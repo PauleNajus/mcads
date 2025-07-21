@@ -14,6 +14,28 @@ from PIL.ExifTags import TAGS
 from datetime import datetime
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 
+# CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
+import logging
+logger = logging.getLogger(__name__)
+
+# PyTorch environment fixes - MUST be set before any PyTorch operations
+os.environ['MKLDNN_ENABLED'] = '0'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+# Force PyTorch to use simple CPU backend to prevent "could not create a primitive" error
+torch.backends.mkldnn.enabled = False
+torch.set_num_threads(1)
+
+# Additional memory optimizations to prevent model inference hanging
+if hasattr(torch.backends, 'openmp'):
+    torch.backends.openmp.is_available = lambda: False
+if hasattr(torch.backends, 'cudnn'):
+    torch.backends.cudnn.enabled = False
+
+logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
+
 
 def load_model(model_type='densenet'):
     """
