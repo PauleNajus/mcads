@@ -110,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData,
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCSRFToken(),
         },
       })
       .then(response => response.json())

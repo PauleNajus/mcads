@@ -31,7 +31,11 @@ logger = logging.getLogger(__name__)
 def process_image_async(image_path, xray_instance, model_type):
     """Process the image in a background thread and update the model with progress"""
     try:
+        logger.info(f"Starting image processing for {image_path} with model {model_type}")
+        
+        # Simple processing without signal timeout (signals don't work well with threads)
         results = process_image(image_path, xray_instance, model_type)
+        logger.info(f"Image processing completed successfully")
         
         # Save predictions to the database - only save what's available in the results
         xray_instance.atelectasis = results.get('Atelectasis', None)
@@ -62,8 +66,12 @@ def process_image_async(image_path, xray_instance, model_type):
         # Create prediction history record
         create_prediction_history(xray_instance, model_type)
         
+        logger.info(f"Successfully processed and saved results for {image_path}")
+        
     except Exception as e:
         logger.error(f"Error processing image {image_path}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         xray_instance.processing_status = 'error'
         xray_instance.save()
 

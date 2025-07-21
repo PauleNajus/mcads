@@ -1,0 +1,24 @@
+[Unit]
+Description=MCADS Gunicorn daemon
+After=network.target
+
+[Service]
+Type=notify
+User=paubun
+Group=paubun
+RuntimeDirectory=mcads
+WorkingDirectory=/opt/mcads/app
+Environment="PATH=/opt/mcads/app/venv/bin"
+Environment="MKLDNN_ENABLED=0"
+Environment="MKL_NUM_THREADS=1"
+Environment="OMP_NUM_THREADS=1"
+ExecStart=/opt/mcads/app/venv/bin/gunicorn --config gunicorn_config.py mcads_project.asgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 

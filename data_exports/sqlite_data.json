@@ -1,0 +1,20 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "!8qMYbjnKi1b964CIQUspQHDpZgH0NuyQ2uQOIDjD",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@mcads.casa",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2025-07-20T12:03:15.936Z",
+    "groups": [],
+    "user_permissions": []
+  }
+}
+]
