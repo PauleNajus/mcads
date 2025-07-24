@@ -1941,13 +1941,11 @@ msgstr "Rentgeno data:"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:236
 msgid "You haven't saved any records yet."
-msgstr ""
+msgstr "Jūs dar neišsaugojote jokių įrašų."
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:237
-#, fuzzy
-#| msgid "prediction history records?"
 msgid "Go to prediction history to save records."
-msgstr "prognozių istorijos įrašus?"
+msgstr "Eikite į prognozių istoriją, kad išsaugotumėte įrašus."
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:245
 msgid "Saved records pagination"
@@ -1964,7 +1962,7 @@ msgstr "Daugiaetiketė krūtinės anomalijų aptikimo sistema (MCADS)"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:15
 msgid "By using MCADS, you acknowledge and agree to the following terms:"
-msgstr ""
+msgstr "Naudodamiesi MCADS, jūs pripažįstate ir sutinkate su šiomis sąlygomis:"
 
 # Terms of Service translations
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:25

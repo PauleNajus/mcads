@@ -231,10 +231,9 @@
                 </div>
                 
                 {% else %}
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
+                <div class="alert alert-info no-records-info">
                     {% trans "You haven't saved any records yet." %} 
-                    <a href="{% url 'prediction_history' %}" class="alert-link">{% trans "Go to prediction history to save records." %}</a>
+                    <a href="{% url 'prediction_history' %}" style="color: #dc3545; text-decoration: none;">{% trans "Go to prediction history to save records." %}</a>
                 </div>
                 {% endif %}
             </div>

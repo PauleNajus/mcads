@@ -2013,8 +2013,30 @@ footer {
    RESPONSIVE DESIGN - MOBILE OPTIMIZATIONS
    ========================================== */
 @media (max-width: 768px) {
+  /* Remove side margins on mobile - make content full width */
+  .container-fluid .container {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* Also ensure container-fluid has minimal side padding */
+  .container-fluid {
+    padding-left: var(--spacing-sm) !important;
+    padding-right: var(--spacing-sm) !important;
+  }
+  
+  /* Ensure cards have minimal padding to reach near screen edges */
+  .card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: var(--spacing-lg);
+  }
+  
   /* Base mobile adjustments */
-  .card { margin-bottom: var(--spacing-lg); }
   .advanced-filters .card-body { padding: var(--spacing-lg); }
   
   /* Button groups and actions */
@@ -2161,6 +2183,16 @@ footer {
   #languageDropdown .flag-icon {
     font-size: 1em !important;
   }
+  
+  /* Account settings mobile spacing - ensure proper spacing between Save profile button and Account information */
+  button[name="update_profile"] {
+    margin-bottom: var(--spacing-lg) !important;
+  }
+  
+  /* Create visual separation for Account Information card on mobile */
+  .col-md-6 .card.border {
+    margin-top: var(--spacing-lg) !important;
+  }
 }
 
 /* Extra mobile adjustments for very small screens */
@@ -2210,17 +2242,12 @@ footer {
     border-bottom: 1px solid var(--light-border) !important;
   }
   
-  /* Account settings mobile spacing */
-  button[name="update_profile"] {
-    margin-bottom: calc(var(--spacing-lg) * 2) !important;
-  }
-  
+  /* Account settings mobile spacing for password form */
   button[name="change_password"] {
     margin-bottom: calc(var(--spacing-lg) * 2) !important;
   }
   
-  /* Create visual separation for Account Information and Danger Zone cards */
-  .card.border,
+  /* Create visual separation for Danger Zone card on very small screens */
   .card.border-warning {
     margin-top: var(--spacing-lg) !important;
   }

@@ -267,8 +267,9 @@
                 // Note: CRITICAL MEDICAL DISCLAIMER and FINAL MEDICAL WARNING now use CSS classes directly
             });
             
-            // Check for no records found message
-            if (alertText.includes('No prediction history found with the current filters')) {
+            // Check for no records found message (both English and Lithuanian)
+            if (alertText.includes('No prediction history found with the current filters') || 
+                alertText.includes('Su dabartiniais filtrais nerasta prognozių istorijos')) {
                 alert.classList.add('no-records-info');
             }
             
