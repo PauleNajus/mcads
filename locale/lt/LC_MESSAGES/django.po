@@ -1654,7 +1654,7 @@ msgstr "Tikimybė"
 
 #: .\xrayapp\templates\xrayapp\results.html:626
 msgid "Visualize"
-msgstr ""
+msgstr "Vizualizacija"
 
 #: .\xrayapp\templates\xrayapp\results.html:634
 msgid "Learn more about"
