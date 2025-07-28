@@ -267,10 +267,8 @@ msgid "Main Visualization"
 msgstr "GRAD-CAM vizualizacija"
 
 #: .\xrayapp\admin.py:381
-#, fuzzy
-#| msgid "GRAD-CAM Heatmap"
 msgid "Heatmap"
-msgstr "GRAD-CAM šilumos žemėlapis"
+msgstr "Šilumos žemėlapis"
 
 #: .\xrayapp\admin.py:383
 #, fuzzy
@@ -602,10 +600,8 @@ msgid "Unknown patient"
 msgstr "Nežinomas pacientas"
 
 #: .\xrayapp\models.py:288
-#, fuzzy
-#| msgid "GRAD-CAM Heatmap"
 msgid "GRAD-CAM"
-msgstr "GRAD-CAM šilumos žemėlapis"
+msgstr "GRAD-CAM"
 
 #: .\xrayapp\models.py:289
 #, fuzzy
@@ -615,7 +611,7 @@ msgstr "Pikselių lygio interpretavimas"
 
 #: .\xrayapp\models.py:290
 msgid "Combined GRAD-CAM"
-msgstr ""
+msgstr "Kombinuotas GRAD-CAM"
 
 #: .\xrayapp\models.py:291
 msgid "Combined PLI"
@@ -1709,10 +1705,7 @@ msgstr "Generuoti vizualizaciją"
 msgid "Original X-ray"
 msgstr "Originalus rentgenas"
 
-#: .\xrayapp\templates\xrayapp\results.html:702
-#: .\xrayapp\templates\xrayapp\results.html:1128
-msgid "GRAD-CAM Heatmap"
-msgstr "GRAD-CAM šilumos žemėlapis"
+
 
 #: .\xrayapp\templates\xrayapp\results.html:706
 #: .\xrayapp\templates\xrayapp\results.html:1132
@@ -1846,10 +1839,7 @@ msgstr ""
 msgid "Pixel-level interpretability"
 msgstr "Pikselių lygio interpretavimas"
 
-#: .\xrayapp\templates\xrayapp\results.html:795
-#: .\xrayapp\templates\xrayapp\results.html:1243
-msgid "Pixel saliency map"
-msgstr "Pikselių svarbumo žemėlapis"
+
 
 #: .\xrayapp\templates\xrayapp\results.html:799
 #: .\xrayapp\templates\xrayapp\results.html:1247

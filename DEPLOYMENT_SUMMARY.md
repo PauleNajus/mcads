@@ -74,7 +74,7 @@ The Multi-label Chest Abnormality Detection System (MCADS) has been successfully
 - **PyTorch**: Not installed (requires ~3GB+ download/installation)
 - **TorchXRayVision**: Not available
 - **AI Predictions**: Replaced with mock stub functions
-- **Interpretability**: Disabled (GradCAM, PLI features)
+- **Interpretability**: Disabled (interpretability features)
 
 ### Mock Functionality Active
 - Image upload and metadata extraction ✅

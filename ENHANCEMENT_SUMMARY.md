@@ -22,7 +22,7 @@ The MCADS (Multi-label Chest Abnormality Detection System) has been **completely
 ### 🧠 **2. AI/ML Functionality Restoration**
 - **RESTORED:** Real PyTorch models (TorchXRayVision)
 - **ENABLED:** Actual AI predictions for 18 pathologies
-- **ACTIVATED:** Grad-CAM and interpretability features
+- **ACTIVATED:** Interpretability features
 - **ELIMINATED:** Mock/stub functions completely
 
 ### 🔒 **3. Enterprise Security Implementation**

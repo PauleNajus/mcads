@@ -283,7 +283,7 @@ class VisualizationResult(models.Model):
     VISUALIZATION_TYPES = [
         ('gradcam', _('GRAD-CAM')),
         ('pli', _('Pixel-level Interpretability')),
-        ('combined_gradcam', _('Combined GRAD-CAM')),
+        ('combined_gradcam', _('Combined')),
         ('combined_pli', _('Combined PLI')),
     ]
     
@@ -297,7 +297,7 @@ class VisualizationResult(models.Model):
     
     # File paths for visualization images
     visualization_path = models.CharField(max_length=255, null=True, blank=True)  # Main visualization
-    heatmap_path = models.CharField(max_length=255, null=True, blank=True)      # Heatmap (GRAD-CAM)
+    heatmap_path = models.CharField(max_length=255, null=True, blank=True)      # Heatmap
     overlay_path = models.CharField(max_length=255, null=True, blank=True)      # Overlay image
     saliency_path = models.CharField(max_length=255, null=True, blank=True)     # Saliency map (PLI)
     

@@ -15,7 +15,7 @@ from .forms import XRayUploadForm, PredictionHistoryFilterForm, UserInfoForm, Us
 from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SavedRecord
 from .utils import (process_image, process_image_with_interpretability,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
-                   save_gradcam_heatmap, save_gradcam_overlay)
+                   save_heatmap, save_overlay)
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -138,7 +138,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 
                 # Generate filenames
                 combined_filename = f"gradcam_{xray_instance.id}_{results['target_class']}.png"
-                heatmap_filename = f"gradcam_heatmap_{xray_instance.id}_{results['target_class']}.png"
+                heatmap_filename = f"heatmap_{xray_instance.id}_{results['target_class']}.png"
                 overlay_filename = f"gradcam_overlay_{xray_instance.id}_{results['target_class']}.png"
                 
                 # Generate paths
@@ -151,15 +151,15 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 # Save combined visualization
                 save_interpretability_visualization(results, combined_path)
                 
-                logger.info(f"Saving Grad-CAM heatmap to {heatmap_path}")
+                logger.info(f"Saving heatmap to {heatmap_path}")
                 
                 # Save heatmap separately
-                save_gradcam_heatmap(results, heatmap_path)
+                save_heatmap(results, heatmap_path)
                 
-                logger.info(f"Saving Grad-CAM overlay to {overlay_path}")
+                logger.info(f"Saving overlay to {overlay_path}")
                 
                 # Save overlay separately
-                save_gradcam_overlay(results, overlay_path)
+                save_overlay(results, overlay_path)
                 
                 # Create VisualizationResult record
                 visualization_data = {
@@ -234,7 +234,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 
                 # Generate filenames
                 combined_filename = f"combined_gradcam_{xray_instance.id}_threshold_{results['threshold']}.png"
-                heatmap_filename = f"combined_gradcam_heatmap_{xray_instance.id}_threshold_{results['threshold']}.png"
+                heatmap_filename = f"combined_heatmap_{xray_instance.id}_threshold_{results['threshold']}.png"
                 overlay_filename = f"combined_gradcam_overlay_{xray_instance.id}_threshold_{results['threshold']}.png"
                 
                 # Generate paths
@@ -247,15 +247,15 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 # Save combined visualization
                 save_interpretability_visualization(results, combined_path)
                 
-                logger.info(f"Saving Combined Grad-CAM heatmap to {heatmap_path}")
+                logger.info(f"Saving combined heatmap to {heatmap_path}")
                 
                 # Save heatmap separately
-                save_gradcam_heatmap(results, heatmap_path)
+                save_heatmap(results, heatmap_path)
                 
-                logger.info(f"Saving Combined Grad-CAM overlay to {overlay_path}")
+                logger.info(f"Saving combined overlay to {overlay_path}")
                 
                 # Save overlay separately
-                save_gradcam_overlay(results, overlay_path)
+                save_overlay(results, overlay_path)
                 
                 # Create VisualizationResult record
                 visualization_data = {
@@ -665,7 +665,7 @@ def xray_results(request, pk):
     # Prepare legacy GRAD-CAM URLs for backward compatibility
     media_url = settings.MEDIA_URL
     gradcam_url = f"{media_url}{xray_instance.gradcam_visualization}" if xray_instance.has_gradcam and xray_instance.gradcam_visualization else None
-    gradcam_heatmap_url = f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.has_gradcam and xray_instance.gradcam_heatmap else None
+    heatmap_url = f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.has_gradcam and xray_instance.gradcam_heatmap else None
     gradcam_overlay_url = f"{media_url}{xray_instance.gradcam_overlay}" if xray_instance.has_gradcam and xray_instance.gradcam_overlay else None
 
     context = {
@@ -683,7 +683,7 @@ def xray_results(request, pk):
         # Legacy support for single visualizations
         'has_gradcam': xray_instance.has_gradcam,
         'gradcam_url': gradcam_url,
-        'gradcam_heatmap_url': gradcam_heatmap_url,
+        'heatmap_url': heatmap_url,
         'gradcam_overlay_url': gradcam_overlay_url,
         'gradcam_target': xray_instance.gradcam_target_class,
         'pathology_explanations': pathology_explanations,
@@ -984,7 +984,7 @@ def check_progress(request, pk):
             if xray_instance.has_gradcam:
                 response_data['gradcam_legacy'] = {
                     'gradcam_url': f"{media_url}{xray_instance.gradcam_visualization}" if xray_instance.gradcam_visualization else None,
-                    'gradcam_heatmap_url': f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.gradcam_heatmap else None,
+                    'heatmap_url': f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.gradcam_heatmap else None,
                     'gradcam_overlay_url': f"{media_url}{xray_instance.gradcam_overlay}" if xray_instance.gradcam_overlay else None,
                     'gradcam_target': xray_instance.gradcam_target_class
                 }

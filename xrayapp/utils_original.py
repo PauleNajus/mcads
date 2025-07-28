@@ -388,7 +388,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot heatmap
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['heatmap'], cmap='jet')
-        plt.title(f'Grad-CAM Heatmap\n{interpretation_results["target_class"]}')
+        plt.title(f'Heatmap\n{interpretation_results["target_class"]}')
         plt.axis('off')
         
         # Plot overlay
@@ -401,7 +401,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot combined heatmap
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['heatmap'], cmap='jet')
-        plt.title(f'Combined Grad-CAM\n{len(interpretation_results["selected_pathologies"])} pathologies > {interpretation_results["threshold"]}')
+        plt.title(f'Combined Heatmap\n{len(interpretation_results["selected_pathologies"])} pathologies > {interpretation_results["threshold"]}')
         plt.axis('off')
         
         # Plot overlay
@@ -427,7 +427,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot saliency map
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['saliency_map'], cmap='jet')
-        plt.title(f'Pixel Saliency Map\n{interpretation_results["target_class"]}')
+        plt.title(f'Saliency Map\n{interpretation_results["target_class"]}')
         plt.axis('off')
         
         # Plot overlay rather than colored saliency
@@ -503,12 +503,12 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_gradcam_heatmap(interpretation_results, output_path, format='png'):
+def save_heatmap(interpretation_results, output_path, format='png'):
     """
-    Save only the Grad-CAM heatmap to a file without white spaces
+    Save only the heatmap to a file without white spaces
     
     Args:
-        interpretation_results: Results from apply_gradcam
+        interpretation_results: Results from interpretability analysis
         output_path: Path to save the visualization
         format: Image format to save (png, jpg, etc.)
         
@@ -536,7 +536,7 @@ def save_gradcam_heatmap(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_gradcam_overlay(interpretation_results, output_path, format='png'):
+def save_overlay(interpretation_results, output_path, format='png'):
     """
     Save only the Grad-CAM overlay to a file without white spaces
     

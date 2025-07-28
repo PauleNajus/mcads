@@ -2,5 +2,5 @@
 # Copy the following directories:
 # - media/xrays/ (X-ray images)
 # - media/visualizations/ (interpretability results)
-# - media/gradcam/ (GradCAM visualizations)
+# - media/interpretability/ (Interpretability visualizations)
 # - media/pli/ (PLI visualizations)

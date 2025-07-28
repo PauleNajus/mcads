@@ -13,7 +13,7 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 - **User Management**: Secure authentication system with user profiles and hospital affiliations
 - **Image Upload & Analysis**: Support for various image formats with preprocessing
 - **Prediction History**: Track and review past analyses
-- **Interpretability**: Grad-CAM visualizations to understand model predictions
+- **Interpretability**: Visualizations to understand model predictions
 - **Responsive UI**: Bootstrap-based interface optimized for medical workflows
 - **RESTful API**: Programmatic access to prediction services
 
@@ -97,7 +97,7 @@ The application will be available at `http://127.0.0.1:8000/`
 1. **Login/Register**: Create an account or log in with existing credentials
 2. **Upload Image**: Navigate to the analysis page and upload a chest X-ray image
 3. **View Results**: Review prediction scores for all pathologies
-4. **Interpretability**: View Grad-CAM visualizations to understand model decisions
+4. **Interpretability**: View visualizations to understand model decisions
 5. **History**: Access previous analyses and results
 
 ### API Usage
@@ -127,7 +127,7 @@ mcads/
 │   ├── models.py          # Database models
 │   ├── views.py           # View controllers
 │   ├── forms.py           # Form definitions
-│   ├── interpretability.py # Grad-CAM implementation
+│   ├── interpretability.py # Interpretability implementation
 │   ├── utils.py           # Utility functions
 │   └── templates/         # HTML templates
 ├── static/                # Static files (CSS, JS, images)

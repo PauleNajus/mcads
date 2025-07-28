@@ -672,7 +672,7 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
 
 def apply_combined_gradcam(image_path, model_type='densenet', probability_threshold=0.5):
     """
-    Apply combined Grad-CAM to an X-ray image for all pathologies above threshold
+    Apply combined interpretability to an X-ray image for all pathologies above threshold
     
     Args:
         image_path: Path to the image
