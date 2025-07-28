@@ -1173,22 +1173,16 @@ msgid "Edit prediction"
 msgstr "Redaguoti prognozes"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:12
-#, fuzzy
-#| msgid "Edit prediction record"
 msgid "Edit prediction for"
-msgstr "Redaguoti prognozės įrašą"
+msgstr "Redaguoti prognozę pacientui"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:16
-#, fuzzy
-#| msgid "X-ray Date:"
 msgid "X-ray taken on:"
-msgstr "Rentgeno data:"
+msgstr "Rentgenas atliktas:"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:17
-#, fuzzy
-#| msgid "Uploaded on"
 msgid "Uploaded on:"
-msgstr "Įkelta"
+msgstr "Įkelta:"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:18
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:90
@@ -1928,16 +1922,12 @@ msgid "View all history"
 msgstr "Peržiūrėti visą istoriją"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:93
-#, fuzzy
-#| msgid "Save changes"
 msgid "Saved date"
-msgstr "Išsaugoti pakeitimus"
+msgstr "Išsaugojimo data"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:206
-#, fuzzy
-#| msgid "X-ray Date:"
 msgid "Saved Date:"
-msgstr "Rentgeno data:"
+msgstr "Išsaugojimo data:"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:236
 msgid "You haven't saved any records yet."
@@ -3025,34 +3015,26 @@ msgstr ""
 "galutinei diagnozei nustatyti ir tinkamam gydymui orientuoti."
 
 #: .\xrayapp\views.py:602
-#, fuzzy
-#| msgid "Full Name"
 msgid "Name"
-msgstr "Pilnas vardas"
+msgstr "Vardas"
 
 #: .\xrayapp\views.py:604
-#, fuzzy
-#| msgid "Min Age"
 msgid "Age"
-msgstr "Min. amžius"
+msgstr "Amžius"
 
 #: .\xrayapp\views.py:604
 msgid "years"
 msgstr "metai"
 
 #: .\xrayapp\views.py:605
-#, fuzzy
-#| msgid "Date of Birth:"
 msgid "Date of Birth"
-msgstr "Gimimo data:"
+msgstr "Gimimo data"
 
 #: .\xrayapp\views.py:606
 msgid "X-ray Date"
 msgstr "Rentgeno data"
 
 #: .\xrayapp\views.py:607
-#, fuzzy
-#| msgid "Additional information"
 msgid "Additional Information"
 msgstr "Papildoma informacija"
 
@@ -3067,6 +3049,22 @@ msgstr "Formatas"
 #: .\xrayapp\views.py:615
 msgid "Size"
 msgstr "Dydis"
+
+# New translations for risk levels and severity
+msgid "Risk Level"
+msgstr "Rizikos lygis"
+
+msgid "Moderate Risk"
+msgstr "Vidutinė rizika"
+
+msgid "High Risk"
+msgstr "Aukšta rizika"
+
+msgid "Low Risk"
+msgstr "Žema rizika"
+
+msgid "Severity Range"
+msgstr "Sunkumo intervalas"
 
 #: .\xrayapp\views.py:616
 msgid "Resolution"
