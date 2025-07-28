@@ -331,7 +331,7 @@
 
 /* Visualization Controls Styling */
 .visualization-controls {
-    background: rgba(248, 249, 250, 0.8);
+    background: white;
     border: 1px solid #dee2e6;
     border-radius: 8px;
     padding: 12px;
@@ -400,30 +400,39 @@
     transform: translateY(-1px);
 }
 
+[data-bs-theme="dark"] .reset-controls-btn {
+    border-color: #6c757d;
+    color: #6c757d;
+}
+
+[data-bs-theme="dark"] .reset-controls-btn:hover {
+    background: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
 /* Dark mode support */
-@media (prefers-color-scheme: dark), [data-bs-theme="dark"] {
-    .visualization-controls {
-        background: rgba(33, 37, 41, 0.8);
-        border-color: #495057;
-    }
-    
-    .control-btn {
-        background: rgba(33, 37, 41, 0.9);
-        border-color: #0dcaf0;
-        color: #0dcaf0;
-    }
-    
-    .control-btn:hover {
-        background: #0dcaf0;
-        color: #000;
-    }
-    
-    .control-btn:active,
-    .control-btn.active {
-        background: #0aa2c0;
-        border-color: #0aa2c0;
-        color: white;
-    }
+[data-bs-theme="dark"] .visualization-controls {
+    background: rgba(33, 37, 41, 0.8);
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .control-btn {
+    background: rgba(33, 37, 41, 0.9);
+    border-color: #0dcaf0;
+    color: #0dcaf0;
+}
+
+[data-bs-theme="dark"] .control-btn:hover {
+    background: #0dcaf0;
+    color: #000;
+}
+
+[data-bs-theme="dark"] .control-btn:active,
+[data-bs-theme="dark"] .control-btn.active {
+    background: #0aa2c0;
+    border-color: #0aa2c0;
+    color: white;
 }
 
 /* Mobile responsive adjustments */
