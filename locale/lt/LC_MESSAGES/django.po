@@ -1832,10 +1832,8 @@ msgstr ""
 #: .\xrayapp\templates\xrayapp\results.html:854
 #: .\xrayapp\templates\xrayapp\results.html:1187
 #: .\xrayapp\templates\xrayapp\results.html:1302
-#, fuzzy
-#| msgid "Generate visualization"
 msgid "Generated on"
-msgstr "Generuoti vizualizaciją"
+msgstr "Sugeneruota"
 
 #: .\xrayapp\templates\xrayapp\results.html:762
 #: .\xrayapp\templates\xrayapp\results.html:855
@@ -1851,14 +1849,12 @@ msgstr "Pikselių lygio interpretavimas"
 #: .\xrayapp\templates\xrayapp\results.html:795
 #: .\xrayapp\templates\xrayapp\results.html:1243
 msgid "Pixel saliency map"
-msgstr ""
+msgstr "Pikselių svarbumo žemėlapis"
 
 #: .\xrayapp\templates\xrayapp\results.html:799
 #: .\xrayapp\templates\xrayapp\results.html:1247
-#, fuzzy
-#| msgid "Pixel-level interpretability"
 msgid "Pixel-level overlay"
-msgstr "Pikselių lygio interpretavimas"
+msgstr "Pikselių lygio perdanga"
 
 #: .\xrayapp\templates\xrayapp\results.html:851
 #: .\xrayapp\templates\xrayapp\results.html:1299
