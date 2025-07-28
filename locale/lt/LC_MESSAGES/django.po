@@ -1690,8 +1690,6 @@ msgstr ""
 
 #: .\xrayapp\templates\xrayapp\results.html:683
 #: .\xrayapp\templates\xrayapp\results.html:1109
-#, fuzzy
-#| msgid "GRAD-CAM Visualization"
 msgid "GRAD-CAM visualization"
 msgstr "GRAD-CAM vizualizacija"
 
@@ -1725,10 +1723,8 @@ msgstr "GRAD-CAM perdanga"
 #: .\xrayapp\templates\xrayapp\results.html:805
 #: .\xrayapp\templates\xrayapp\results.html:1138
 #: .\xrayapp\templates\xrayapp\results.html:1253
-#, fuzzy
-#| msgid "Page Not Found"
 msgid "Image Controls"
-msgstr "Puslapis nerastas"
+msgstr "Vaizdo valdymas"
 
 #: .\xrayapp\templates\xrayapp\results.html:714
 #: .\xrayapp\templates\xrayapp\results.html:807
@@ -1740,93 +1736,89 @@ msgstr "Atkurti"
 #: .\xrayapp\templates\xrayapp\results.html:718
 #: .\xrayapp\templates\xrayapp\results.html:811
 msgid "Invert Colors"
-msgstr ""
+msgstr "Apversti spalvas"
 
 #: .\xrayapp\templates\xrayapp\results.html:720
 #: .\xrayapp\templates\xrayapp\results.html:813
 msgid "Invert"
-msgstr ""
+msgstr "Apversti"
 
 #: .\xrayapp\templates\xrayapp\results.html:722
 #: .\xrayapp\templates\xrayapp\results.html:815
 msgid "Flip Horizontal"
-msgstr ""
+msgstr "Apversti horizontaliai"
 
 #: .\xrayapp\templates\xrayapp\results.html:724
 #: .\xrayapp\templates\xrayapp\results.html:817
 msgid "Flip H"
-msgstr ""
+msgstr "Apversti H"
 
 #: .\xrayapp\templates\xrayapp\results.html:726
 #: .\xrayapp\templates\xrayapp\results.html:819
 msgid "Flip Vertical"
-msgstr ""
+msgstr "Apversti vertikaliai"
 
 #: .\xrayapp\templates\xrayapp\results.html:728
 #: .\xrayapp\templates\xrayapp\results.html:821
 msgid "Flip V"
-msgstr ""
+msgstr "Apversti V"
 
 #: .\xrayapp\templates\xrayapp\results.html:730
 #: .\xrayapp\templates\xrayapp\results.html:823
 msgid "Rotate 90°"
-msgstr ""
+msgstr "Pasukti 90°"
 
 #: .\xrayapp\templates\xrayapp\results.html:732
 #: .\xrayapp\templates\xrayapp\results.html:825
 msgid "Rotate"
-msgstr ""
+msgstr "Pasukti"
 
 #: .\xrayapp\templates\xrayapp\results.html:734
 #: .\xrayapp\templates\xrayapp\results.html:736
 #: .\xrayapp\templates\xrayapp\results.html:827
 #: .\xrayapp\templates\xrayapp\results.html:829
 msgid "Sharpen"
-msgstr ""
+msgstr "Aštrinti"
 
 #: .\xrayapp\templates\xrayapp\results.html:738
 #: .\xrayapp\templates\xrayapp\results.html:831
 msgid "Increase Brightness"
-msgstr ""
+msgstr "Padidinti šviesumą"
 
 #: .\xrayapp\templates\xrayapp\results.html:740
 #: .\xrayapp\templates\xrayapp\results.html:833
-#, fuzzy
-#| msgid "Light"
 msgid "Bright +"
-msgstr "Šviesi"
+msgstr "Apšvietimas +"
 
 #: .\xrayapp\templates\xrayapp\results.html:742
 #: .\xrayapp\templates\xrayapp\results.html:835
 msgid "Decrease Brightness"
-msgstr ""
+msgstr "Sumažinti šviesumą"
 
 #: .\xrayapp\templates\xrayapp\results.html:744
 #: .\xrayapp\templates\xrayapp\results.html:837
-#, fuzzy
-#| msgid "Light"
 msgid "Bright -"
-msgstr "Šviesi"
+msgstr "Apšvietimas -"
 
 #: .\xrayapp\templates\xrayapp\results.html:746
 #: .\xrayapp\templates\xrayapp\results.html:839
 msgid "Increase Contrast"
-msgstr ""
+msgstr "Padidinti kontrastą"
 
 #: .\xrayapp\templates\xrayapp\results.html:748
 #: .\xrayapp\templates\xrayapp\results.html:841
 msgid "Contrast +"
-msgstr ""
+msgstr "Kontrastas +"
 
 #: .\xrayapp\templates\xrayapp\results.html:750
 #: .\xrayapp\templates\xrayapp\results.html:843
 msgid "Decrease Contrast"
-msgstr ""
+msgstr "Sumažinti kontrastą"
 
 #: .\xrayapp\templates\xrayapp\results.html:752
 #: .\xrayapp\templates\xrayapp\results.html:845
 msgid "Contrast -"
-msgstr ""
+msgstr "Kontrastas -"
 
 #: .\xrayapp\templates\xrayapp\results.html:758
 #: .\xrayapp\templates\xrayapp\results.html:1184
