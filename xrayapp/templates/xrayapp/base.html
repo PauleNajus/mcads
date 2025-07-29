@@ -70,6 +70,13 @@
                     </ul>
                     <div class="ms-auto d-flex align-items-center">
                         {% if user.is_authenticated %}
+                            <!-- Admin button for admin users only -->
+                            {% if user.profile.can_access_admin %}
+                                <a href="/secure-admin-mcads-2024/" class="btn btn-outline-danger me-3" target="_blank">
+                                    <i class="bi bi-gear-fill"></i> {% trans "Admin" %}
+                                </a>
+                            {% endif %}
+                            
                             <div class="dropdown me-3">
                                 <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-person"></i> {{ user.username }}
