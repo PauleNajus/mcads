@@ -2050,11 +2050,8 @@ msgid "validated for clinical diagnosis"
 msgstr "patvirtintas klinikiniam diagnozavimui"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:57
-msgid ""
-"approved by any medical regulatory authority (FDA, CE, Health Canada, etc.)"
-msgstr ""
-"patvirtintas jokios medicinos reguliavimo institucijos (FDA, CE, Health "
-"Canada ir kt.)"
+msgid "approved by any medical regulatory authority (State Medicines Control Agency under the Ministry of Health of the Republic of Lithuania, etc.)"
+msgstr "patvirtintas jokios medicinos reguliavimo institucijos (Valstybinės vaistų kontrolės tarnybos prie Lietuvos Respublikos sveikatos apsaugos ministerijos ir kt.)"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:58
 msgid "intended to replace professional medical judgment"
@@ -2114,9 +2111,7 @@ msgstr "VISADA"
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:72
 msgid "consult qualified healthcare professionals for medical decisions"
 msgstr ""
-"konsultuokitės su kvalifikuotais sveikatos priežiūros specialistais dėl "
-"medicinos sprendimųkonsultuokitės su kvalifikuotais sveikatos priežiūros "
-"specialistais dėl medicinos sprendimų"
+"konsultuokitės su kvalifikuotais sveikatos priežiūros specialistais dėl medicinos sprendimų"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:73
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:74
@@ -2130,9 +2125,7 @@ msgstr "priimkite medicinos sprendimų vien tik pagal MCADS išvestį"
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:74
 msgid "delay seeking medical attention based on Software results"
 msgstr ""
-"atidėliokite medicinos pagalbos ieškojimo pagal programinės įrangos "
-"rezultatusatidėliokite medicinos pagalbos ieškojimo pagal programinės "
-"įrangos rezultatus"
+"neatidėliokite medicinos pagalbos ieškojimo pagal programinės įrangos rezultatus"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:75
 msgid ""
@@ -2151,22 +2144,13 @@ msgid "No Liability for Medical Decisions"
 msgstr "Jokia atsakomybė už medicinos sprendimus"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:85
-#, fuzzy
-#| msgid ""
-#| "The authors, developers, contributors, and affiliated institutions "
-#| "(\"Providers\") shall not be liable for:"
-msgid "The authors, developers, contributors, and affiliated institutions (\\"
-msgstr ""
-"Autoriai, kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Autoriai, "
-"kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Teikėjai\") nebus "
-"atsakingi už:"
+msgid "The authors, developers, contributors, and affiliated institutions (\"Providers\") shall not be liable for:"
+msgstr "Autoriai, kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Teikėjai\") nebus atsakingi už:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:87
 msgid "Any medical decisions made based on Software output"
 msgstr ""
-"Bet kokius medicinos sprendimus, priimtus pagal programinės įrangos "
-"išvestįBet kokius medicinos sprendimus, priimtus pagal programinės įrangos "
-"išvestį"
+"Bet kokius medicinos sprendimus, priimtus pagal programinės įrangos išvestį"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:88
 msgid "Any misdiagnosis or delayed diagnosis"
@@ -2296,10 +2280,7 @@ msgstr "Duomenys ir privatumas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:145
 msgid "Ensure proper authorization before uploading any medical images"
-msgstr ""
-"Užtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias medicinos "
-"nuotraukasUžtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias "
-"medicinos nuotraukas"
+msgstr "Užtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias medicinos nuotraukas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:146
 msgid "Comply with HIPAA, GDPR, and other privacy regulations"
@@ -2410,7 +2391,7 @@ msgid ""
 "claims, damages, losses, or expenses arising from:"
 msgstr ""
 "Naudotojai sutinka atlyginti žalą, ginti ir apsaugoti teikėjus nuo bet kokių "
-"reikalavimų, žalos, nuostolių ar išlaidų, kylantin iš:"
+"reikalavimų, žalos, nuostolių ar išlaidų, kylančių iš:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:193
 msgid "User's violation of these Terms"
