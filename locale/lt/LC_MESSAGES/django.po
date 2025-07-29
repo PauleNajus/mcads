@@ -2208,10 +2208,8 @@ msgid "Disclaimer of All Warranties"
 msgstr "Visų garantijų atsisakymas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:107
-#, fuzzy
-#| msgid "The Software provides probability scores,"
-msgid "The Software is provided \\"
-msgstr "Programinė įranga teikia tikimybės balus,"
+msgid "The Software is provided \"as is\" without warranty of any kind, including but not limited to:"
+msgstr "Programinė įranga teikiama \"tokia, kokia yra\" be jokių garantijų, įskaitant, bet neapsiribojant:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:109
 msgid "Warranties of merchantability"
@@ -2329,10 +2327,7 @@ msgstr "NEGALI"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:158
 msgid "Use the Software for clinical diagnosis or treatment decisions"
-msgstr ""
-"Naudoti programinę įrangą klinikiniam diagnozavimui ar gydymo "
-"sprendimamsNaudoti programinę įrangą klinikiniam diagnozavimui ar gydymo "
-"sprendimams"
+msgstr "Naudoti programinę įrangą klinikiniam diagnozavimui ar gydymo sprendimams"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:159
 msgid "Present Software output as medical advice"
