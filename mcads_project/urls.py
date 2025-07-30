@@ -17,11 +17,15 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic.base import RedirectView
+from django.views.i18n import JavaScriptCatalog
 
 urlpatterns = [
     path('secure-admin-mcads-2024/', admin.site.urls),  # Changed from 'admin/' for security
     path('accounts/', include('django.contrib.auth.urls')),
-    # Removed Django's built-in i18n URLs to avoid conflict with custom implementation
+    # Add Django's i18n URLs for JavaScript internationalization
+    path('i18n/', include('django.conf.urls.i18n')),
+    # Add JavaScript catalog for internationalization
+    path('i18n/jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
     path('', include('xrayapp.urls')),
     # Add favicon redirect
     path('favicon.ico', 

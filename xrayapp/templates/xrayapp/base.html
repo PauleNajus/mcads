@@ -22,6 +22,34 @@
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{% static 'images/favicon.ico' %}">
     {% block extra_css %}{% endblock %}
+    
+    <!-- Immediate theme application script to prevent FOUC -->
+    <script>
+        (function() {
+            // Get theme immediately to prevent flash
+            function getStoredTheme() {
+                // Check user preferences first (if available)
+                const userTheme = '{{ user.profile.preferred_theme|default:"auto" }}';
+                if (userTheme && userTheme !== 'auto') {
+                    return userTheme;
+                }
+                
+                // Fall back to localStorage
+                const storedTheme = localStorage.getItem('theme');
+                if (storedTheme && storedTheme !== 'auto') {
+                    return storedTheme;
+                }
+                
+                // Use system preference for 'auto' or if no preference is set
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            
+            // Apply theme immediately
+            const theme = getStoredTheme();
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    
     <style>
         .xray-image {
             transition: transform 0.2s, box-shadow 0.2s;
@@ -223,6 +251,21 @@
             return getCookie('csrftoken');
         }
     </script>
+    
+    <!-- Django JavaScript Internationalization -->
+    {% load i18n %}
+    <script src="{% url 'javascript-catalog' %}"></script>
+    
+    <!-- Fallback for gettext if i18n catalog fails to load -->
+    <script>
+        // Fallback gettext function
+        if (typeof gettext === 'undefined') {
+            window.gettext = function(str) {
+                return str; // Return the string as-is if translation is not available
+            };
+        }
+    </script>
+    
     <script src="{% static 'xrayapp/js/theme.js' %}"></script>
     <script src="{% static 'xrayapp/js/image-maximize.js' %}"></script>
     

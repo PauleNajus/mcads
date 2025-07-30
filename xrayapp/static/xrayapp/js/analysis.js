@@ -113,14 +113,26 @@ document.addEventListener('DOMContentLoaded', () => {
           'X-CSRFToken': getCSRFToken(),
         },
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Response is not JSON');
+        }
+        return response.json();
+      })
       .then(data => {
         if (data.upload_id) {
           console.log('Upload successful, tracking progress for ID:', data.upload_id);
           // Start tracking progress
           trackProgress(data.upload_id);
+        } else if (data.error) {
+          // Handle validation errors
+          alert(gettext('Error: ') + data.error);
         } else {
-          // Error handling
+          // Generic error handling
           alert(gettext('Error starting analysis. Please try again.'));
         }
       })

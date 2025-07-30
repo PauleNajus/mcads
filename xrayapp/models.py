@@ -79,6 +79,12 @@ class XRayImage(models.Model):
     # Severity level
     severity_level = models.IntegerField(null=True, blank=True, db_index=True)
     
+    # Expert review requirement
+    requires_expert_review = models.BooleanField(default=False, db_index=True)
+    
+    # Model used for analysis
+    model_used = models.CharField(max_length=50, default='densenet', db_index=True)
+    
     class Meta:
         # Add composite indexes for commonly queried combinations
         indexes = [

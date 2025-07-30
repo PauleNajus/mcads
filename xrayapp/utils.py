@@ -37,9 +37,12 @@ if hasattr(torch.backends, 'cudnn'):
 logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
 
 
+# Global model cache to prevent reloading
+_model_cache = {}
+
 def load_model(model_type='densenet'):
     """
-    Load the pre-trained torchxrayvision model
+    Load the pre-trained torchxrayvision model with memory-efficient caching
     
     Args:
         model_type (str): 'densenet' or 'resnet'
@@ -48,20 +51,66 @@ def load_model(model_type='densenet'):
         model: Loaded model
         resize_dim (int): Resize dimension for preprocessing
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Check cache first
+    if model_type in _model_cache:
+        logger.info(f"Using cached {model_type} model")
+        return _model_cache[model_type]
+    logger.info(f"Loading {model_type} model...")
     
-    if model_type == 'resnet':
-        # Load ResNet model - all classes except "Enlarged Cardiomediastinum" and "Lung Lesion"
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        # Default to DenseNet with all classes
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Force CPU to save memory and prevent hardware issues
+    device = torch.device("cpu")
     
-    model.to(device)
-    model.eval()
-    return model, resize_dim
+    try:
+        if model_type == 'resnet':
+            # Load ResNet model - all classes except "Enlarged Cardiomediastinum" and "Lung Lesion"
+            model = xrv.models.ResNet(weights="resnet50-res512-all")
+            resize_dim = 512
+        else:
+            # Default to DenseNet with all classes
+            model = xrv.models.DenseNet(weights="densenet121-res224-all")
+            resize_dim = 224
+        
+        model.to(device)
+        model.eval()
+        
+        # Cache the model
+        _model_cache[model_type] = (model, resize_dim)
+        logger.info(f"✅ {model_type} model loaded and cached successfully")
+        
+        return model, resize_dim
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to load {model_type} model: {e}")
+        raise e
+
+
+def clear_model_cache():
+    """Clear model cache to free memory"""
+    global _model_cache
+    logger.info(f"Clearing model cache ({len(_model_cache)} models)")
+    _model_cache.clear()
+    
+    # Force garbage collection
+    import gc
+    gc.collect()
+    
+    # Also clear PyTorch cache if available
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def get_memory_info():
+    """Get current memory usage information"""
+    import psutil
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    
+    return {
+        'rss_mb': memory_info.rss / 1024 / 1024,  # Resident Set Size in MB
+        'vms_mb': memory_info.vms / 1024 / 1024,  # Virtual Memory Size in MB
+        'percent': process.memory_percent(),
+        'cached_models': len(_model_cache)
+    }
 
 
 def extract_image_metadata(image_path):

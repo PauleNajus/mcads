@@ -19,14 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
   
-  // Function to get current theme, respecting user preferences
+  // Function to get current theme (same logic as inline script)
   const getCurrentTheme = () => {
-    // If user is authenticated and has preferences, use those
-    if (window.userPreferences && window.userPreferences.theme && window.userPreferences.theme !== 'auto') {
-      return window.userPreferences.theme;
+    // Check user preferences first (if available)
+    const userTheme = window.userPreferences?.theme;
+    if (userTheme && userTheme !== 'auto') {
+      return userTheme;
     }
     
-    // Fall back to localStorage or system preference
+    // Fall back to localStorage
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme && storedTheme !== 'auto') {
       return storedTheme;
@@ -49,10 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
   
-  // Initialize theme based on user preferences or stored preferences
-  const initializeTheme = () => {
+  // Initialize theme icon only (theme already applied by inline script)
+  const initializeThemeIcon = () => {
     const theme = getCurrentTheme();
-    setTheme(theme);
+    updateThemeIcon(theme);
   };
   
   // Add event listener to theme toggle button
@@ -68,6 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Initialize the theme
-  initializeTheme();
+  // Initialize the theme icon (theme already applied by inline script)
+  initializeThemeIcon();
 }); 

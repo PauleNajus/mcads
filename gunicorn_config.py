@@ -7,13 +7,13 @@ backlog = 2048
 # Worker processes - Reduced for memory optimization
 workers = 1  # Single worker to prevent OOM on 2GB RAM server
 worker_class = "uvicorn.workers.UvicornWorker"  # ASGI worker for better async performance
-worker_connections = 500  # Reduced connections
+worker_connections = 100  # Very reduced connections for memory constrained system
 timeout = 60  # Increased timeout for ML processing
 keepalive = 2
 
-# Restart workers more frequently to prevent memory leaks
-max_requests = 100  # More frequent restarts
-max_requests_jitter = 10
+# Restart workers very frequently to prevent memory leaks on constrained system
+max_requests = 20  # Very frequent restarts to prevent OOM
+max_requests_jitter = 2
 
 # Logging
 accesslog = "/opt/mcads/app/logs/gunicorn_access.log"

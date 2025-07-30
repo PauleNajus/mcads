@@ -1,0 +1,22 @@
+Service Management:
+
+# Check status
+systemctl status mcads.service
+
+# Restart service
+systemctl restart mcads.service
+
+# View logs
+journalctl -u mcads.service -f
+
+
+For Development Testing:
+
+# Stop production temporarily
+systemctl stop mcads.service
+
+# Run development server
+python3 manage.py runserver 0.0.0.0:8000
+
+# Restart production
+systemctl start mcads.service

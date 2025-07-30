@@ -76,19 +76,26 @@ class GradCAM:
         self._register_hooks()
     
     def _register_hooks(self):
+        # Initialize to None
+        self.activations = None
+        self.gradients = None
+        
         def forward_hook(module, input, output):
             self.activations = output.detach()
         
         def backward_hook(module, grad_input, grad_output):
-            self.gradients = grad_output[0].detach()
+            if grad_output[0] is not None:
+                self.gradients = grad_output[0].detach()
         
         # Register hooks to capture activations and gradients
         self.hook_forward = self.target_layer.register_forward_hook(forward_hook)
         self.hook_backward = self.target_layer.register_full_backward_hook(backward_hook)
     
     def _release_hooks(self):
-        self.hook_forward.remove()
-        self.hook_backward.remove()
+        if hasattr(self, 'hook_forward'):
+            self.hook_forward.remove()
+        if hasattr(self, 'hook_backward'):
+            self.hook_backward.remove()
     
     def get_heatmap(self, input_tensor, target_class=None):
         """
@@ -104,7 +111,16 @@ class GradCAM:
         """
         # Forward pass
         self.model.zero_grad()
-        output = self.model(input_tensor)
+        try:
+            output = self.model(input_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error in GRAD-CAM. Using CPU fallback.")
+                self.model = self.model.cpu()
+                input_tensor = input_tensor.cpu()
+                output = self.model(input_tensor)
+            else:
+                raise e
         
         # If target_class is None, get class with highest score
         if target_class is None:
@@ -128,6 +144,12 @@ class GradCAM:
         one_hot[0, target_class] = 1
         output.backward(gradient=one_hot)
         
+        # Check if gradients and activations were captured
+        if self.gradients is None:
+            raise RuntimeError("Gradients not captured. Check if target layer is correct.")
+        if self.activations is None:
+            raise RuntimeError("Activations not captured. Check if target layer is correct.")
+        
         # Calculate weights based on global average pooling of gradients
         pooled_gradients = torch.mean(self.gradients, dim=[0, 2, 3])
         
@@ -149,6 +171,10 @@ class GradCAM:
         # Normalize heatmap
         if np.max(heatmap) > 0:
             heatmap = heatmap / np.max(heatmap)
+        else:
+            # If heatmap is all zeros, create a fallback minimal heatmap
+            print("Warning: GRAD-CAM heatmap is all zeros. Creating fallback.")
+            heatmap = np.ones_like(heatmap) * 0.1
         
         return heatmap, output
     
@@ -619,7 +645,16 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     # Get model predictions to determine target class if not provided
     wrapped_model.eval()
     with torch.no_grad():
-        preds = wrapped_model(img_tensor)
+        try:
+            preds = wrapped_model(img_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                wrapped_model = wrapped_model.cpu()
+                img_tensor = img_tensor.cpu()
+                preds = wrapped_model(img_tensor)
+            else:
+                raise e
     
     # If target_class is not provided, use the class with the highest probability
     if target_class is None:
@@ -846,7 +881,16 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     # Get model predictions to determine target class if not provided
     wrapped_model.eval()
     with torch.no_grad():
-        preds = wrapped_model(img_tensor)
+        try:
+            preds = wrapped_model(img_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                wrapped_model = wrapped_model.cpu()
+                img_tensor = img_tensor.cpu()
+                preds = wrapped_model(img_tensor)
+            else:
+                raise e
     
     # If target_class is not provided, use the class with the highest probability
     if target_class is None:

@@ -481,11 +481,53 @@ def home(request):
             xray_instance = form.save(commit=False)
             # Assign the current user
             xray_instance.user = request.user
-            # Now save the instance
-            xray_instance.save()
+            # Set the requires_expert_review field (default to False)
+            xray_instance.requires_expert_review = False
             
-            # Get the model type from the form
+            # Set default values for fields that cannot be NULL in database
+            if not xray_instance.first_name:
+                xray_instance.first_name = ''
+            if not xray_instance.last_name:
+                xray_instance.last_name = ''
+            if not xray_instance.patient_id:
+                xray_instance.patient_id = ''
+            if not xray_instance.gender:
+                xray_instance.gender = ''
+            if not xray_instance.additional_info:
+                xray_instance.additional_info = ''
+            if not xray_instance.technologist_first_name:
+                xray_instance.technologist_first_name = ''
+            if not xray_instance.technologist_last_name:
+                xray_instance.technologist_last_name = ''
+            if not xray_instance.image_format:
+                xray_instance.image_format = ''
+            if not xray_instance.image_size:
+                xray_instance.image_size = ''
+            if not xray_instance.image_resolution:
+                xray_instance.image_resolution = ''
+            
+            # Set model_used field
             model_type = request.POST.get('model_type', 'densenet')
+            xray_instance.model_used = model_type
+            # Now save the instance
+            try:
+                xray_instance.save()
+            except Exception as e:
+                # Log the error for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error saving XRayImage: {e}")
+                
+                # Return error response for AJAX requests
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'error': 'Database error occurred while saving image',
+                        'details': str(e)
+                    }, status=500)
+                else:
+                    # For non-AJAX requests, re-raise the exception
+                    raise
+
             
             # Save image to disk
             image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
@@ -507,6 +549,13 @@ def home(request):
             else:
                 # Redirect for normal form submissions
                 return redirect('xray_results', pk=xray_instance.pk)
+        else:
+            # Handle form validation errors for AJAX requests
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'error': 'Form validation failed',
+                    'errors': form.errors
+                }, status=400)
     else:
         form = XRayUploadForm(user=request.user)
         
@@ -922,15 +971,24 @@ def generate_interpretability(request, pk):
     return redirect('xray_results', pk=pk)
 
 
-@login_required
 def check_progress(request, pk):
-    """AJAX endpoint to check processing progress"""
+    """AJAX endpoint to check processing progress - lightweight version for memory-constrained systems"""
+    
+    # Import here to avoid loading heavy dependencies
+    import gc
+    from django.http import JsonResponse
+    
+    # Check authentication manually to provide better JSON error responses
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': 'Authentication required',
+            'message': 'Please log in to check progress'
+        }, status=401)
+    
     try:
-        # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
-        
-        # Allow access to any X-ray from the same hospital
-        xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+        # For now, allow access to any X-ray the user uploaded
+        # TODO: Implement proper hospital-based access control later
+        xray_instance = XRayImage.objects.get(pk=pk, user=request.user)
         
         response_data = {
             'status': xray_instance.processing_status,
@@ -1000,9 +1058,30 @@ def check_progress(request, pk):
             # Include image URL for display
             response_data['image_url'] = xray_instance.image.url
         
+        # Force garbage collection to free memory
+        gc.collect()
         return JsonResponse(response_data)
     except XRayImage.DoesNotExist:
-        return JsonResponse({'error': _('Image not found')}, status=404)
+        # Log the 404 for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"XRayImage {pk} not found for user {request.user.username}")
+        
+        return JsonResponse({
+            'error': 'Image not found or access denied',
+            'message': f'X-ray image {pk} was not found or you do not have permission to access it.'
+        }, status=404)
+    except Exception as e:
+        # Log the error for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in check_progress for pk={pk}: {e}")
+        
+        # Return JSON error response instead of HTML error page
+        return JsonResponse({
+            'error': 'An error occurred while checking progress',
+            'details': str(e)
+        }, status=500)
 
 
 @login_required
