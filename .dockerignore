@@ -1,0 +1,72 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environment
+venv/
+env/
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Development files
+.env.example
+*.md
+README*
+.editorconfig
+.stylelintrc.json
+pyrightconfig.json
+
+# Backup and temporary files
+backups/
+*.backup
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+tests/
+.coverage
+.pytest_cache/
+.tox/
+
+# Documentation
+docs/
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+
+# Media files during build (mounted as volume)
+media/*
+staticfiles/*
+logs/*
+data_exports/*
+
+# SSL certificates
+ssl/
+*.pem
+*.key
+*.crt
+
+# Temporary build files
+*.tar.gz
+*.zip
