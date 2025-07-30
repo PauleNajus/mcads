@@ -1,6 +1,0 @@
-For production, consider:
-1. Using PostgreSQL instead of SQLite
-2. Redis for caching instead of local memory
-3. Nginx as reverse proxy
-4. SSL/TLS certificate installation
-5. Database connection pooling
