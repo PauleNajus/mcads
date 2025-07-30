@@ -1,0 +1,13 @@
+{
+    "venvPath": ".",
+    "venv": "venv",
+    "pythonPath": "./venv/bin/python",
+    "pythonVersion": "3.12",
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "reportMissingImports": "warning",
+    "reportMissingTypeStubs": "none",
+    "reportUnusedImport": "information",
+    "reportUnusedClass": "information",
+    "reportUnusedFunction": "information"
+}
