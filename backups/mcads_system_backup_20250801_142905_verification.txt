@@ -1,0 +1,26 @@
+Backup Verification Report
+==========================
+Backup Name: mcads_system_backup_20250801_142905
+Backup Date: Fri Aug  1 02:29:12 PM EEST 2025
+Backup Size: 65M
+Backup Location: ./backups/mcads_system_backup_20250801_142905.tar.gz
+
+Archive Contents:
+mcads_system_backup_20250801_142905/
+mcads_system_backup_20250801_142905/tests.tar.gz
+mcads_system_backup_20250801_142905/models.tar.gz
+mcads_system_backup_20250801_142905/system_info.txt
+mcads_system_backup_20250801_142905/static.tar.gz
+mcads_system_backup_20250801_142905/locale.tar.gz
+mcads_system_backup_20250801_142905/media.tar.gz
+mcads_system_backup_20250801_142905/staticfiles.tar.gz
+mcads_system_backup_20250801_142905/config.tar.gz
+mcads_system_backup_20250801_142905/db.sqlite3
+mcads_system_backup_20250801_142905/app_code.tar.gz
+mcads_system_backup_20250801_142905/data_exports.tar.gz
+mcads_system_backup_20250801_142905/logs.tar.gz
+
+Total Files in Archive:
+13
+
+Backup Status: SUCCESS
