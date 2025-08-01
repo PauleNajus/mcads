@@ -40,6 +40,16 @@ services:
   web:
     build: .
     container_name: mcads_web
+    entrypoint: []
+    command: bash -c "
+      echo 'Starting MCADS Docker initialization...' &&
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      mkdir -p /app/logs /app/media /app/data_exports /app/backups &&
+      echo 'MCADS initialization completed!' &&
+      gunicorn --bind 0.0.0.0:8000 --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 60 --max-requests 1000 --access-logfile /app/logs/gunicorn_access.log --error-logfile /app/logs/gunicorn_error.log mcads_project.asgi:application"
     depends_on:
       db:
         condition: service_healthy
@@ -55,6 +65,10 @@ services:
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,mcads.casa,www.mcads.casa,203.161.58.22,server1.mcads.casa
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
@@ -65,7 +79,7 @@ services:
       - "8000:8000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-f", "-L", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -74,7 +88,11 @@ services:
   celery:
     build: .
     container_name: mcads_celery
-    command: celery -A mcads_project worker -l info --concurrency=1
+    entrypoint: []
+    command: bash -c "
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      celery -A mcads_project worker -l info --concurrency=1"
     depends_on:
       db:
         condition: service_healthy
@@ -89,6 +107,10 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
@@ -99,7 +121,11 @@ services:
   celery-beat:
     build: .
     container_name: mcads_celery_beat
-    command: celery -A mcads_project beat -l info
+    entrypoint: []
+    command: bash -c "
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      celery -A mcads_project beat -l info"
     depends_on:
       db:
         condition: service_healthy
@@ -114,6 +140,10 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped

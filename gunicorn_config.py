@@ -16,8 +16,8 @@ max_requests = 20  # Very frequent restarts to prevent OOM
 max_requests_jitter = 2
 
 # Logging
-accesslog = "/opt/mcads/app/logs/gunicorn_access.log"
-errorlog = "/opt/mcads/app/logs/gunicorn_error.log"
+accesslog = "/app/logs/gunicorn_access.log"
+errorlog = "/app/logs/gunicorn_error.log"
 loglevel = "info"
 
 # Process naming
@@ -25,9 +25,8 @@ proc_name = 'mcads_gunicorn'
 
 # Server mechanics
 daemon = False
-pidfile = "/opt/mcads/app/gunicorn.pid"
-user = "paubun"
-group = "paubun"
+pidfile = "/app/gunicorn.pid"
+# user and group are handled by Docker container user context
 tmp_upload_dir = None
 
 # SSL (if needed later)

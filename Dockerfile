@@ -40,21 +40,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
 # Install PostgreSQL client for pg_isready
 RUN apt-get update && apt-get install -y postgresql-client redis-tools && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Change ownership to app user
-RUN chown -R mcads:mcads /app
+# Create necessary directories
+RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.matplotlib /app/.torch /app/.torchxrayvision /home/mcads/.torchxrayvision/models_data
+
+# Change ownership to app user (including the entrypoint script)
+RUN chown -R mcads:mcads /app && chown mcads:mcads /usr/local/bin/docker-entrypoint.sh
 
 # Switch to app user
 USER mcads

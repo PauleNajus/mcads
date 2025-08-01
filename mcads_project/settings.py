@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_bootstrap5',
     'csp',  # Content Security Policy
+    'django_celery_beat',  # Celery beat scheduler
+    'django_celery_results',  # Celery result backend
     'xrayapp',
 ]
 
@@ -96,17 +98,30 @@ WSGI_APPLICATION = 'mcads_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME', default='mcads_db'),
-        'USER': env('DB_USER', default='mcads_user'),
-        'PASSWORD': env('DB_PASSWORD', default=''),
-        'HOST': env('DB_HOST', default='localhost'),
-        'PORT': env('DB_PORT', default='5432'),
-        'OPTIONS': {},
+# Use PostgreSQL in production, SQLite in development
+if os.environ.get('DB_HOST'):
+    # Production: PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'mcads_db'),
+            'USER': os.environ.get('DB_USER', 'mcads_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'mcads_secure_password_2024'),
+            'HOST': os.environ.get('DB_HOST', 'db'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'OPTIONS': {
+                'sslmode': 'disable',
+            },
+        }
     }
-}
+else:
+    # Development: SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -294,3 +309,35 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
+# Celery task settings
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Task routing and worker settings
+CELERY_TASK_ROUTES = {
+    'xrayapp.tasks.*': {'queue': 'default'},
+}
+
+# Worker settings
+CELERY_WORKER_CONCURRENCY = 1  # Single worker for memory constrained environment
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_DISABLE_RATE_LIMITS = False
+
+# Task execution settings
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 360  # 6 minutes
+CELERY_TASK_ALWAYS_EAGER = False  # Set to True for testing without Celery
+
+# Beat scheduler settings
+CELERY_BEAT_SCHEDULE = {
+    # Add scheduled tasks here if needed
+}
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

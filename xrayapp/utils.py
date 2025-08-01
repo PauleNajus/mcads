@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import torchxrayvision as xrv
 import skimage.io
 import torchvision
@@ -60,6 +59,19 @@ def load_model(model_type='densenet'):
     # Force CPU to save memory and prevent hardware issues
     device = torch.device("cpu")
     
+    # Set cache directory to a writable location and force XRayVision to use it
+    cache_dir = os.environ.get('TORCHXRAYVISION_CACHE_DIR', '/app/.torchxrayvision')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Force TorchXRayVision to use our cache directory by setting environment variables
+    os.environ['XRV_DATA_DIR'] = cache_dir
+    os.environ['TORCHXRAYVISION_CACHE_DIR'] = cache_dir
+    os.environ['TORCH_HOME'] = cache_dir
+    
+    # Also set the HOME environment variable to our cache directory to prevent TorchXRayVision from using /home/mcads
+    original_home = os.environ.get('HOME', '')
+    os.environ['HOME'] = cache_dir
+    
     try:
         if model_type == 'resnet':
             # Load ResNet model - all classes except "Enlarged Cardiomediastinum" and "Lung Lesion"
@@ -82,6 +94,12 @@ def load_model(model_type='densenet'):
     except Exception as e:
         logger.error(f"❌ Failed to load {model_type} model: {e}")
         raise e
+    finally:
+        # Restore original HOME environment variable
+        if original_home:
+            os.environ['HOME'] = original_home
+        else:
+            os.environ.pop('HOME', None)
 
 
 def clear_model_cache():
@@ -144,15 +162,21 @@ def extract_image_metadata(image_path):
             else:
                 size = f"{file_size_bytes / (1024 * 1024):.1f} MB"
             
-            # Try to get creation date from EXIF data
+            # Try to get creation date from EXIF data using proper method
             date_created = None
-            if hasattr(img, '_getexif') and img._getexif() is not None:
-                exif = {
-                    TAGS.get(tag, tag): value
-                    for tag, value in img._getexif().items()
-                }
-                if 'DateTimeOriginal' in exif:
-                    date_created = datetime.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            try:
+                # Use getexif() method instead of _getexif()
+                exif_data = img.getexif()
+                if exif_data:
+                    exif = {
+                        TAGS.get(tag, tag): value
+                        for tag, value in exif_data.items()
+                    }
+                    if 'DateTimeOriginal' in exif:
+                        date_created = datetime.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            except (AttributeError, ValueError, TypeError):
+                # Fallback if EXIF extraction fails
+                pass
             
             # If no EXIF data, use file creation/modification time
             if date_created is None:
@@ -562,7 +586,7 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
         saliency_map = interpretation_results['saliency_map']
         
         # Apply colormap to saliency map (convert to 0-255 range)
-        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)
+        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)  # type: ignore
         
         # Convert BGR to RGB for proper color display
         saliency_rgb = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)
@@ -595,7 +619,7 @@ def save_heatmap(interpretation_results, output_path, format='png'):
         heatmap_resized = cv2.resize(heatmap, (original_shape[1], original_shape[0]))
         
         # Apply colormap to heatmap (convert to 0-255 range)
-        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)  # type: ignore
         
         # Convert BGR to RGB for proper color display
         heatmap_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
