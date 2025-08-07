@@ -12,13 +12,79 @@ from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResu
 admin.site.unregister(User)
 
 
+# Inline admin for UserProfile to edit within User admin
+class UserProfileInline(admin.StackedInline):
+    """Inline admin for UserProfile within User admin"""
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = _('Profile & Permissions')
+    
+    fieldsets = (
+        (_('Role & Hospital'), {
+            'fields': ('role', 'hospital'),
+            'description': _('Role determines permissions. Hospital is used for shared prediction history.')
+        }),
+        (_('Preferences'), {
+            'fields': ('preferred_theme', 'preferred_language', 'dashboard_view'),
+            'classes': ('collapse',)
+        }),
+        (_('Notifications'), {
+            'fields': ('email_notifications', 'processing_complete_notification'),
+            'classes': ('collapse',)
+        }),
+        (_('Security'), {
+            'fields': ('two_factor_auth_enabled',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    """Enhanced User admin with role information"""
-    list_display = ('username', 'email', 'first_name', 'last_name', 'get_role', 'is_staff', 'is_active', 'date_joined')
-    list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined', 'profile__role')
+    """Enhanced User admin with all fields editable"""
+    list_display = ('username', 'email', 'first_name', 'last_name', 'get_role', 'get_hospital', 'is_staff', 'is_active', 'date_joined')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined', 'profile__role', 'profile__hospital')
     search_fields = ('username', 'first_name', 'last_name', 'email')
     ordering = ('username',)
+    
+    # Add the inline for UserProfile
+    inlines = [UserProfileInline]
+    
+    # Define comprehensive fieldsets with all User model fields
+    fieldsets = (
+        (None, {
+            'fields': ('username', 'password')
+        }),
+        (_('Personal info'), {
+            'fields': ('first_name', 'last_name', 'email')
+        }),
+        (_('Permissions'), {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+            'description': _('is_staff allows access to admin site. is_superuser grants all permissions.')
+        }),
+        (_('Important dates'), {
+            'fields': ('last_login', 'date_joined')
+        }),
+    )
+    
+    # Override add_fieldsets to include all fields when creating new user
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'password1', 'password2'),
+        }),
+        (_('Personal info'), {
+            'classes': ('wide',),
+            'fields': ('first_name', 'last_name', 'email')
+        }),
+        (_('Permissions'), {
+            'classes': ('wide',),
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
+        }),
+    )
+    
+    # Remove readonly restrictions - all fields are now editable
+    readonly_fields = ('last_login', 'date_joined')  # Only keep system-managed fields as readonly
     
     def get_role(self, obj):
         """Get user role with color coding"""
@@ -40,61 +106,34 @@ class CustomUserAdmin(UserAdmin):
     get_role.short_description = _('Role')
     get_role.admin_order_field = 'profile__role'
 
-    def get_fieldsets(self, request, obj=None):
-        """Override fieldsets to include role management"""
-        fieldsets = super().get_fieldsets(request, obj)
-        if obj and hasattr(obj, 'profile'):
-            # Add role information to personal info
-            fieldsets = list(fieldsets)
-            fieldsets[1] = (
-                _('Personal info'),
-                {'fields': ('first_name', 'last_name', 'email', 'get_role_info')}
-            )
-        return fieldsets
-
-    def get_role_info(self, obj):
-        """Display role information in user edit form"""
+    def get_hospital(self, obj):
+        """Get user hospital"""
         try:
-            profile = obj.profile
-            return format_html(
-                '<strong>{}:</strong> {} <br>'
-                '<a href="{}" class="button">{}</a>',
-                _('Current Role'),
-                profile.role,
-                reverse('admin:xrayapp_userprofile_change', args=[profile.pk]),
-                _('Edit Profile & Role')
-            )
+            return obj.profile.hospital
         except:
-            return format_html(
-                '<span style="color: red;">{}</span><br>'
-                '<a href="{}" class="button">{}</a>',
-                _('No profile found'),
-                reverse('admin:xrayapp_userprofile_add') + f'?user={obj.pk}',
-                _('Create Profile')
-            )
-    get_role_info.short_description = _('Role Information')
-
-    readonly_fields = UserAdmin.readonly_fields + ('get_role_info',)
+            return '-'
+    get_hospital.short_description = _('Hospital')
+    get_hospital.admin_order_field = 'profile__hospital'
 
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    """Enhanced UserProfile admin with role management"""
+    """Enhanced UserProfile admin with full editing capabilities"""
     list_display = (
-        'user', 'get_user_full_name', 'role', 'get_role_permissions', 
+        'user', 'get_user_full_name', 'role', 'hospital', 'get_role_permissions', 
         'preferred_theme', 'email_notifications', 'created_at'
     )
-    list_filter = ('role', 'preferred_theme', 'preferred_language', 'email_notifications', 'created_at')
-    search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name')
+    list_filter = ('role', 'hospital', 'preferred_theme', 'preferred_language', 'email_notifications', 'created_at')
+    search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name', 'hospital')
     ordering = ('user__username',)
     
     fieldsets = (
         (_('User'), {
-            'fields': ('user', 'get_user_info')
+            'fields': ('user',)
         }),
-        (_('Role & Permissions'), {
-            'fields': ('role', 'get_permissions_display'),
-            'description': _('Role determines what actions the user can perform in the system.')
+        (_('Role & Hospital'), {
+            'fields': ('role', 'hospital'),
+            'description': _('Role determines permissions. Hospital is used for shared prediction history.')
         }),
         (_('Preferences'), {
             'fields': ('preferred_theme', 'preferred_language', 'dashboard_view'),
@@ -114,7 +153,8 @@ class UserProfileAdmin(admin.ModelAdmin):
         })
     )
     
-    readonly_fields = ('get_user_info', 'get_permissions_display', 'created_at', 'updated_at')
+    # Only keep system-managed fields as readonly
+    readonly_fields = ('created_at', 'updated_at')
 
     def get_user_full_name(self, obj):
         """Get user's full name"""
@@ -152,7 +192,8 @@ class UserProfileAdmin(admin.ModelAdmin):
         if obj.can_delete_data():
             perms.append(_('Delete'))
         
-        return ', '.join(perms) if perms else _('View Only')
+        # Convert lazy translation proxy objects to strings before joining
+        return ', '.join(str(perm) for perm in perms) if perms else str(_('View Only'))
     get_role_permissions.short_description = _('Key Permissions')
 
     def get_permissions_display(self, obj):
@@ -376,13 +417,13 @@ class VisualizationResultAdmin(admin.ModelAdmin):
         links = []
         
         if obj.visualization_url:
-            links.append(f'<a href="{obj.visualization_url}" target="_blank">{_("Main Visualization")}</a>')
+            links.append(f'<a href="{obj.visualization_url}" target="_blank">{str(_("Main Visualization"))}</a>')
         if obj.heatmap_url:
-            links.append(f'<a href="{obj.heatmap_url}" target="_blank">{_("Heatmap")}</a>')
+            links.append(f'<a href="{obj.heatmap_url}" target="_blank">{str(_("Heatmap"))}</a>')
         if obj.overlay_url:
-            links.append(f'<a href="{obj.overlay_url}" target="_blank">{_("Overlay")}</a>')
+            links.append(f'<a href="{obj.overlay_url}" target="_blank">{str(_("Overlay"))}</a>')
         if obj.saliency_url:
-            links.append(f'<a href="{obj.saliency_url}" target="_blank">{_("Saliency Map")}</a>')
+            links.append(f'<a href="{obj.saliency_url}" target="_blank">{str(_("Saliency Map"))}</a>')
         
         if links:
             return format_html(' | '.join(links))
