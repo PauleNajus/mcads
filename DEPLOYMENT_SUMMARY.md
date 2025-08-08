@@ -123,8 +123,7 @@ source venv/bin/activate
 pip install torch torchvision torchxrayvision scikit-image
 
 # Restore original ML modules
-cp xrayapp/utils_original.py xrayapp/utils.py
-cp xrayapp/interpretability_original.py xrayapp/interpretability.py
+# Original migration steps no longer needed; legacy files removed
 
 # Restart service
 sudo systemctl restart mcads.service

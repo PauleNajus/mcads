@@ -241,14 +241,17 @@ CONTENT_SECURITY_POLICY = {
     }
 }
 
-# Static files optimization with WhiteNoise
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Static files storage
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
-# Use local Bootstrap assets with django-bootstrap5
+# Use CDN Bootstrap assets with django-bootstrap5
 BOOTSTRAP5 = {
     "include_jquery": False,
-    "css_url": f"{STATIC_URL}vendor/bootstrap/css/bootstrap.min.css",
-    "javascript_url": f"{STATIC_URL}vendor/bootstrap/js/bootstrap.bundle.min.js",
+    "css_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
+    "javascript_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
 }
 
 # Internationalization

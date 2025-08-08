@@ -110,20 +110,17 @@ The MCADS (Multi-label Chest Abnormality Detection System) has been **completely
 
 ### 📊 Health Monitoring
 ```bash
-python system_health_monitor.py    # Complete system health check
-python monitoring_alerts.py        # Advanced monitoring with alerts
+# (removed legacy standalone scripts)
 ```
 
 ### 💾 Backup Management
 ```bash
-python backup_system.py backup     # Create full backup
-python backup_system.py status     # Check backup status
-python backup_system.py restore    # Restore from backup
+# Use scripts/system_backup.sh and scripts/backup.sh for backups
 ```
 
 ### 🚀 Scaling Preparation
 ```bash
-python load_balancing_prep.py      # Prepare for horizontal scaling
+# Load balancing preparation is documented; script removed
 ```
 
 ---
