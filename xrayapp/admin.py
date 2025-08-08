@@ -3,9 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, USER_ROLES
+from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult
 
 
 # Unregister the default User admin
@@ -74,7 +73,7 @@ class CustomUserAdmin(UserAdmin):
             )
     get_role_info.short_description = _('Role Information')
 
-    readonly_fields = UserAdmin.readonly_fields + ('get_role_info',)
+    readonly_fields = (*UserAdmin.readonly_fields, 'get_role_info')
 
 
 @admin.register(UserProfile)

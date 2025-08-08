@@ -8,7 +8,7 @@ try:
     MAGIC_AVAILABLE = True
 except ImportError:
     MAGIC_AVAILABLE = False
-from .models import XRayImage, PredictionHistory, UserProfile
+from .models import XRayImage, UserProfile
 from django.contrib.auth.models import User
 
 class XRayUploadForm(forms.ModelForm):
@@ -285,7 +285,7 @@ class ChangePasswordForm(forms.Form):
     
     def clean_new_password(self):
         """Validate new password strength"""
-        new_password = self.cleaned_data.get('new_password')
+        new_password = self.cleaned_data.get('new_password') or ""
         
         # Basic password validation
         if len(new_password) < 8:

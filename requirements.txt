@@ -10,8 +10,8 @@ django-csp==3.8  # Content Security Policy
 Pillow==11.3.0  # Keep updated for security
 
 # Machine Learning and Scientific Computing
-torch==2.7.1
-torchvision==0.22.1
+torch==2.7.0
+torchvision==0.22.0
 torchxrayvision==1.3.4
 numpy==2.2.6  # Constrained by PyTorch compatibility
 matplotlib==3.10.3

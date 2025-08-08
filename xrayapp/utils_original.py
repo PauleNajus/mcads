@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import torchxrayvision as xrv
 import skimage.io
 import torchvision
@@ -8,10 +7,10 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from pathlib import Path
-import os
 from PIL import Image
 from PIL.ExifTags import TAGS
 from datetime import datetime
+from typing import Optional, Dict, Any
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 
 
@@ -75,11 +74,10 @@ def extract_image_metadata(image_path):
             
             # Try to get creation date from EXIF data
             date_created = None
-            if hasattr(img, '_getexif') and img._getexif() is not None:
-                exif = {
-                    TAGS.get(tag, tag): value
-                    for tag, value in img._getexif().items()
-                }
+            exif_func = getattr(img, '_getexif', None)
+            raw_exif: Optional[Dict[int, Any]] = exif_func() if callable(exif_func) else None
+            if raw_exif:
+                exif = {TAGS.get(tag, tag): value for tag, value in raw_exif.items()}
                 if 'DateTimeOriginal' in exif:
                     date_created = datetime.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
             
@@ -491,10 +489,10 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
         saliency_map = interpretation_results['saliency_map']
         
         # Apply colormap to saliency map (convert to 0-255 range)
-        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)
+        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)  # type: ignore[arg-type]
         
         # Convert BGR to RGB for proper color display
-        saliency_rgb = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)
+        saliency_rgb = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)  # type: ignore
         
         # Save directly as image without matplotlib padding
         from PIL import Image
@@ -524,10 +522,10 @@ def save_heatmap(interpretation_results, output_path, format='png'):
         heatmap_resized = cv2.resize(heatmap, (original_shape[1], original_shape[0]))
         
         # Apply colormap to heatmap (convert to 0-255 range)
-        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)  # type: ignore[arg-type]
         
         # Convert BGR to RGB for proper color display
-        heatmap_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
+        heatmap_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)  # type: ignore
         
         # Save directly as image without matplotlib padding
         from PIL import Image

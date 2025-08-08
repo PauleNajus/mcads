@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -69,12 +67,22 @@ services:
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
       - XRV_DATA_DIR=/app/.torchxrayvision
       - MPLCONFIGDIR=/app/.matplotlib
+      # Model configuration
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      # OOD autoencoder configuration
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_OOD_THRESHOLD=0.015
+      # Optional calibration file (provide ./config/calibration.json on host)
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
       - ./backups:/app/backups
+      - ./config:/app/config:ro
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -111,10 +119,18 @@ services:
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
       - XRV_DATA_DIR=/app/.torchxrayvision
       - MPLCONFIGDIR=/app/.matplotlib
+      # Keep environment consistent for tasks
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_OOD_THRESHOLD=0.015
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
+      - ./config:/app/config:ro
     restart: unless-stopped
 
   # Celery Beat for scheduled tasks
@@ -144,8 +160,15 @@ services:
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
       - XRV_DATA_DIR=/app/.torchxrayvision
       - MPLCONFIGDIR=/app/.matplotlib
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_OOD_THRESHOLD=0.015
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./logs:/app/logs
+      - ./config:/app/config:ro
     restart: unless-stopped
 
   # Nginx Reverse Proxy

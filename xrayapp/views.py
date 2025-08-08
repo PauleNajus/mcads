@@ -1,19 +1,21 @@
 from django.shortcuts import render, redirect
 import threading
-import os
 from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone, translation
-from django.db.models import Q, Prefetch
 from django.core.paginator import Paginator
-from django.views.decorators.cache import cache_page
-from django.core.cache import cache
-from datetime import datetime, timedelta
+"""Views for MCADS.
+
+This module contains various view functions. Some dynamic attributes on Django
+models (like `.id`) are accessed via `.pk` to satisfy static type checkers.
+User profile access is guarded because `request.user` may not have a related
+`profile` yet at the time of access.
+"""
 from dateutil.relativedelta import relativedelta
 from .forms import XRayUploadForm, PredictionHistoryFilterForm, UserInfoForm, UserProfileForm, ChangePasswordForm
 from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SavedRecord
-from .utils import (process_image, process_image_with_interpretability,
+from .utils import (process_image,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
                    save_heatmap, save_overlay)
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
@@ -21,7 +23,7 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.utils.translation import activate, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import logging
 
 # Set up logging
@@ -418,7 +420,7 @@ def create_visualization_result(xray_instance, visualization_type, target_pathol
         visualization.save()
         
         action = "Created" if created else "Updated"
-        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.id}")
+        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.pk}")
         
         return visualization
         
@@ -460,7 +462,7 @@ def update_existing_prediction_history(xray_instance, model_type):
                 existing_history.model_used = f"{existing_history.model_used}+{model_type}"
             
             existing_history.save()
-            logger.info(f"Updated existing prediction history record #{existing_history.id} with visualization data")
+            logger.info(f"Updated existing prediction history record #{existing_history.pk} with visualization data")
         else:
             # If no existing record found, create a new one as fallback
             logger.warning(f"No existing prediction history found for XRayImage #{xray_instance.id}, creating new record")
@@ -571,7 +573,9 @@ def home(request):
 def xray_results(request, pk):
     """View the results of the X-ray analysis"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -694,7 +698,7 @@ def xray_results(request, pk):
     
     for viz in visualizations:
         viz_data = {
-            'id': viz.id,
+            'id': viz.pk,
             'target_pathology': viz.target_pathology,
             'created_at': viz.created_at,
             'model_used': viz.model_used,
@@ -747,7 +751,9 @@ def prediction_history(request):
     form = PredictionHistoryFilterForm(request.GET)
     
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Initialize query with optimized select_related to avoid N+1 queries
     # Filter by users from the same hospital instead of just current user
@@ -804,7 +810,7 @@ def prediction_history(request):
     # Get saved record IDs for current user to show star status
     saved_record_ids = set(SavedRecord.objects.filter(
         user=request.user,
-        prediction_history__in=[item.id for item in history_items]
+        prediction_history__in=[item.pk for item in history_items]
     ).values_list('prediction_history_id', flat=True))
     
     context = {
@@ -822,7 +828,9 @@ def delete_prediction_history(request, pk):
     """Delete a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow deletion of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -839,7 +847,9 @@ def delete_all_prediction_history(request):
     """Delete all prediction history records"""
     if request.method == 'POST':
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Count records before deletion for current hospital
         count = PredictionHistory.objects.filter(user__profile__hospital=user_hospital).count()
@@ -864,8 +874,12 @@ def delete_visualization(request, pk):
         visualization = VisualizationResult.objects.get(pk=pk)
         
         # Check if user has permission to delete (must be from same hospital)
-        user_hospital = request.user.profile.hospital
-        if visualization.xray.user.profile.hospital != user_hospital:
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
+        owner_profile = getattr(visualization.xray.user, 'profile', None)
+        owner_hospital = getattr(owner_profile, 'hospital', None)
+        if owner_hospital != user_hospital:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Delete associated files
@@ -904,7 +918,9 @@ def edit_prediction_history(request, pk):
     """Edit a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow editing of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -933,7 +949,9 @@ def edit_prediction_history(request, pk):
 def generate_interpretability(request, pk):
     """Generate interpretability visualization for an X-ray image"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -1009,7 +1027,7 @@ def check_progress(request, pk):
             
             for viz in visualizations:
                 viz_data = {
-                    'id': viz.id,
+                    'id': viz.pk,
                     'target_pathology': viz.target_pathology,
                     'created_at': viz.created_at.isoformat(),
                     'model_used': viz.model_used,

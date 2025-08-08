@@ -65,6 +65,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -231,32 +232,24 @@ CONTENT_SECURITY_POLICY = {
         'base-uri': ("'self'",),
         'connect-src': ("'self'",),
         'default-src': ("'self'",),
-        'font-src': (
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        ),
+        'font-src': ("'self'",),
         'frame-ancestors': ("'none'",),
-        'img-src': ("'self'", "data:", "https:"),
+        'img-src': ("'self'", "data:"),
         'object-src': ("'none'",),
-        'script-src': (
-            "'self'",
-            "'unsafe-inline'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        ),
-        'style-src': (
-            "'self'",
-            "'unsafe-inline'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        )
+        'script-src': ("'self'", "'unsafe-inline'"),
+        'style-src': ("'self'", "'unsafe-inline'"),
     }
 }
 
-# Static files optimization with WhiteNoise  
-# Note: Using default storage to work with nginx serving static files directly
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Static files optimization with WhiteNoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Use local Bootstrap assets with django-bootstrap5
+BOOTSTRAP5 = {
+    "include_jquery": False,
+    "css_url": f"{STATIC_URL}vendor/bootstrap/css/bootstrap.min.css",
+    "javascript_url": f"{STATIC_URL}vendor/bootstrap/js/bootstrap.bundle.min.js",
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/

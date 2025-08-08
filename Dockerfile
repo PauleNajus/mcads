@@ -37,7 +37,10 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
+# Install PyTorch and torchvision from the official CPU index first to ensure wheels resolve,
+# then install the remaining dependencies from requirements.txt (already satisfied pins are skipped).
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.7.0 torchvision==0.22.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install PostgreSQL client for pg_isready
@@ -62,9 +65,9 @@ USER mcads
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check (root path responds without auth)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+    CMD curl -f http://localhost:8000/ || exit 1
 
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
