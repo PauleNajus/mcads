@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 import environ
+from typing import cast
 from django.core.management.utils import get_random_secret_key
 
 # Fix PyTorch CPU backend issues - must be set before torch import
@@ -42,9 +43,9 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True  # Temporary for CSS fix
-
-ALLOWED_HOSTS = ['mcads.casa', 'www.mcads.casa', '203.161.58.22', 'server1.mcads.casa', 'localhost', '127.0.0.1']
+# Types resolved via Env defaults declared above
+DEBUG: bool = cast(bool, env('DEBUG'))
+ALLOWED_HOSTS: list[str] = cast(list[str], env('ALLOWED_HOSTS'))
 
 
 # Application definition
@@ -65,12 +66,15 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'csp.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'xrayapp.middleware.RateLimitMiddleware',
+    'xrayapp.middleware.RoleBasedAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -153,6 +157,9 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
+# Respect HTTPS when behind a reverse proxy (Nginx)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Session security
 SESSION_COOKIE_AGE = 3600  # 1 hour
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
@@ -209,35 +216,57 @@ LOGGING = {
 logs_dir = BASE_DIR / 'logs'
 os.makedirs(logs_dir, exist_ok=True)
 
-# Redis caching configuration for production performance
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-        'TIMEOUT': 300,  # 5 minutes
-        'OPTIONS': {
-            'db': '1',
+# Cache configuration
+# Use Redis if REDIS_CACHE_URL is provided; otherwise fall back to in-memory cache for development
+_redis_cache_url = os.environ.get('REDIS_CACHE_URL')
+if _redis_cache_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_cache_url,
+            'TIMEOUT': 300,  # 5 minutes
         }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mcads-local',
+            'TIMEOUT': 300,
+        }
+    }
 
 # Cache middleware (add to MIDDLEWARE for full page caching if needed)
 CACHE_MIDDLEWARE_ALIAS = 'default'
 CACHE_MIDDLEWARE_SECONDS = 300
 CACHE_MIDDLEWARE_KEY_PREFIX = 'mcads'
 
-# Content Security Policy settings (django-csp 4.0+ format)
+# Content Security Policy (django-csp 3.8 format)
+# Allow Bootstrap via jsDelivr CDN; tighten other sources.
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_BASE_URI = ("'self'",)
+CSP_CONNECT_SRC = ("'self'",)
+CSP_FONT_SRC = ("'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+CSP_FRAME_ANCESTORS = ("'none'",)
+CSP_IMG_SRC = ("'self'", 'data:')
+CSP_OBJECT_SRC = ("'none'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net')
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+# Explicitly allow stylesheet <link>/<style> sources
+CSP_STYLE_SRC_ELEM = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+
+# Back-compat structure (has no effect for django-csp 3.8, retained for clarity)
 CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'base-uri': ("'self'",),
         'connect-src': ("'self'",),
         'default-src': ("'self'",),
-        'font-src': ("'self'",),
+        'font-src': ("'self'", 'https://cdn.jsdelivr.net'),
         'frame-ancestors': ("'none'",),
-        'img-src': ("'self'", "data:"),
+        'img-src': ("'self'", 'data:'),
         'object-src': ("'none'",),
-        'script-src': ("'self'", "'unsafe-inline'"),
-        'style-src': ("'self'", "'unsafe-inline'"),
+        'script-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
+        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
     }
 }
 

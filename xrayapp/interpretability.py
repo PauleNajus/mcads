@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter threading issues
 from typing import Optional
 import torchxrayvision as xrv
+from .model_loader import load_model
 
 
 def disable_inplace_relu(model):
@@ -586,13 +587,8 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     Returns:
         Dictionary with visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
@@ -716,13 +712,8 @@ def apply_combined_gradcam(image_path, model_type='densenet', probability_thresh
     Returns:
         Dictionary with combined visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
@@ -818,13 +809,8 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     Returns:
         Dictionary with visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
@@ -968,13 +954,8 @@ def apply_combined_pixel_interpretability(image_path, model_type='densenet', pro
     Returns:
         Dictionary with combined visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, _ = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)

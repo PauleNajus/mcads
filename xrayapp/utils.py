@@ -12,6 +12,8 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 from datetime import datetime
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
+from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder
+from typing import Any, cast
 
 # CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
 import logging
@@ -36,131 +38,24 @@ if hasattr(torch.backends, 'cudnn'):
 logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
 
 
-# Global model cache to prevent reloading
 _model_cache = {}
 _ae_cache_key = "autoencoder"
 _calibration_cache_key = "calibration"
 
 def load_model(model_type='densenet'):
-    """
-    Load the pre-trained torchxrayvision model with memory-efficient caching
-    
-    Args:
-        model_type (str): 'densenet' or 'resnet'
-        
-    Returns:
-        model: Loaded model
-        resize_dim (int): Resize dimension for preprocessing
-    """
-    # Check cache first
-    if model_type in _model_cache:
-        logger.info(f"Using cached {model_type} model")
-        return _model_cache[model_type]
-    logger.info(f"Loading {model_type} model...")
-    
-    # Force CPU to save memory and prevent hardware issues
-    device = torch.device("cpu")
-    
-    # Set cache directory to a writable location and force XRayVision to use it
-    default_cache = str((Path(__file__).resolve().parent.parent / '.torchxrayvision').resolve())
-    cache_dir = os.environ.get('TORCHXRAYVISION_CACHE_DIR', default_cache)
-    os.makedirs(cache_dir, exist_ok=True)
-    
-    # Force TorchXRayVision to use our cache directory by setting environment variables
-    os.environ['XRV_DATA_DIR'] = cache_dir
-    os.environ['TORCHXRAYVISION_CACHE_DIR'] = cache_dir
-    os.environ['TORCH_HOME'] = cache_dir
-    
-    # Also set the HOME environment variable to our cache directory to prevent TorchXRayVision from using /home/mcads
-    original_home = os.environ.get('HOME', '')
-    os.environ['HOME'] = cache_dir
-    
-    try:
-        if model_type == 'resnet':
-            # Allow overriding weights via env var
-            resnet_weights = os.environ.get('XRV_RESNET_WEIGHTS', 'resnet50-res512-all')
-            model = xrv.models.ResNet(weights=resnet_weights)
-            resize_dim = 512
-        else:
-            # Allow overriding weights via env var
-            densenet_weights = os.environ.get('XRV_DENSENET_WEIGHTS', 'densenet121-res224-all')
-            model = xrv.models.DenseNet(weights=densenet_weights)
-            resize_dim = 224
-        
-        model.to(device)
-        model.eval()
-        
-        # Cache the model
-        _model_cache[model_type] = (model, resize_dim)
-        logger.info(f"✅ {model_type} model loaded and cached successfully")
-        
-        return model, resize_dim
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to load {model_type} model: {e}")
-        raise e
-    finally:
-        # Restore original HOME environment variable
-        if original_home:
-            os.environ['HOME'] = original_home
-        else:
-            os.environ.pop('HOME', None)
+    """Compatibility wrapper: use shared cached loader."""
+    return cached_load_model(model_type)
 
 
 def clear_model_cache():
-    """Clear model cache to free memory"""
-    global _model_cache
-    logger.info(f"Clearing model cache ({len(_model_cache)} models)")
-    _model_cache.clear()
-    
-    # Force garbage collection
-    import gc
-    gc.collect()
-    
-    # Also clear PyTorch cache if available
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    """Deprecated; kept for backwards compatibility."""
+    from .model_loader import clear_model_cache as _clear
+    _clear()
 
 
 def load_autoencoder():
-    """Load and cache the TorchXRayVision autoencoder for OOD detection.
-
-    Uses weights specified by env var `XRV_AE_WEIGHTS` if provided, otherwise
-    falls back to a stable default ("101-elastic").
-    """
-    # Return from cache if available
-    if _ae_cache_key in _model_cache:
-        return _model_cache[_ae_cache_key]
-
-    # Force CPU for stability
-    device = torch.device("cpu")
-
-    # Ensure TorchXRayVision cache paths are set (reuse same dir as classifier)
-    default_cache = str((Path(__file__).resolve().parent.parent / '.torchxrayvision').resolve())
-    cache_dir = os.environ.get('TORCHXRAYVISION_CACHE_DIR', default_cache)
-    os.makedirs(cache_dir, exist_ok=True)
-    os.environ['XRV_DATA_DIR'] = cache_dir
-    os.environ['TORCHXRAYVISION_CACHE_DIR'] = cache_dir
-    os.environ['TORCH_HOME'] = cache_dir
-
-    # Choose weights
-    ae_weights = os.environ.get('XRV_AE_WEIGHTS', '').strip()
-    if not ae_weights:
-        # Fallback to a known good default from TorchXRayVision
-        ae_weights = "101-elastic"
-
-    try:
-        ae = xrv.autoencoders.ResNetAE(weights=ae_weights)
-        ae.to(device)
-        ae.eval()
-        # Cache with expected input resize for OOD (64x64 by default)
-        ae_resize = int(os.environ.get('XRV_AE_INPUT_SIZE', '64'))
-        _model_cache[_ae_cache_key] = (ae, ae_resize)
-        logger.info(f"✅ Autoencoder loaded (weights={ae_weights}, input={ae_resize})")
-        return ae, ae_resize
-    except Exception as e:
-        logger.error(f"❌ Failed to load autoencoder ({ae_weights}): {e}")
-        raise
+    """Compatibility wrapper: use shared cached loader."""
+    return cached_load_autoencoder()
 
 
 def compute_ood_score(img_np: np.ndarray) -> dict:
@@ -193,9 +88,10 @@ def compute_ood_score(img_np: np.ndarray) -> dict:
     img_tensor = torch.from_numpy(img_small).unsqueeze(0)  # (1, 1, ae_resize, ae_resize)
 
     with torch.no_grad():
-        # Encode and decode
-        z = ae.encode(img_tensor)
-        recon = ae.decode(z)
+        # Encode and decode (AE API not typed; cast to Any for tooling)
+        ae_mod: Any = ae
+        z = ae_mod.encode(img_tensor)
+        recon = ae_mod.decode(z)
 
     # Compute normalized MSE per pixel
     recon_err = (recon - img_tensor).pow(2).mean().item()
@@ -465,6 +361,7 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
         xray_instance.save()
     
     model, resize_dim = load_model(model_type)
+    model = cast(torch.nn.Module, model)
     
     # Apply transforms for model
     # Use consistent preprocessing: center-crop then resize for both models
@@ -513,10 +410,11 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     # For ResNet, ALWAYS use default_pathologies for correct mapping
     if model_type == 'resnet':
         # ResNet model outputs 18 values in the order of default_pathologies
-        results = dict(zip(xrv.datasets.default_pathologies, preds[0].detach().numpy()))
+        results = dict(zip(list(xrv.datasets.default_pathologies), preds[0].detach().numpy()))
     else:
-        # For DenseNet, we can use the model's pathologies directly
-        results = dict(zip(model.pathologies, preds[0].detach().numpy()))
+        # For DenseNet, we can use the model's pathologies directly (access dynamically)
+        model_pathologies: list[str] = list(getattr(model, 'pathologies', list(xrv.datasets.default_pathologies)))
+        results = dict(zip(model_pathologies, preds[0].detach().numpy()))
     
     # Filter out specific classes for ResNet if needed
     # Note: These classes will always output 0.5 for ResNet as they're not trained

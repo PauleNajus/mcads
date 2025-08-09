@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Function to simulate/track progress
+  // Function to track progress
   const trackProgress = (uploadId) => {
     let currentProgress = 0;
     
@@ -39,11 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Check progress from the server
     const checkProgress = () => {
-      fetch(`/progress/${uploadId}/`)
+      fetch(`/progress/${uploadId}/`, { cache: 'no-store' })
         .then(response => response.json())
         .then(data => {
           // Update progress bar
           currentProgress = data.progress;
+          if (!Number.isFinite(currentProgress)) currentProgress = 0;
+          if (currentProgress < 1) currentProgress = 1; // never show 0%
           if (progressBar) {
             progressBar.style.width = `${currentProgress}%`;
             progressBar.setAttribute('aria-valuenow', currentProgress);
@@ -80,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
           console.error('Error checking progress:', error);
           // Increase progress a bit anyway to give feedback
-          currentProgress = Math.min(currentProgress + 5, 95);
+          currentProgress = Math.min(Math.max(currentProgress, 1) + 5, 95);
           if (progressBar) {
             progressBar.style.width = `${currentProgress}%`;
             progressBar.setAttribute('aria-valuenow', currentProgress);
@@ -112,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
           'X-Requested-With': 'XMLHttpRequest',
           'X-CSRFToken': getCSRFToken(),
         },
+        cache: 'no-store',
       })
       .then(response => {
         if (!response.ok) {

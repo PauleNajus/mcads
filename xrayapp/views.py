@@ -18,6 +18,8 @@ from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResu
 from .utils import (process_image,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
                    save_heatmap, save_overlay)
+from .tasks import run_inference_task, run_interpretability_task
+from typing import Any
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -25,6 +27,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.utils.translation import gettext_lazy as _
 import logging
+import os
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -322,7 +325,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 xray_instance.pli_target_class = results['pathology_summary']  # Store summary of selected pathologies
         
         xray_instance.progress = 90
-        xray_instance.processing_status = 'complete'
+        xray_instance.processing_status = 'completed'
         xray_instance.save()
         
         # Update existing prediction history record instead of creating a new one
@@ -516,8 +519,6 @@ def home(request):
                 xray_instance.save()
             except Exception as e:
                 # Log the error for debugging
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Error saving XRayImage: {e}")
                 
                 # Return error response for AJAX requests
@@ -530,16 +531,32 @@ def home(request):
                     # For non-AJAX requests, re-raise the exception
                     raise
 
-            
+            # Set immediate queued state to avoid UI showing 0% for long
+            xray_instance.processing_status = 'queued'
+            xray_instance.progress = 1
+            xray_instance.save(update_fields=['processing_status', 'progress'])
+
             # Save image to disk
             image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
             
-            # Start background processing
-            thread = threading.Thread(
-                target=process_image_async, 
-                args=(image_path, xray_instance, model_type)
-            )
-            thread.start()
+            # Start background processing (prefer Celery only if explicitly enabled)
+            use_celery = os.environ.get('USE_CELERY', '0') == '1'
+            started = False
+            if use_celery:
+                try:
+                    task: Any = run_inference_task
+                    task.delay(xray_instance.pk, model_type)
+                    started = True
+                except Exception as e:
+                    logger.warning(f"Celery unavailable; falling back to thread: {e}")
+            if not started:
+                # Fallback to lightweight thread on the web worker
+                thread = threading.Thread(
+                    target=process_image_async,
+                    args=(image_path, xray_instance, model_type),
+                    daemon=True,
+                )
+                thread.start()
             
             # Check if it's an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -883,7 +900,8 @@ def delete_visualization(request, pk):
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Delete associated files
-        import os
+        from pathlib import Path
+        import logging
         from django.conf import settings
         
         file_paths = [
@@ -893,14 +911,15 @@ def delete_visualization(request, pk):
             visualization.saliency_path,
         ]
         
+        logger = logging.getLogger(__name__)
         for file_path in file_paths:
             if file_path:
                 try:
-                    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
-                    if os.path.exists(full_path):
-                        os.remove(full_path)
+                    full_path = Path(settings.MEDIA_ROOT) / file_path
+                    if full_path.exists():
+                        full_path.unlink()
                 except Exception as e:
-                    print(f"Error deleting file {file_path}: {e}")
+                    logger.warning(f"Error deleting file {file_path}: {e}")
         
         # Delete the visualization record
         visualization.delete()
@@ -969,12 +988,23 @@ def generate_interpretability(request, pk):
     # Get the image path
     image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
     
-    # Start background processing
-    thread = threading.Thread(
-        target=process_with_interpretability_async,
-        args=(image_path, xray_instance, model_type, interpretation_method, target_class)
-    )
-    thread.start()
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = os.environ.get('USE_CELERY', '0') == '1'
+    started = False
+    if use_celery:
+        try:
+            task2: Any = run_interpretability_task
+            task2.delay(xray_instance.pk, model_type, interpretation_method, target_class)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        thread = threading.Thread(
+            target=process_with_interpretability_async,
+            args=(image_path, xray_instance, model_type, interpretation_method, target_class),
+            daemon=True,
+        )
+        thread.start()
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -1015,7 +1045,7 @@ def check_progress(request, pk):
         }
         
         # If processing is complete, include visualization data
-        if xray_instance.progress >= 100 and xray_instance.processing_status == 'complete':
+        if xray_instance.progress >= 100 and xray_instance.processing_status == 'completed':
             media_url = settings.MEDIA_URL
             
             # Get all visualizations for this X-ray

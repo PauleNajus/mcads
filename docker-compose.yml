@@ -55,13 +55,15 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
+      - USE_CELERY=1
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
       - ALLOWED_HOSTS=localhost,127.0.0.1,mcads.casa,www.mcads.casa,203.161.58.22,server1.mcads.casa
       - TORCH_HOME=/app/.torch
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
@@ -108,13 +110,14 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
       - TORCH_HOME=/app/.torch
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
       - XRV_DATA_DIR=/app/.torchxrayvision
@@ -131,6 +134,11 @@ services:
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
       - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   # Celery Beat for scheduled tasks
@@ -149,13 +157,14 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
       - TORCH_HOME=/app/.torch
       - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
       - XRV_DATA_DIR=/app/.torchxrayvision
@@ -169,6 +178,11 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   # Nginx Reverse Proxy
