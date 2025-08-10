@@ -54,10 +54,10 @@ COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create necessary directories
-RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.matplotlib /app/.torch /app/.torchxrayvision /home/mcads/.torchxrayvision/models_data
+RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.matplotlib /app/.torch /app/.torchxrayvision /home/mcads/.torchxrayvision /home/mcads/.torchxrayvision/models_data
 
 # Change ownership to app user (including the entrypoint script)
-RUN chown -R mcads:mcads /app && chown mcads:mcads /usr/local/bin/docker-entrypoint.sh
+RUN chown -R mcads:mcads /app && chown -R mcads:mcads /home/mcads && chown mcads:mcads /usr/local/bin/docker-entrypoint.sh
 
 # Switch to app user
 USER mcads

@@ -336,6 +336,7 @@ LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
 
 # Celery Configuration
+USE_CELERY = os.environ.get('USE_CELERY', '0') == '1'
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
@@ -347,7 +348,7 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # Task routing and worker settings
 CELERY_TASK_ROUTES = {
-    'xrayapp.tasks.*': {'queue': 'default'},
+    'xrayapp.tasks.*': {'queue': 'celery'},
 }
 
 # Worker settings

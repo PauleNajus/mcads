@@ -47,7 +47,7 @@ services:
       python manage.py collectstatic --noinput &&
       mkdir -p /app/logs /app/media /app/data_exports /app/backups &&
       echo 'MCADS initialization completed!' &&
-      gunicorn --bind 0.0.0.0:8000 --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 60 --max-requests 1000 --access-logfile /app/logs/gunicorn_access.log --error-logfile /app/logs/gunicorn_error.log mcads_project.asgi:application"
+      gunicorn --config gunicorn_config.py mcads_project.asgi:application"
     depends_on:
       db:
         condition: service_healthy
@@ -74,7 +74,7 @@ services:
       - XRV_RESNET_WEIGHTS=resnet50-res512-all
       # OOD autoencoder configuration
       - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_INPUT_SIZE=224
       - XRV_AE_OOD_THRESHOLD=0.015
       # Optional calibration file (provide ./config/calibration.json on host)
       - XRV_CALIBRATION_FILE=/app/config/calibration.json
@@ -85,6 +85,7 @@ services:
       - ./data_exports:/app/data_exports
       - ./backups:/app/backups
       - ./config:/app/config:ro
+      - models_data:/home/mcads/.torchxrayvision/models_data
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -126,7 +127,7 @@ services:
       - XRV_DENSENET_WEIGHTS=densenet121-res224-all
       - XRV_RESNET_WEIGHTS=resnet50-res512-all
       - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_INPUT_SIZE=224
       - XRV_AE_OOD_THRESHOLD=0.015
       - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
@@ -134,6 +135,7 @@ services:
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
       - ./config:/app/config:ro
+      - models_data:/home/mcads/.torchxrayvision/models_data
     healthcheck:
       test: ["CMD-SHELL", "echo ok"]
       interval: 30s
@@ -172,7 +174,7 @@ services:
       - XRV_DENSENET_WEIGHTS=densenet121-res224-all
       - XRV_RESNET_WEIGHTS=resnet50-res512-all
       - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=64
+      - XRV_AE_INPUT_SIZE=224
       - XRV_AE_OOD_THRESHOLD=0.015
       - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
@@ -205,3 +207,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  models_data:

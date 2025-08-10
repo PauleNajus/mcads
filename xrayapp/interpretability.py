@@ -48,22 +48,50 @@ class GradCAM:
         self.model = model
         self.model.eval()
         
+        # Check if model is wrapped with NoInplaceReLU
+        actual_model = model.model if isinstance(model, NoInplaceReLU) else model
+        
         # For DenseNet-121, the default target layer is the last convolutional layer
         if target_layer is None:
-            if hasattr(model, 'features') and hasattr(model.features, 'denseblock4'):
-                # For torchxrayvision DenseNet models
-                self.target_layer = model.features.denseblock4.denselayer16.norm2
-            elif hasattr(model, 'model') and hasattr(model.model, 'layer4'):
-                # For torchxrayvision ResNet models (which have a nested model structure)
-                self.target_layer = model.model.layer4[-1]
-            elif hasattr(model, 'layer4'):
-                # For standard ResNet models
-                self.target_layer = model.layer4[-1]
+            # TorchXRayVision DenseNet models have features directly accessible
+            if hasattr(actual_model, 'features') and hasattr(actual_model.features, 'denseblock4'):
+                # For DenseNet models - use the last conv layer before the classifier
+                if hasattr(actual_model.features.denseblock4, 'denselayer16'):
+                    if hasattr(actual_model.features.denseblock4.denselayer16, 'conv2'):
+                        self.target_layer = actual_model.features.denseblock4.denselayer16.conv2
+                    else:
+                        # Fallback to relu2 if conv2 doesn't exist
+                        self.target_layer = actual_model.features.denseblock4.denselayer16.relu2
+                else:
+                    # If denselayer16 doesn't exist, use the transition3 conv layer
+                    self.target_layer = actual_model.features.transition3.conv
+            elif hasattr(actual_model, 'model'):
+                # Some models might have a nested .model attribute
+                inner_model = actual_model.model
+                if hasattr(inner_model, 'features') and hasattr(inner_model.features, 'denseblock4'):
+                    # For nested DenseNet models
+                    if hasattr(inner_model.features.denseblock4, 'denselayer16'):
+                        if hasattr(inner_model.features.denseblock4.denselayer16, 'conv2'):
+                            self.target_layer = inner_model.features.denseblock4.denselayer16.conv2
+                        else:
+                            self.target_layer = inner_model.features.denseblock4.denselayer16.relu2
+                    else:
+                        self.target_layer = inner_model.features.transition3.conv
+                elif hasattr(inner_model, 'layer4'):
+                    # For ResNet models
+                    self.target_layer = inner_model.layer4[-1]
+                else:
+                    raise ValueError("Could not determine target layer for inner model")
+            elif hasattr(actual_model, 'layer4'):
+                # Direct ResNet model
+                self.target_layer = actual_model.layer4[-1]
             else:
                 # Print model structure to help with debugging
                 print("Model structure:")
-                for name, module in model.named_modules():
+                for name, module in actual_model.named_modules():
                     print(f"Module: {name}")
+                    if 'conv' in name.lower() or 'layer' in name.lower():
+                        print(f"  -> Potential target: {name}")
                 raise ValueError("Could not determine the target layer. Please specify explicitly.")
         else:
             self.target_layer = target_layer
@@ -587,8 +615,17 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     Returns:
         Dictionary with visualization results
     """
-    # Load model via shared cache
-    model, resize_dim = load_model(model_type)
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Load model via shared cache
+        logger.info(f"Loading model for Grad-CAM: {model_type}")
+        model, resize_dim = load_model(model_type)
+        logger.info(f"Model loaded successfully, resize_dim: {resize_dim}")
+    except Exception as e:
+        logger.error(f"Failed to load model for Grad-CAM: {e}")
+        raise
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)

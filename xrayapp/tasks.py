@@ -115,112 +115,140 @@ def run_interpretability_task(self, xray_id: int, model_type: str = 'densenet', 
     xray.progress = 10
     xray.processing_status = 'processing'
     xray.save(update_fields=['progress', 'processing_status'])
+    
+    # Update progress to show model loading
+    xray.progress = 20
+    xray.save(update_fields=['progress'])
+    
+    # Log the start of interpretability processing
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting interpretability task for image {xray_id}, method: {interpretation_method}")
 
     # Compute interpretability
-    if interpretation_method == 'gradcam':
-        results = apply_gradcam(str(image_path), model_type, target_class)
-        results['method'] = 'gradcam'
-        output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'gradcam'
-        output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        if interpretation_method == 'gradcam':
+            logger.info(f"Applying Grad-CAM for image {xray_id}")
+            results = apply_gradcam(str(image_path), model_type, target_class)
+            results['method'] = 'gradcam'
+            logger.info(f"Grad-CAM completed for image {xray_id}")
+            
+            # Update progress after computation
+            xray.progress = 60
+            xray.save(update_fields=['progress'])
+            
+            output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'gradcam'
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        combined_filename = f"gradcam_{xray.pk}_{results['target_class']}.png"
-        heatmap_filename = f"heatmap_{xray.pk}_{results['target_class']}.png"
-        overlay_filename = f"gradcam_overlay_{xray.pk}_{results['target_class']}.png"
+            combined_filename = f"gradcam_{xray.pk}_{results['target_class']}.png"
+            heatmap_filename = f"heatmap_{xray.pk}_{results['target_class']}.png"
+            overlay_filename = f"gradcam_overlay_{xray.pk}_{results['target_class']}.png"
 
-        save_interpretability_visualization(results, output_dir / combined_filename)
-        save_heatmap(results, output_dir / heatmap_filename)
-        save_overlay(results, output_dir / overlay_filename)
+            save_interpretability_visualization(results, output_dir / combined_filename)
+            save_heatmap(results, output_dir / heatmap_filename)
+            save_overlay(results, output_dir / overlay_filename)
 
-        VisualizationResult.objects.update_or_create(
-            xray=xray,
-            visualization_type='gradcam',
-            target_pathology=results['target_class'],
-            defaults={
-                'model_used': model_type,
-                'visualization_path': f"interpretability/gradcam/{combined_filename}",
-                'heatmap_path': f"interpretability/gradcam/{heatmap_filename}",
-                'overlay_path': f"interpretability/gradcam/{overlay_filename}",
-            },
-        )
+            VisualizationResult.objects.update_or_create(
+                xray=xray,
+                visualization_type='gradcam',
+                target_pathology=results['target_class'],
+                defaults={
+                    'model_used': model_type,
+                    'visualization_path': f"interpretability/gradcam/{combined_filename}",
+                    'heatmap_path': f"interpretability/gradcam/{heatmap_filename}",
+                    'overlay_path': f"interpretability/gradcam/{overlay_filename}",
+                },
+            )
 
-    elif interpretation_method == 'pli':
-        results = apply_pixel_interpretability(str(image_path), model_type, target_class)
-        results['method'] = 'pli'
-        output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'pli'
-        output_dir.mkdir(parents=True, exist_ok=True)
+        elif interpretation_method == 'pli':
+            results = apply_pixel_interpretability(str(image_path), model_type, target_class)
+            results['method'] = 'pli'
+            
+            # Update progress after computation
+            xray.progress = 60
+            xray.save(update_fields=['progress'])
+        
+            output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'pli'
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        saliency_filename = f"pli_{xray.pk}_{results['target_class']}.png"
-        overlay_filename = f"pli_overlay_{xray.pk}_{results['target_class']}.png"
-        separate_saliency_filename = f"pli_saliency_{xray.pk}_{results['target_class']}.png"
+            saliency_filename = f"pli_{xray.pk}_{results['target_class']}.png"
+            overlay_filename = f"pli_overlay_{xray.pk}_{results['target_class']}.png"
+            separate_saliency_filename = f"pli_saliency_{xray.pk}_{results['target_class']}.png"
 
-        save_interpretability_visualization(results, output_dir / saliency_filename)
-        save_overlay_visualization(results, output_dir / overlay_filename)
-        save_saliency_map(results, output_dir / separate_saliency_filename)
+            save_interpretability_visualization(results, output_dir / saliency_filename)
+            save_overlay_visualization(results, output_dir / overlay_filename)
+            save_saliency_map(results, output_dir / separate_saliency_filename)
 
-        VisualizationResult.objects.update_or_create(
-            xray=xray,
-            visualization_type='pli',
-            target_pathology=results['target_class'],
-            defaults={
-                'model_used': model_type,
-                'visualization_path': f"interpretability/pli/{saliency_filename}",
-                'overlay_path': f"interpretability/pli/{overlay_filename}",
-                'saliency_path': f"interpretability/pli/{separate_saliency_filename}",
-            },
-        )
+            VisualizationResult.objects.update_or_create(
+                xray=xray,
+                visualization_type='pli',
+                target_pathology=results['target_class'],
+                defaults={
+                    'model_used': model_type,
+                    'visualization_path': f"interpretability/pli/{saliency_filename}",
+                    'overlay_path': f"interpretability/pli/{overlay_filename}",
+                    'saliency_path': f"interpretability/pli/{separate_saliency_filename}",
+                },
+            )
 
-    elif interpretation_method == 'combined_gradcam':
-        results = apply_combined_gradcam(str(image_path), model_type)
-        output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'combined_gradcam'
-        output_dir.mkdir(parents=True, exist_ok=True)
+        elif interpretation_method == 'combined_gradcam':
+            results = apply_combined_gradcam(str(image_path), model_type)
+            output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'combined_gradcam'
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        combined_filename = f"combined_gradcam_{xray.pk}_threshold_{results['threshold']}.png"
-        heatmap_filename = f"combined_heatmap_{xray.pk}_threshold_{results['threshold']}.png"
-        overlay_filename = f"combined_gradcam_overlay_{xray.pk}_threshold_{results['threshold']}.png"
+            combined_filename = f"combined_gradcam_{xray.pk}_threshold_{results['threshold']}.png"
+            heatmap_filename = f"combined_heatmap_{xray.pk}_threshold_{results['threshold']}.png"
+            overlay_filename = f"combined_gradcam_overlay_{xray.pk}_threshold_{results['threshold']}.png"
 
-        save_interpretability_visualization(results, output_dir / combined_filename)
-        save_heatmap(results, output_dir / heatmap_filename)
-        save_overlay(results, output_dir / overlay_filename)
+            save_interpretability_visualization(results, output_dir / combined_filename)
+            save_heatmap(results, output_dir / heatmap_filename)
+            save_overlay(results, output_dir / overlay_filename)
 
-        VisualizationResult.objects.update_or_create(
-            xray=xray,
-            visualization_type='combined_gradcam',
-            target_pathology=results['pathology_summary'],
-            defaults={
-                'model_used': model_type,
-                'visualization_path': f"interpretability/combined_gradcam/{combined_filename}",
-                'heatmap_path': f"interpretability/combined_gradcam/{heatmap_filename}",
-                'overlay_path': f"interpretability/combined_gradcam/{overlay_filename}",
-                'threshold': results.get('threshold'),
-            },
-        )
+            VisualizationResult.objects.update_or_create(
+                xray=xray,
+                visualization_type='combined_gradcam',
+                target_pathology=results['pathology_summary'],
+                defaults={
+                    'model_used': model_type,
+                    'visualization_path': f"interpretability/combined_gradcam/{combined_filename}",
+                    'heatmap_path': f"interpretability/combined_gradcam/{heatmap_filename}",
+                    'overlay_path': f"interpretability/combined_gradcam/{overlay_filename}",
+                    'threshold': results.get('threshold'),
+                },
+            )
 
-    elif interpretation_method == 'combined_pli':
-        results = apply_combined_pixel_interpretability(str(image_path), model_type)
-        output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'combined_pli'
-        output_dir.mkdir(parents=True, exist_ok=True)
+        elif interpretation_method == 'combined_pli':
+            results = apply_combined_pixel_interpretability(str(image_path), model_type)
+            output_dir = Path(settings.MEDIA_ROOT) / 'interpretability' / 'combined_pli'
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        combined_filename = f"combined_pli_{xray.pk}_threshold_{results['threshold']}.png"
-        saliency_filename = f"combined_pli_saliency_{xray.pk}_threshold_{results['threshold']}.png"
-        overlay_filename = f"combined_pli_overlay_{xray.pk}_threshold_{results['threshold']}.png"
+            combined_filename = f"combined_pli_{xray.pk}_threshold_{results['threshold']}.png"
+            saliency_filename = f"combined_pli_saliency_{xray.pk}_threshold_{results['threshold']}.png"
+            overlay_filename = f"combined_pli_overlay_{xray.pk}_threshold_{results['threshold']}.png"
 
-        save_interpretability_visualization(results, output_dir / combined_filename)
-        save_saliency_map(results, output_dir / saliency_filename)
-        save_overlay_visualization(results, output_dir / overlay_filename)
+            save_interpretability_visualization(results, output_dir / combined_filename)
+            save_saliency_map(results, output_dir / saliency_filename)
+            save_overlay_visualization(results, output_dir / overlay_filename)
 
-        VisualizationResult.objects.update_or_create(
-            xray=xray,
-            visualization_type='combined_pli',
-            target_pathology=results['pathology_summary'],
-            defaults={
-                'model_used': model_type,
-                'visualization_path': f"interpretability/combined_pli/{combined_filename}",
-                'saliency_path': f"interpretability/combined_pli/{saliency_filename}",
-                'overlay_path': f"interpretability/combined_pli/{overlay_filename}",
-                'threshold': results.get('threshold'),
-            },
-        )
+            VisualizationResult.objects.update_or_create(
+                xray=xray,
+                visualization_type='combined_pli',
+                target_pathology=results['pathology_summary'],
+                defaults={
+                    'model_used': model_type,
+                    'visualization_path': f"interpretability/combined_pli/{combined_filename}",
+                    'saliency_path': f"interpretability/combined_pli/{saliency_filename}",
+                    'overlay_path': f"interpretability/combined_pli/{overlay_filename}",
+                    'threshold': results.get('threshold'),
+                },
+            )
 
+    except Exception as e:
+        logger.error(f"Interpretability task failed for image {xray_id}: {e}", exc_info=True)
+        xray.processing_status = 'error'
+        xray.save(update_fields=['processing_status'])
+        raise
+    
     # Finalize
     xray.progress = 100
     xray.processing_status = 'completed'

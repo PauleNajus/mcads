@@ -11,9 +11,9 @@ worker_connections = 100  # Very reduced connections for memory constrained syst
 timeout = 60  # Increased timeout for ML processing
 keepalive = 2
 
-# Restart workers very frequently to prevent memory leaks on constrained system
-max_requests = 20  # Very frequent restarts to prevent OOM
-max_requests_jitter = 2
+# Restart workers periodically to prevent memory leaks on constrained system
+max_requests = 1000  # Restart after 1000 requests to balance memory and performance
+max_requests_jitter = 50
 
 # Logging
 accesslog = "/app/logs/gunicorn_access.log"
@@ -36,4 +36,18 @@ tmp_upload_dir = None
 # Security
 limit_request_line = 4094
 limit_request_fields = 100
-limit_request_field_size = 8190 
+limit_request_field_size = 8190
+
+# Worker hooks to preserve environment variables
+import os
+
+def pre_fork(server, worker):
+    """Called just before a worker is forked."""
+    # Ensure critical environment variables are set
+    if 'USE_CELERY' not in os.environ:
+        os.environ['USE_CELERY'] = '1'
+
+def post_fork(server, worker):
+    """Called just after a worker has been forked."""
+    # Verify environment variables are still set
+    server.log.info(f"Worker {worker.pid} started with USE_CELERY={os.environ.get('USE_CELERY', 'NOT SET')}") 

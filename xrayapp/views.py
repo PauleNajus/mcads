@@ -540,7 +540,7 @@ def home(request):
             image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
             
             # Start background processing (prefer Celery only if explicitly enabled)
-            use_celery = os.environ.get('USE_CELERY', '0') == '1'
+            use_celery = settings.USE_CELERY
             started = False
             if use_celery:
                 try:
@@ -989,7 +989,7 @@ def generate_interpretability(request, pk):
     image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
     
     # Start background processing (prefer Celery only if explicitly enabled)
-    use_celery = os.environ.get('USE_CELERY', '0') == '1'
+    use_celery = settings.USE_CELERY
     started = False
     if use_celery:
         try:
