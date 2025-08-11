@@ -12,7 +12,7 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 from datetime import datetime
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
-from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder
+from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder, load_segmentation_model
 from typing import Any, cast
 
 # CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
@@ -759,4 +759,194 @@ def save_overlay(interpretation_results, output_path, format='png'):
         from PIL import Image
         Image.fromarray(overlay_rgb).save(output_path, format=format.upper())
     
-    return output_path 
+    return output_path
+
+
+def apply_segmentation(image_path):
+    """
+    Apply anatomical segmentation to a chest X-ray image using PSPNet
+    
+    Args:
+        image_path: Path to the X-ray image
+        
+    Returns:
+        Dictionary containing segmentation results
+    """
+    logger.info(f"Applying segmentation to image: {image_path}")
+    
+    # Load the segmentation model
+    seg_model = load_segmentation_model()
+    
+    # Load and preprocess the image
+    img = skimage.io.imread(image_path)
+    img = xrv.datasets.normalize(img, 255)
+    
+    # Preserve original image for visualization
+    original_img = img.copy()
+    
+    # Check that images are 2D arrays
+    if len(img.shape) > 2:
+        img = img[:, :, 0]  # Take first channel
+    if len(img.shape) < 2:
+        raise ValueError("Input image must have at least 2 dimensions")
+    
+    # Add channel dimension
+    img = img[None, :, :]
+    
+    # Resize to 512x512 for PSPNet
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(512)
+    ])
+    
+    # Apply transform to numpy array first
+    img_transformed = transform(img)
+    
+    # Convert to tensor and add batch dimension
+    img_tensor = torch.from_numpy(img_transformed).float().unsqueeze(0)
+    
+    # Perform segmentation
+    with torch.no_grad():
+        output = seg_model(img_tensor)
+    
+    # Output shape is [1, 14, 512, 512]
+    # 14 channels for different anatomical structures
+    segmentation_masks = output.squeeze(0).cpu().numpy()
+    
+    # Define the anatomical structures
+    anatomical_structures = [
+        'Left Clavicle', 'Right Clavicle', 'Left Scapula', 'Right Scapula',
+        'Left Lung', 'Right Lung', 'Left Hilus Pulmonis', 'Right Hilus Pulmonis',
+        'Heart', 'Aorta', 'Facies Diaphragmatica', 'Mediastinum',
+        'Weasand', 'Spine'
+    ]
+    
+    # Apply sigmoid to get probabilities
+    segmentation_probs = torch.sigmoid(output).squeeze(0).cpu().numpy()
+    
+    # Create binary masks with threshold
+    threshold = 0.5
+    binary_masks = (segmentation_probs > threshold).astype(np.uint8)
+    
+    # Store results
+    results = {
+        'segmentation_masks': segmentation_masks,
+        'segmentation_probs': segmentation_probs,
+        'binary_masks': binary_masks,
+        'anatomical_structures': anatomical_structures,
+        'original': original_img,
+        'num_structures': len(anatomical_structures)
+    }
+    
+    logger.info("Segmentation completed successfully")
+    return results
+
+
+def save_segmentation_visualization(segmentation_results, output_path, structures_to_show=None):
+    """
+    Save segmentation visualization with colored overlays for each anatomical structure
+    
+    Args:
+        segmentation_results: Results from apply_segmentation
+        output_path: Path to save the visualization
+        structures_to_show: List of structure indices to show (None = show all)
+        
+    Returns:
+        Path to saved file
+    """
+    original = segmentation_results['original']
+    binary_masks = segmentation_results['binary_masks']
+    anatomical_structures = segmentation_results['anatomical_structures']
+    
+    # Convert original to RGB if grayscale
+    if len(original.shape) == 2:
+        original_rgb = cv2.cvtColor((original * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
+    else:
+        original_rgb = (original * 255).astype(np.uint8)
+    
+    # Resize original to match mask dimensions (512x512)
+    original_resized = cv2.resize(original_rgb, (512, 512))
+    
+    # Create overlay image
+    overlay = original_resized.copy()
+    
+    # Define colors for each anatomical structure (BGR format)
+    colors = [
+        (255, 0, 0),     # Blue - Left Clavicle
+        (0, 255, 0),     # Green - Right Clavicle
+        (0, 0, 255),     # Red - Left Scapula
+        (255, 255, 0),   # Cyan - Right Scapula
+        (255, 0, 255),   # Magenta - Left Lung
+        (0, 255, 255),   # Yellow - Right Lung
+        (128, 0, 255),   # Purple - Left Hilus Pulmonis
+        (255, 128, 0),   # Orange - Right Hilus Pulmonis
+        (0, 128, 255),   # Light Blue - Heart
+        (255, 0, 128),   # Pink - Aorta
+        (128, 255, 0),   # Lime - Facies Diaphragmatica
+        (0, 255, 128),   # Spring Green - Mediastinum
+        (128, 128, 255), # Light Purple - Weasand
+        (255, 128, 128)  # Light Red - Spine
+    ]
+    
+    # Apply masks
+    if structures_to_show is None:
+        structures_to_show = list(range(len(anatomical_structures)))
+    
+    for idx in structures_to_show:
+        if idx < len(binary_masks):
+            mask = binary_masks[idx]
+            color = colors[idx % len(colors)]
+            
+            # Create colored mask
+            colored_mask = np.zeros_like(overlay)
+            colored_mask[:, :] = color
+            
+            # Apply mask with transparency
+            # Multiply colored mask by the binary mask and alpha value
+            masked_color = (colored_mask * mask[:, :, np.newaxis] * 0.3).astype(overlay.dtype)
+            overlay = cv2.addWeighted(overlay, 1.0, masked_color, 1.0, 0)
+    
+    # Convert BGR to RGB for saving
+    overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+    
+    # Save the visualization
+    Image.fromarray(overlay_rgb).save(output_path, format='PNG')
+    
+    return output_path
+
+
+def save_individual_segmentation_masks(segmentation_results, output_dir):
+    """
+    Save individual binary masks for each anatomical structure
+    
+    Args:
+        segmentation_results: Results from apply_segmentation
+        output_dir: Directory to save individual masks
+        
+    Returns:
+        Dictionary mapping structure names to file paths
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    binary_masks = segmentation_results['binary_masks']
+    anatomical_structures = segmentation_results['anatomical_structures']
+    
+    saved_paths = {}
+    
+    for idx, structure_name in enumerate(anatomical_structures):
+        if idx < len(binary_masks):
+            mask = binary_masks[idx]
+            
+            # Convert to uint8 (0 or 255)
+            mask_img = (mask * 255).astype(np.uint8)
+            
+            # Clean filename
+            filename = f"{structure_name.lower().replace(' ', '_')}_mask.png"
+            filepath = output_dir / filename
+            
+            # Save mask
+            Image.fromarray(mask_img, mode='L').save(filepath)
+            saved_paths[structure_name] = str(filepath)
+    
+    return saved_paths 

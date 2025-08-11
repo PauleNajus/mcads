@@ -5,8 +5,7 @@ from typing import Optional
 
 from celery import shared_task
 from django.conf import settings
-from django.utils import timezone
-from django.conf import settings
+# from django.utils import timezone  # Currently unused
 
 from .models import XRayImage, PredictionHistory, VisualizationResult
 from .utils import (
@@ -16,6 +15,9 @@ from .utils import (
     save_saliency_map,
     save_heatmap,
     save_overlay,
+    apply_segmentation,
+    save_segmentation_visualization,
+    save_individual_segmentation_masks,
 )
 from .interpretability import (
     apply_gradcam,
@@ -278,6 +280,118 @@ def run_interpretability_task(self, xray_id: int, model_type: str = 'densenet', 
         hist.severity_level = xray.severity_level
         hist.save()
 
+    return xray.pk
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def run_segmentation_task(self, xray_id: int) -> Optional[int]:
+    """Celery task to perform anatomical segmentation on an X-ray image.
+    
+    Args:
+        xray_id: ID of the XRayImage instance
+        
+    Returns:
+        xray_id if successful, None otherwise
+    """
+    try:
+        xray = XRayImage.objects.get(pk=xray_id)
+    except XRayImage.DoesNotExist:
+        return None
+    
+    image_path = Path(settings.MEDIA_ROOT) / xray.image.name
+    
+    # Set processing flags
+    xray.progress = 10
+    xray.processing_status = 'processing'
+    xray.save(update_fields=['progress', 'processing_status'])
+    
+    # Log the start of segmentation processing
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting segmentation task for image {xray_id}")
+    
+    # Update progress to show model loading
+    xray.progress = 20
+    xray.save(update_fields=['progress'])
+    
+    try:
+        # Apply segmentation
+        logger.info(f"Applying segmentation for image {xray_id}")
+        results = apply_segmentation(str(image_path))
+        logger.info(f"Segmentation completed for image {xray_id}")
+        
+        # Update progress after segmentation
+        xray.progress = 60
+        xray.save(update_fields=['progress'])
+        
+        # Create output directories
+        output_dir = Path(settings.MEDIA_ROOT) / 'segmentation' / str(xray.pk)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        masks_dir = output_dir / 'masks'
+        masks_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save combined visualization
+        combined_filename = f"segmentation_{xray.pk}_all_structures.png"
+        combined_path = output_dir / combined_filename
+        save_segmentation_visualization(results, combined_path)
+        
+        # Save individual masks
+        mask_paths = save_individual_segmentation_masks(results, masks_dir)
+        
+        # Update progress
+        xray.progress = 80
+        xray.save(update_fields=['progress'])
+        
+        # Store visualization results for each structure
+        for idx, structure_name in enumerate(results['anatomical_structures']):
+            # Get confidence score (max probability in the mask)
+            confidence = float(results['segmentation_probs'][idx].max())
+            
+            # Create visualization result entry
+            VisualizationResult.objects.update_or_create(
+                xray=xray,
+                visualization_type='segmentation',
+                target_pathology=structure_name,
+                defaults={
+                    'model_used': 'pspnet',
+                    'visualization_path': f"segmentation/{xray.pk}/{combined_filename}",
+                    'confidence_score': confidence,
+                    'metadata': {
+                        'structure_index': idx,
+                        'mask_path': mask_paths.get(structure_name, ''),
+                        'threshold': 0.5,
+                    }
+                },
+            )
+        
+        # Store combined result
+        VisualizationResult.objects.update_or_create(
+            xray=xray,
+            visualization_type='segmentation_combined',
+            target_pathology='All Structures',
+            defaults={
+                'model_used': 'pspnet',
+                'visualization_path': f"segmentation/{xray.pk}/{combined_filename}",
+                'metadata': {
+                    'num_structures': len(results['anatomical_structures']),
+                    'structures': results['anatomical_structures'],
+                }
+            },
+        )
+        
+    except Exception as e:
+        logger.error(f"Segmentation task failed for image {xray_id}: {e}", exc_info=True)
+        xray.processing_status = 'error'
+        xray.save(update_fields=['processing_status'])
+        raise
+    
+    # Finalize
+    xray.progress = 100
+    xray.processing_status = 'completed'
+    xray.save(update_fields=['progress', 'processing_status'])
+    
+    logger.info(f"Segmentation task completed successfully for image {xray_id}")
     return xray.pk
 
 

@@ -18,8 +18,9 @@ from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResu
 from .utils import (process_image,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
                    save_heatmap, save_overlay)
-from .tasks import run_inference_task, run_interpretability_task
+from .tasks import run_inference_task, run_interpretability_task, run_segmentation_task
 from typing import Any
+from celery import Task
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -27,7 +28,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.utils.translation import gettext_lazy as _
 import logging
-import os
+# import os  # Currently unused
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -712,6 +713,7 @@ def xray_results(request, pk):
     # Group visualizations by type for display
     gradcam_visualizations = []
     pli_visualizations = []
+    segmentation_visualizations = []
     
     for viz in visualizations:
         viz_data = {
@@ -724,13 +726,18 @@ def xray_results(request, pk):
             'overlay_url': viz.overlay_url,
             'saliency_url': viz.saliency_url,
             'threshold': viz.threshold,
-            'visualization_type': viz.visualization_type
+            'visualization_type': viz.visualization_type,
+            'confidence_score': viz.confidence_score,
+            'metadata': viz.metadata,
+            'visualization_path': viz.visualization_path
         }
         
         if viz.visualization_type in ['gradcam', 'combined_gradcam']:
             gradcam_visualizations.append(viz_data)
         elif viz.visualization_type in ['pli', 'combined_pli']:
             pli_visualizations.append(viz_data)
+        elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+            segmentation_visualizations.append(viz_data)
     
     # Prepare legacy GRAD-CAM URLs for backward compatibility
     media_url = settings.MEDIA_URL
@@ -749,6 +756,7 @@ def xray_results(request, pk):
         # Multiple visualization support
         'gradcam_visualizations': gradcam_visualizations,
         'pli_visualizations': pli_visualizations,
+        'segmentation_visualizations': segmentation_visualizations,
         'has_multiple_visualizations': len(visualizations) > 0,
         # Legacy support for single visualizations
         'has_gradcam': xray_instance.has_gradcam,
@@ -1019,6 +1027,51 @@ def generate_interpretability(request, pk):
     return redirect('xray_results', pk=pk)
 
 
+@login_required
+def generate_segmentation(request, pk):
+    """Generate anatomical segmentation for an X-ray image"""
+    # Get user's hospital from profile
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
+    
+    # Allow access to any X-ray from the same hospital
+    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    
+    # Reset progress to 0 and set status to processing
+    xray_instance.progress = 0
+    xray_instance.processing_status = 'processing'
+    xray_instance.save()
+    
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = settings.USE_CELERY
+    started = False
+    if use_celery:
+        try:
+            task: Task = run_segmentation_task  # type: ignore
+            task.delay(xray_instance.pk)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        # For now, segmentation requires Celery
+        # Could implement a threaded version later if needed
+        messages.error(request, _('Segmentation processing is currently unavailable. Please try again later.'))
+        return redirect('xray_results', pk=pk)
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+        # Return JSON response for AJAX requests
+        return JsonResponse({
+            'status': 'started',
+            'message': _('Segmentation processing started'),
+            'xray_id': xray_instance.pk
+        })
+    
+    # Redirect to the results page for non-AJAX requests
+    return redirect('xray_results', pk=pk)
+
+
 def check_progress(request, pk):
     """AJAX endpoint to check processing progress - lightweight version for memory-constrained systems"""
     
@@ -1054,6 +1107,7 @@ def check_progress(request, pk):
             # Group visualizations by type
             gradcam_visualizations = []
             pli_visualizations = []
+            segmentation_visualizations = []
             
             for viz in visualizations:
                 viz_data = {
@@ -1065,13 +1119,18 @@ def check_progress(request, pk):
                     'heatmap_url': viz.heatmap_url,
                     'overlay_url': viz.overlay_url,
                     'saliency_url': viz.saliency_url,
-                    'threshold': viz.threshold
+                    'threshold': viz.threshold,
+                    'confidence_score': viz.confidence_score,
+                    'metadata': viz.metadata,
+                    'visualization_path': viz.visualization_path
                 }
                 
                 if viz.visualization_type in ['gradcam', 'combined_gradcam']:
                     gradcam_visualizations.append(viz_data)
                 elif viz.visualization_type in ['pli', 'combined_pli']:
                     pli_visualizations.append(viz_data)
+                elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+                    segmentation_visualizations.append(viz_data)
             
             # Include visualization data in response
             if gradcam_visualizations:
@@ -1084,6 +1143,12 @@ def check_progress(request, pk):
                 response_data['pli'] = {
                     'has_pli': True,
                     'visualizations': pli_visualizations
+                }
+            
+            if segmentation_visualizations:
+                response_data['segmentation'] = {
+                    'has_segmentation': True,
+                    'visualizations': segmentation_visualizations
                 }
             
             # Include backward compatibility data for latest visualizations

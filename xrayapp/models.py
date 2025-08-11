@@ -293,13 +293,15 @@ class VisualizationResult(models.Model):
         ('pli', _('Pixel-level Interpretability')),
         ('combined_gradcam', _('Combined')),
         ('combined_pli', _('Combined PLI')),
+        ('segmentation', _('Anatomical Segmentation')),
+        ('segmentation_combined', _('Combined Segmentation')),
     ]
     
     # Foreign key to X-ray image
     xray = models.ForeignKey(XRayImage, on_delete=models.CASCADE, related_name='visualizations', db_index=True)
     
     # Visualization details
-    visualization_type = models.CharField(max_length=20, choices=VISUALIZATION_TYPES, db_index=True)
+    visualization_type = models.CharField(max_length=30, choices=VISUALIZATION_TYPES, db_index=True)
     target_pathology = models.CharField(max_length=50, db_index=True)  # The pathology this visualization targets
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     
@@ -312,6 +314,8 @@ class VisualizationResult(models.Model):
     # Additional metadata
     model_used = models.CharField(max_length=50, blank=True)  # Model used for visualization
     threshold = models.FloatField(null=True, blank=True)     # Threshold used (for PLI)
+    confidence_score = models.FloatField(null=True, blank=True)  # Confidence score for segmentation
+    metadata = models.JSONField(null=True, blank=True)  # Additional metadata as JSON
     
     class Meta:
         # Unique constraint: prevent duplicate visualization type + pathology combinations

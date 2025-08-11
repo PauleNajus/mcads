@@ -10,6 +10,7 @@ _model_cache: Dict[str, tuple] = {}
 
 _AE_CACHE_KEY = "autoencoder"
 _CALIBRATION_CACHE_KEY = "calibration"
+_SEGMENTATION_CACHE_KEY = "segmentation_pspnet"
 
 
 def _ensure_cache_dirs() -> str:
@@ -85,6 +86,38 @@ def clear_model_cache() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def load_segmentation_model() -> torch.nn.Module:
+    """Load and cache TorchXRayVision PSPNet segmentation model.
+    
+    Returns:
+        PSPNet model for anatomical structure segmentation
+    """
+    if _SEGMENTATION_CACHE_KEY in _model_cache:
+        return _model_cache[_SEGMENTATION_CACHE_KEY][0]  # Return just the model, no resize dim
+    
+    device = torch.device('cpu')
+    _ensure_cache_dirs()
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Loading PSPNet segmentation model...")
+    
+    try:
+        # Load the PSPNet model
+        seg_model = xrv.baseline_models.chestx_det.PSPNet()
+        seg_model.to(device)
+        seg_model.eval()
+        
+        # Cache the model (store as tuple for consistency)
+        _model_cache[_SEGMENTATION_CACHE_KEY] = (seg_model, 512)  # PSPNet uses 512x512 input
+        logger.info("PSPNet segmentation model loaded successfully")
+        
+        return seg_model
+    except Exception as e:
+        logger.error(f"Failed to load segmentation model: {e}")
+        raise
 
 
 def get_cached_model_count() -> int:
