@@ -19,10 +19,10 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 
 ## X & Y
 
-X (input) --> chest X-ray
-Y (output) --> 18 per-class pathologies probabilities and GRAD-CAM heatmap.
+- **X (input) --> chest X-ray
+- **Y (output) --> 18 per-class pathologies probabilities and GRAD-CAM heatmap.
 
-Example of a GRAD-CAM heatmap:
+- **Example of a GRAD-CAM heatmap:
 <img width="1745" height="1267" alt="image" src="https://github.com/user-attachments/assets/f9f422bb-3954-4290-9320-b3e2dfd529bb" />
 
 
