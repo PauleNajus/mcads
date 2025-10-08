@@ -971,6 +971,10 @@
                        class="btn btn-outline-secondary interpretation-btn" data-method="pli">
                         {% trans "Pixel-Level interpretability" %}
                     </a>
+                    <a href="{% url 'generate_segmentation' xray.id %}" 
+                       class="btn btn-outline-secondary segmentation-btn" id="segmentation-btn">
+                        {% trans "Anatomical Segmentation" %}
+                    </a>
                 </div>
             </div>
         </div>
@@ -1105,6 +1109,42 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
+    // Add click event listener for segmentation button
+    const segmentationBtn = document.getElementById('segmentation-btn');
+    if (segmentationBtn) {
+        segmentationBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Show progress for segmentation
+            progressWrapper.style.display = 'block';
+            statusText.textContent = 'Starting anatomical segmentation...';
+            progressBar.style.width = '0%';
+            progressBar.setAttribute('aria-valuenow', 0);
+            percentageText.textContent = '0% Complete';
+            
+            // Start segmentation process
+            fetch(this.href, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'started') {
+                        // Start monitoring progress for segmentation
+                        monitorSegmentationProgress();
+                    } else {
+                        statusText.textContent = 'Error starting segmentation process';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting segmentation:', error);
+                    statusText.textContent = 'Error starting segmentation process';
+                });
+        });
+    }
+    
     function monitorProgress() {
         let progress = 5;
         progressBar.style.width = `${progress}%`;
@@ -1194,6 +1234,79 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('Error checking progress:', error);
                     statusText.textContent = 'Connection error - retrying...';
                     // Keep checking but with longer intervals
+                    setTimeout(checkProgress, 2000);
+                });
+        }
+        
+        // Start checking
+        checkProgress();
+    }
+    
+    function monitorSegmentationProgress() {
+        let progress = 5;
+        progressBar.style.width = `${progress}%`;
+        progressBar.setAttribute('aria-valuenow', progress);
+        percentageText.textContent = `${progress}% Complete`;
+        
+        // Check progress from the server
+        function checkProgress() {
+            fetch(`/progress/${XRAY_ID}/`)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().catch(() => {
+                            return {
+                                error: `HTTP ${response.status}: ${response.statusText}`,
+                                progress: 0
+                            };
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        console.error('Server error:', data.error);
+                        statusText.textContent = 'Error occurred during processing';
+                        return;
+                    }
+                    
+                    // Update progress
+                    progress = data.progress || 0;
+                    progressBar.style.width = `${progress}%`;
+                    progressBar.setAttribute('aria-valuenow', progress);
+                    percentageText.textContent = `${progress}% Complete`;
+                    
+                    // Update status message based on progress
+                    if (progress <= 20) {
+                        statusText.textContent = 'Loading segmentation model...';
+                    } else if (progress <= 60) {
+                        statusText.textContent = 'Analyzing anatomical structures...';
+                    } else if (progress <= 80) {
+                        statusText.textContent = 'Generating segmentation masks...';
+                    } else {
+                        statusText.textContent = 'Finalizing segmentation results...';
+                    }
+                    
+                    if (progress < 100) {
+                        // Check again in 500ms
+                        setTimeout(checkProgress, 500);
+                    } else {
+                        // Complete - display segmentation results
+                        statusText.textContent = 'Segmentation complete!';
+                        
+                        // Hide progress container after a short delay
+                        setTimeout(() => {
+                            progressWrapper.style.display = 'none';
+                            
+                            // Display segmentation visualizations if available
+                            if (data.segmentation && data.segmentation.has_segmentation && data.segmentation.visualizations) {
+                                displaySegmentationVisualizations(data.segmentation.visualizations, data.image_url);
+                            }
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking progress:', error);
+                    statusText.textContent = 'Connection error - retrying...';
                     setTimeout(checkProgress, 2000);
                 });
         }
@@ -1431,6 +1544,97 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Initialize Image Controls for the new PLI visualizations
         window.initializeVisualizationControls();
+    }
+    
+    function displaySegmentationVisualizations(visualizations, imageUrl) {
+        // Clear any existing segmentation visualization containers
+        removeExistingMultipleVisualizations('segmentation');
+        
+        // Find or create a container for segmentation results
+        let segmentationSection = document.getElementById('segmentation-results-section');
+        if (!segmentationSection) {
+            // Create new section after interpretation section
+            const interpretationSection = document.querySelector('.interpretation-section');
+            segmentationSection = document.createElement('div');
+            segmentationSection.id = 'segmentation-results-section';
+            segmentationSection.className = 'mb-5';
+            
+            if (interpretationSection && interpretationSection.parentNode) {
+                interpretationSection.parentNode.insertBefore(segmentationSection, interpretationSection.nextSibling);
+            } else {
+                // Fallback: insert before the action buttons
+                const actionButtons = document.querySelector('.text-center.mb-5');
+                if (actionButtons && actionButtons.parentNode) {
+                    actionButtons.parentNode.insertBefore(segmentationSection, actionButtons);
+                }
+            }
+        }
+        
+        // Display combined segmentation visualization
+        const combinedViz = visualizations.find(v => v.target_pathology === 'All Structures');
+        if (combinedViz) {
+            const section = document.createElement('div');
+            section.className = 'card mb-4';
+            section.setAttribute('data-dynamic-container', 'segmentation-combined');
+            section.innerHTML = `
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        {% trans "Anatomical Segmentation Results" %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>{% trans "Original X-ray" %}</h6>
+                            <img src="${imageUrl}" alt="{% trans 'Original X-ray' %}" class="img-fluid mb-3">
+                        </div>
+                        <div class="col-md-6">
+                            <h6>{% trans "Segmentation Overlay" %}</h6>
+                            <img src="/media/${combinedViz.visualization_path}" alt="{% trans 'Segmentation overlay' %}" class="img-fluid mb-3">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>{% trans "Detected Anatomical Structures" %}:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><span style="color: #0000FF;">●</span> {% trans "Left Clavicle" %}</li>
+                                    <li><span style="color: #00FF00;">●</span> {% trans "Right Clavicle" %}</li>
+                                    <li><span style="color: #FF0000;">●</span> {% trans "Left Scapula" %}</li>
+                                    <li><span style="color: #00FFFF;">●</span> {% trans "Right Scapula" %}</li>
+                                    <li><span style="color: #FF00FF;">●</span> {% trans "Left Lung" %}</li>
+                                    <li><span style="color: #FFFF00;">●</span> {% trans "Right Lung" %}</li>
+                                    <li><span style="color: #8000FF;">●</span> {% trans "Left Hilus Pulmonis" %}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><span style="color: #FF8000;">●</span> {% trans "Right Hilus Pulmonis" %}</li>
+                                    <li><span style="color: #0080FF;">●</span> {% trans "Heart" %}</li>
+                                    <li><span style="color: #FF0080;">●</span> {% trans "Aorta" %}</li>
+                                    <li><span style="color: #80FF00;">●</span> {% trans "Facies Diaphragmatica" %}</li>
+                                    <li><span style="color: #00FF80;">●</span> {% trans "Mediastinum" %}</li>
+                                    <li><span style="color: #8080FF;">●</span> {% trans "Weasand" %}</li>
+                                    <li><span style="color: #FF8080;">●</span> {% trans "Spine" %}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            segmentationSection.appendChild(section);
+            
+            // Make images clickable
+            const images = section.querySelectorAll('img');
+            makeVisualizationImagesClickable(Array.from(images));
+            
+            // Scroll to the section
+            setTimeout(() => {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     }
     
     function removeExistingMultipleVisualizations(type) {

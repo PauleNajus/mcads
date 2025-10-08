@@ -8,6 +8,7 @@ urlpatterns = [
     path('xray/<int:pk>/', views.xray_results, name='xray_results'),
     path('progress/<int:pk>/', views.check_progress, name='check_progress'),
     path('interpretability/<int:pk>/generate/', views.generate_interpretability, name='generate_interpretability'),
+    path('segmentation/<int:pk>/generate/', views.generate_segmentation, name='generate_segmentation'),
     path('visualization/<int:pk>/delete/', views.delete_visualization, name='delete_visualization'),
     path('prediction-history/', views.prediction_history, name='prediction_history'),
     path('prediction-history/<int:pk>/delete/', views.delete_prediction_history, name='delete_prediction_history'),

@@ -90,7 +90,7 @@ rsync -av /opt/mcads/app/staticfiles/ server3:/opt/mcads/app/staticfiles/
 ```
 
 ## Monitoring Multi-Server Setup
-- Use the monitoring_alerts.py script on each server
+- Use external monitoring (Prometheus, ELK); legacy local scripts removed
 - Implement centralized logging (ELK stack or similar)
 - Monitor load balancer metrics via nginx status module
 

@@ -99,13 +99,7 @@ log_message "Backing up application code..."
 tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/app_code.tar.gz" \
     ./xrayapp/ \
     ./mcads_project/ \
-    ./manage.py \
-    ./backup_system.py \
-    ./system_health_monitor.py \
-    ./monitoring_alerts.py \
-    ./load_balancing_prep.py \
-    ./debug_processing.py \
-    ./emergency_settings_patch.py
+    ./manage.py
 
 log_message "Application code backup completed"
 

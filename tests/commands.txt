@@ -1,1 +1,0 @@
-python process_image.py ../tests/00000001_000.png -resize

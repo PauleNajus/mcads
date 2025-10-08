@@ -37,12 +37,11 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
+# Install PyTorch and torchvision from the official CPU index first to ensure wheels resolve,
+# then install the remaining dependencies from requirements.txt (already satisfied pins are skipped).
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.7.0 torchvision==0.22.0 && \
     pip install --no-cache-dir -r requirements.txt
-
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Install PostgreSQL client for pg_isready
 RUN apt-get update && apt-get install -y postgresql-client redis-tools && rm -rf /var/lib/apt/lists/*
@@ -50,11 +49,15 @@ RUN apt-get update && apt-get install -y postgresql-client redis-tools && rm -rf
 # Copy project files
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Change ownership to app user
-RUN chown -R mcads:mcads /app
+# Create necessary directories
+RUN mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.matplotlib /app/.torch /app/.torchxrayvision /home/mcads/.torchxrayvision /home/mcads/.torchxrayvision/models_data
+
+# Change ownership to app user (including the entrypoint script)
+RUN chown -R mcads:mcads /app && chown -R mcads:mcads /home/mcads && chown mcads:mcads /usr/local/bin/docker-entrypoint.sh
 
 # Switch to app user
 USER mcads
@@ -62,9 +65,9 @@ USER mcads
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check (root path responds without auth)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+    CMD curl -f http://localhost:8000/ || exit 1
 
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

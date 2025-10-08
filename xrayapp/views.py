@@ -1,28 +1,34 @@
 from django.shortcuts import render, redirect
 import threading
-import os
 from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone, translation
-from django.db.models import Q, Prefetch
 from django.core.paginator import Paginator
-from django.views.decorators.cache import cache_page
-from django.core.cache import cache
-from datetime import datetime, timedelta
+"""Views for MCADS.
+
+This module contains various view functions. Some dynamic attributes on Django
+models (like `.id`) are accessed via `.pk` to satisfy static type checkers.
+User profile access is guarded because `request.user` may not have a related
+`profile` yet at the time of access.
+"""
 from dateutil.relativedelta import relativedelta
 from .forms import XRayUploadForm, PredictionHistoryFilterForm, UserInfoForm, UserProfileForm, ChangePasswordForm
 from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SavedRecord
-from .utils import (process_image, process_image_with_interpretability,
+from .utils import (process_image,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
                    save_heatmap, save_overlay)
+from .tasks import run_inference_task, run_interpretability_task, run_segmentation_task
+from typing import Any
+from celery import Task
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.utils.translation import activate, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import logging
+# import os  # Currently unused
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -320,7 +326,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 xray_instance.pli_target_class = results['pathology_summary']  # Store summary of selected pathologies
         
         xray_instance.progress = 90
-        xray_instance.processing_status = 'complete'
+        xray_instance.processing_status = 'completed'
         xray_instance.save()
         
         # Update existing prediction history record instead of creating a new one
@@ -418,7 +424,7 @@ def create_visualization_result(xray_instance, visualization_type, target_pathol
         visualization.save()
         
         action = "Created" if created else "Updated"
-        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.id}")
+        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.pk}")
         
         return visualization
         
@@ -460,7 +466,7 @@ def update_existing_prediction_history(xray_instance, model_type):
                 existing_history.model_used = f"{existing_history.model_used}+{model_type}"
             
             existing_history.save()
-            logger.info(f"Updated existing prediction history record #{existing_history.id} with visualization data")
+            logger.info(f"Updated existing prediction history record #{existing_history.pk} with visualization data")
         else:
             # If no existing record found, create a new one as fallback
             logger.warning(f"No existing prediction history found for XRayImage #{xray_instance.id}, creating new record")
@@ -514,8 +520,6 @@ def home(request):
                 xray_instance.save()
             except Exception as e:
                 # Log the error for debugging
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Error saving XRayImage: {e}")
                 
                 # Return error response for AJAX requests
@@ -528,16 +532,32 @@ def home(request):
                     # For non-AJAX requests, re-raise the exception
                     raise
 
-            
+            # Set immediate queued state to avoid UI showing 0% for long
+            xray_instance.processing_status = 'queued'
+            xray_instance.progress = 1
+            xray_instance.save(update_fields=['processing_status', 'progress'])
+
             # Save image to disk
             image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
             
-            # Start background processing
-            thread = threading.Thread(
-                target=process_image_async, 
-                args=(image_path, xray_instance, model_type)
-            )
-            thread.start()
+            # Start background processing (prefer Celery only if explicitly enabled)
+            use_celery = settings.USE_CELERY
+            started = False
+            if use_celery:
+                try:
+                    task: Any = run_inference_task
+                    task.delay(xray_instance.pk, model_type)
+                    started = True
+                except Exception as e:
+                    logger.warning(f"Celery unavailable; falling back to thread: {e}")
+            if not started:
+                # Fallback to lightweight thread on the web worker
+                thread = threading.Thread(
+                    target=process_image_async,
+                    args=(image_path, xray_instance, model_type),
+                    daemon=True,
+                )
+                thread.start()
             
             # Check if it's an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -571,7 +591,9 @@ def home(request):
 def xray_results(request, pk):
     """View the results of the X-ray analysis"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -691,10 +713,11 @@ def xray_results(request, pk):
     # Group visualizations by type for display
     gradcam_visualizations = []
     pli_visualizations = []
+    segmentation_visualizations = []
     
     for viz in visualizations:
         viz_data = {
-            'id': viz.id,
+            'id': viz.pk,
             'target_pathology': viz.target_pathology,
             'created_at': viz.created_at,
             'model_used': viz.model_used,
@@ -703,13 +726,18 @@ def xray_results(request, pk):
             'overlay_url': viz.overlay_url,
             'saliency_url': viz.saliency_url,
             'threshold': viz.threshold,
-            'visualization_type': viz.visualization_type
+            'visualization_type': viz.visualization_type,
+            'confidence_score': viz.confidence_score,
+            'metadata': viz.metadata,
+            'visualization_path': viz.visualization_path
         }
         
         if viz.visualization_type in ['gradcam', 'combined_gradcam']:
             gradcam_visualizations.append(viz_data)
         elif viz.visualization_type in ['pli', 'combined_pli']:
             pli_visualizations.append(viz_data)
+        elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+            segmentation_visualizations.append(viz_data)
     
     # Prepare legacy GRAD-CAM URLs for backward compatibility
     media_url = settings.MEDIA_URL
@@ -728,6 +756,7 @@ def xray_results(request, pk):
         # Multiple visualization support
         'gradcam_visualizations': gradcam_visualizations,
         'pli_visualizations': pli_visualizations,
+        'segmentation_visualizations': segmentation_visualizations,
         'has_multiple_visualizations': len(visualizations) > 0,
         # Legacy support for single visualizations
         'has_gradcam': xray_instance.has_gradcam,
@@ -747,7 +776,9 @@ def prediction_history(request):
     form = PredictionHistoryFilterForm(request.GET)
     
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Initialize query with optimized select_related to avoid N+1 queries
     # Filter by users from the same hospital instead of just current user
@@ -804,7 +835,7 @@ def prediction_history(request):
     # Get saved record IDs for current user to show star status
     saved_record_ids = set(SavedRecord.objects.filter(
         user=request.user,
-        prediction_history__in=[item.id for item in history_items]
+        prediction_history__in=[item.pk for item in history_items]
     ).values_list('prediction_history_id', flat=True))
     
     context = {
@@ -822,7 +853,9 @@ def delete_prediction_history(request, pk):
     """Delete a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow deletion of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -839,7 +872,9 @@ def delete_all_prediction_history(request):
     """Delete all prediction history records"""
     if request.method == 'POST':
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Count records before deletion for current hospital
         count = PredictionHistory.objects.filter(user__profile__hospital=user_hospital).count()
@@ -864,12 +899,17 @@ def delete_visualization(request, pk):
         visualization = VisualizationResult.objects.get(pk=pk)
         
         # Check if user has permission to delete (must be from same hospital)
-        user_hospital = request.user.profile.hospital
-        if visualization.xray.user.profile.hospital != user_hospital:
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
+        owner_profile = getattr(visualization.xray.user, 'profile', None)
+        owner_hospital = getattr(owner_profile, 'hospital', None)
+        if owner_hospital != user_hospital:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Delete associated files
-        import os
+        from pathlib import Path
+        import logging
         from django.conf import settings
         
         file_paths = [
@@ -879,14 +919,15 @@ def delete_visualization(request, pk):
             visualization.saliency_path,
         ]
         
+        logger = logging.getLogger(__name__)
         for file_path in file_paths:
             if file_path:
                 try:
-                    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
-                    if os.path.exists(full_path):
-                        os.remove(full_path)
+                    full_path = Path(settings.MEDIA_ROOT) / file_path
+                    if full_path.exists():
+                        full_path.unlink()
                 except Exception as e:
-                    print(f"Error deleting file {file_path}: {e}")
+                    logger.warning(f"Error deleting file {file_path}: {e}")
         
         # Delete the visualization record
         visualization.delete()
@@ -904,7 +945,9 @@ def edit_prediction_history(request, pk):
     """Edit a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow editing of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -933,7 +976,9 @@ def edit_prediction_history(request, pk):
 def generate_interpretability(request, pk):
     """Generate interpretability visualization for an X-ray image"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -951,12 +996,23 @@ def generate_interpretability(request, pk):
     # Get the image path
     image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
     
-    # Start background processing
-    thread = threading.Thread(
-        target=process_with_interpretability_async,
-        args=(image_path, xray_instance, model_type, interpretation_method, target_class)
-    )
-    thread.start()
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = settings.USE_CELERY
+    started = False
+    if use_celery:
+        try:
+            task2: Any = run_interpretability_task
+            task2.delay(xray_instance.pk, model_type, interpretation_method, target_class)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        thread = threading.Thread(
+            target=process_with_interpretability_async,
+            args=(image_path, xray_instance, model_type, interpretation_method, target_class),
+            daemon=True,
+        )
+        thread.start()
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -964,6 +1020,51 @@ def generate_interpretability(request, pk):
         return JsonResponse({
             'status': 'started',
             'message': _('Interpretability generation started'),
+            'xray_id': xray_instance.pk
+        })
+    
+    # Redirect to the results page for non-AJAX requests
+    return redirect('xray_results', pk=pk)
+
+
+@login_required
+def generate_segmentation(request, pk):
+    """Generate anatomical segmentation for an X-ray image"""
+    # Get user's hospital from profile
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
+    
+    # Allow access to any X-ray from the same hospital
+    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    
+    # Reset progress to 0 and set status to processing
+    xray_instance.progress = 0
+    xray_instance.processing_status = 'processing'
+    xray_instance.save()
+    
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = settings.USE_CELERY
+    started = False
+    if use_celery:
+        try:
+            task: Task = run_segmentation_task  # type: ignore
+            task.delay(xray_instance.pk)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        # For now, segmentation requires Celery
+        # Could implement a threaded version later if needed
+        messages.error(request, _('Segmentation processing is currently unavailable. Please try again later.'))
+        return redirect('xray_results', pk=pk)
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+        # Return JSON response for AJAX requests
+        return JsonResponse({
+            'status': 'started',
+            'message': _('Segmentation processing started'),
             'xray_id': xray_instance.pk
         })
     
@@ -997,7 +1098,7 @@ def check_progress(request, pk):
         }
         
         # If processing is complete, include visualization data
-        if xray_instance.progress >= 100 and xray_instance.processing_status == 'complete':
+        if xray_instance.progress >= 100 and xray_instance.processing_status == 'completed':
             media_url = settings.MEDIA_URL
             
             # Get all visualizations for this X-ray
@@ -1006,10 +1107,11 @@ def check_progress(request, pk):
             # Group visualizations by type
             gradcam_visualizations = []
             pli_visualizations = []
+            segmentation_visualizations = []
             
             for viz in visualizations:
                 viz_data = {
-                    'id': viz.id,
+                    'id': viz.pk,
                     'target_pathology': viz.target_pathology,
                     'created_at': viz.created_at.isoformat(),
                     'model_used': viz.model_used,
@@ -1017,13 +1119,18 @@ def check_progress(request, pk):
                     'heatmap_url': viz.heatmap_url,
                     'overlay_url': viz.overlay_url,
                     'saliency_url': viz.saliency_url,
-                    'threshold': viz.threshold
+                    'threshold': viz.threshold,
+                    'confidence_score': viz.confidence_score,
+                    'metadata': viz.metadata,
+                    'visualization_path': viz.visualization_path
                 }
                 
                 if viz.visualization_type in ['gradcam', 'combined_gradcam']:
                     gradcam_visualizations.append(viz_data)
                 elif viz.visualization_type in ['pli', 'combined_pli']:
                     pli_visualizations.append(viz_data)
+                elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+                    segmentation_visualizations.append(viz_data)
             
             # Include visualization data in response
             if gradcam_visualizations:
@@ -1036,6 +1143,12 @@ def check_progress(request, pk):
                 response_data['pli'] = {
                     'has_pli': True,
                     'visualizations': pli_visualizations
+                }
+            
+            if segmentation_visualizations:
+                response_data['segmentation'] = {
+                    'has_segmentation': True,
+                    'visualizations': segmentation_visualizations
                 }
             
             # Include backward compatibility data for latest visualizations

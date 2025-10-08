@@ -1,9 +1,7 @@
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.contrib import messages
 from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseForbidden
-from django.utils import timezone
 from django.template.loader import render_to_string
 import hashlib
 

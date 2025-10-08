@@ -17,11 +17,19 @@ docker-compose exec -T db pg_dump -U mcads_user mcads_db > "${BACKUP_DIR}/${BACK
 
 # Backup media files
 echo "Backing up media files..."
-tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/media.tar.gz" ./media
+if [ -d "./media" ]; then
+  tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/media.tar.gz" ./media
+else
+  echo "No media directory found"
+fi
 
-# Backup static files
+# Backup static files (collected)
 echo "Backing up static files..."
-tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/staticfiles.tar.gz" ./staticfiles
+if [ -d "./staticfiles" ]; then
+  tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/staticfiles.tar.gz" ./staticfiles
+else
+  echo "No staticfiles directory found"
+fi
 
 # Backup configuration files
 echo "Backing up configuration files..."
@@ -35,7 +43,11 @@ tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/config.tar.gz" \
 
 # Backup logs
 echo "Backing up logs..."
-tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/logs.tar.gz" ./logs
+if [ -d "./logs" ]; then
+  tar -czf "${BACKUP_DIR}/${BACKUP_NAME}/logs.tar.gz" ./logs
+else
+  echo "No logs directory found"
+fi
 
 # Create backup info file
 cat > "${BACKUP_DIR}/${BACKUP_NAME}/backup_info.txt" << EOF

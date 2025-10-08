@@ -3,6 +3,17 @@ set -e
 
 echo "Starting MCADS Docker initialization..."
 
+# Export critical environment variables to ensure they persist through worker restarts
+export USE_CELERY="${USE_CELERY:-1}"
+export REDIS_URL="${REDIS_URL}"
+export DB_HOST="${DB_HOST}"
+export DB_PORT="${DB_PORT}"
+export DB_USER="${DB_USER}"
+export DB_PASSWORD="${DB_PASSWORD}"
+export DB_NAME="${DB_NAME}"
+
+echo "Environment variables exported (USE_CELERY=$USE_CELERY)"
+
 # Wait for database to be ready
 echo "Waiting for database to be ready..."
 while ! pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
