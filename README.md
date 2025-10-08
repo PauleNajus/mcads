@@ -17,6 +17,15 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 - **Responsive UI**: Bootstrap-based interface optimized for medical workflows
 - **RESTful API**: Programmatic access to prediction services
 
+## X & Y
+
+- X (input) --> chest X-ray
+- Y (output) --> 18 per-class pathologies probabilities and GRAD-CAM heatmap.
+
+Example of a GRAD-CAM heatmap:
+
+![GRAD-CAM heatmap example](https://github.com/user-attachments/assets/f9f422bb-3954-4290-9320-b3e2dfd529bb)
+
 ## Technology Stack
 
 - **Backend**: Django 5.2, Python 3.11.9
@@ -156,15 +165,6 @@ SECRET_KEY=your-secret-key
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
 DATABASE_URL=sqlite:///db.sqlite3
-XRV_DENSENET_WEIGHTS=densenet121-res224-all
-XRV_RESNET_WEIGHTS=resnet50-res512-all
-XRV_AE_WEIGHTS=101-elastic
-XRV_AE_INPUT_SIZE=64
-XRV_AE_OOD_THRESHOLD=0.015
-# Optionally supply per-class calibration and thresholds
-# XRV_CALIBRATION_FILE=./config/calibration.json
-# or inline JSON
-# XRV_CALIBRATION_JSON={"temperature": {"Pneumothorax": 1.1}, "thresholds": {"Pneumothorax": 0.35}}
 ```
 
 ### Settings
