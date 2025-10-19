@@ -218,31 +218,11 @@ EXPOSE 8000
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - [TorchXRayVision](https://github.com/mlmed/torchxrayvision) for the pre-trained models
 - Django and PyTorch communities for excellent documentation
 - Healthcare professionals for domain expertise
-
-## Support
-
-For issues and questions:
-
-- Create an issue in the repository
-- Check the documentation in the `docs/` directory
-- Review the test cases for usage examples
 
 ## Disclaimer
 
