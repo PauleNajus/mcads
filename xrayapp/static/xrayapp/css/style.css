@@ -484,6 +484,16 @@ footer {
   line-height: 1;
 }
 
+.flag-img {
+  width: 1.33em;
+  height: 1em;
+  margin-right: var(--spacing-xs);
+  vertical-align: middle;
+  display: inline-block;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
 /* Language dropdown button styling */
 #languageDropdown {
   min-width: 70px;

@@ -258,7 +258,7 @@ CSP_BASE_URI = ("'self'",)
 CSP_CONNECT_SRC = ("'self'",)
 CSP_FONT_SRC = ("'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
 CSP_FRAME_ANCESTORS = ("'none'",)
-CSP_IMG_SRC = ("'self'", 'data:')
+CSP_IMG_SRC = ("'self'", 'data:', 'https://cdn.jsdelivr.net')
 CSP_OBJECT_SRC = ("'none'",)
 CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net')
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
@@ -273,7 +273,7 @@ CONTENT_SECURITY_POLICY = {
         'default-src': ("'self'",),
         'font-src': ("'self'", 'https://cdn.jsdelivr.net'),
         'frame-ancestors': ("'none'",),
-        'img-src': ("'self'", 'data:'),
+        'img-src': ("'self'", 'data:', 'https://cdn.jsdelivr.net'),
         'object-src': ("'none'",),
         'script-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
         'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
