@@ -1,5 +1,5 @@
 // Service worker to clear browser cache on activation
-const CACHE_VERSION = 'v1.0.1';
+const CACHE_VERSION = 'v1.0.3';
 
 // Install event - cache necessary files
 self.addEventListener('install', event => {

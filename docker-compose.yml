@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -40,6 +38,16 @@ services:
   web:
     build: .
     container_name: mcads_web
+    entrypoint: []
+    command: bash -c "
+      echo 'Starting MCADS Docker initialization...' &&
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      mkdir -p /app/logs /app/media /app/data_exports /app/backups &&
+      echo 'MCADS initialization completed!' &&
+      gunicorn --config gunicorn_config.py mcads_project.asgi:application"
     depends_on:
       db:
         condition: service_healthy
@@ -47,25 +55,42 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
+      - USE_CELERY=1
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
       - ALLOWED_HOSTS=localhost,127.0.0.1,mcads.casa,www.mcads.casa,203.161.58.22,server1.mcads.casa
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
+      # Model configuration
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      # OOD autoencoder configuration
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=224
+      - XRV_AE_OOD_THRESHOLD=0.015
+      # Optional calibration file (provide ./config/calibration.json on host)
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
       - ./backups:/app/backups
+      - ./config:/app/config:ro
+      - models_data:/home/mcads/.torchxrayvision/models_data
     ports:
       - "8000:8000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-f", "-L", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -74,7 +99,11 @@ services:
   celery:
     build: .
     container_name: mcads_celery
-    command: celery -A mcads_project worker -l info --concurrency=1
+    entrypoint: []
+    command: bash -c "
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      celery -A mcads_project worker -l info --concurrency=1"
     depends_on:
       db:
         condition: service_healthy
@@ -82,24 +111,47 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
+      # Keep environment consistent for tasks
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=224
+      - XRV_AE_OOD_THRESHOLD=0.015
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
       - ./data_exports:/app/data_exports
+      - ./config:/app/config:ro
+      - models_data:/home/mcads/.torchxrayvision/models_data
+    healthcheck:
+      test: ["CMD-SHELL", "echo ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   # Celery Beat for scheduled tasks
   celery-beat:
     build: .
     container_name: mcads_celery_beat
-    command: celery -A mcads_project beat -l info
+    entrypoint: []
+    command: bash -c "
+      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
+      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
+      celery -A mcads_project beat -l info"
     depends_on:
       db:
         condition: service_healthy
@@ -107,15 +159,32 @@ services:
         condition: service_healthy
     environment:
       - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=False
+      - DEBUG=True
       - DB_NAME=mcads_db
       - DB_USER=mcads_user
       - DB_PASSWORD=mcads_secure_password_2024
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
+      - TORCH_HOME=/app/.torch
+      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
+      - XRV_DATA_DIR=/app/.torchxrayvision
+      - MPLCONFIGDIR=/app/.matplotlib
+      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
+      - XRV_RESNET_WEIGHTS=resnet50-res512-all
+      - XRV_AE_WEIGHTS=101-elastic
+      - XRV_AE_INPUT_SIZE=224
+      - XRV_AE_OOD_THRESHOLD=0.015
+      - XRV_CALIBRATION_FILE=/app/config/calibration.json
     volumes:
       - ./logs:/app/logs
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   # Nginx Reverse Proxy
@@ -138,3 +207,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  models_data:

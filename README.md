@@ -17,6 +17,15 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 - **Responsive UI**: Bootstrap-based interface optimized for medical workflows
 - **RESTful API**: Programmatic access to prediction services
 
+## X & Y
+
+- X (input) --> chest X-ray
+- Y (output) --> 18 per-class pathologies probabilities and GRAD-CAM heatmap.
+
+Example of a GRAD-CAM heatmap:
+
+![GRAD-CAM heatmap example](https://github.com/user-attachments/assets/f9f422bb-3954-4290-9320-b3e2dfd529bb)
+
 ## Technology Stack
 
 - **Backend**: Django 5.2, Python 3.11.9
@@ -209,31 +218,11 @@ EXPOSE 8000
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - [TorchXRayVision](https://github.com/mlmed/torchxrayvision) for the pre-trained models
 - Django and PyTorch communities for excellent documentation
 - Healthcare professionals for domain expertise
-
-## Support
-
-For issues and questions:
-
-- Create an issue in the repository
-- Check the documentation in the `docs/` directory
-- Review the test cases for usage examples
 
 ## Disclaimer
 

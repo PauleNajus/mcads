@@ -12,6 +12,7 @@
   --warning: #ffc107;
   --success: #198754;
   --info: #0dcaf0;
+  --info-rgb: 13, 202, 240;
   --light: #f8f9fa;
   --dark: #212529;
   --white: #fff;
@@ -449,6 +450,13 @@ footer {
   background-color: rgba(var(--primary-rgb), 0.1);
 }
 
+/* Theme toggle icon visibility control */
+.theme-toggle i {
+  font-size: 1.1rem;
+  color: var(--bs-body-color);
+  transition: all var(--transition-fast);
+}
+
 /* ==========================================
    LANGUAGE SWITCH
    ========================================== */
@@ -821,7 +829,7 @@ footer {
 }
 
 .progress-bar.bg-info { 
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: linear-gradient(135deg, var(--info) 0%, #0bb5d6 100%) !important;
 }
 
 .progress-bar.bg-primary:not(.modern-progress-bar) { 
@@ -1920,8 +1928,8 @@ footer {
 }
 
 .btn-info-pathology:hover {
-  color: #0d6efd;
-  background-color: rgba(13, 110, 253, 0.1);
+  color: var(--info);
+  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.1);
   transform: scale(1.1);
 }
 
@@ -1993,7 +2001,7 @@ footer {
 }
 
 [data-bs-theme="dark"] .btn-info-pathology { color: #adb5bd; }
-[data-bs-theme="dark"] .btn-info-pathology:hover { color: #66b3ff; background-color: rgba(102, 179, 255, 0.1); }
+[data-bs-theme="dark"] .btn-info-pathology:hover { color: var(--info); background-color: rgba(var(--info-rgb, 13, 202, 240), 0.1); }
 
 /* ==========================================
    FILTER ACTION BUTTONS - EQUAL HEIGHT

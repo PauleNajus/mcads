@@ -1,6 +1,4 @@
 from django.db import models
-from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
 # User Roles Choices
@@ -152,14 +150,16 @@ class XRayImage(models.Model):
         }
         level = self.severity_level
         if level is None:
-            level = self.calculate_severity_level
-            
+            calculated = self.calculate_severity_level
+            if calculated is None:
+                return _("Unknown")
+            return severity_mapping.get(calculated, _("Unknown"))
         return severity_mapping.get(level, _("Unknown"))
     
     def __str__(self):
         if self.patient_id and (self.first_name or self.last_name):
             return f"{self.first_name} {self.last_name} (ID: {self.patient_id}) - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
-        return f"X-ray #{self.id} - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
+        return f"X-ray #{self.pk} - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
         
     def get_patient_display(self):
         """Return formatted patient information"""
@@ -274,12 +274,14 @@ class PredictionHistory(models.Model):
         }
         level = self.severity_level
         if level is None:
-            level = self.calculate_severity_level
-            
+            calculated = self.calculate_severity_level
+            if calculated is None:
+                return _("Unknown")
+            return severity_mapping.get(calculated, _("Unknown"))
         return severity_mapping.get(level, _("Unknown"))
     
     def __str__(self):
-        return f"Prediction #{self.id} for {self.xray} using {self.model_used}"
+        return f"Prediction #{self.pk} for {self.xray} using {self.model_used}"
 
 
 class VisualizationResult(models.Model):
@@ -291,13 +293,15 @@ class VisualizationResult(models.Model):
         ('pli', _('Pixel-level Interpretability')),
         ('combined_gradcam', _('Combined')),
         ('combined_pli', _('Combined PLI')),
+        ('segmentation', _('Anatomical Segmentation')),
+        ('segmentation_combined', _('Combined Segmentation')),
     ]
     
     # Foreign key to X-ray image
     xray = models.ForeignKey(XRayImage, on_delete=models.CASCADE, related_name='visualizations', db_index=True)
     
     # Visualization details
-    visualization_type = models.CharField(max_length=20, choices=VISUALIZATION_TYPES, db_index=True)
+    visualization_type = models.CharField(max_length=30, choices=VISUALIZATION_TYPES, db_index=True)
     target_pathology = models.CharField(max_length=50, db_index=True)  # The pathology this visualization targets
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     
@@ -310,6 +314,8 @@ class VisualizationResult(models.Model):
     # Additional metadata
     model_used = models.CharField(max_length=50, blank=True)  # Model used for visualization
     threshold = models.FloatField(null=True, blank=True)     # Threshold used (for PLI)
+    confidence_score = models.FloatField(null=True, blank=True)  # Confidence score for segmentation
+    metadata = models.JSONField(null=True, blank=True)  # Additional metadata as JSON
     
     class Meta:
         # Unique constraint: prevent duplicate visualization type + pathology combinations
@@ -331,7 +337,13 @@ class VisualizationResult(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.get_visualization_type_display()} - {self.target_pathology} for X-ray #{self.xray.id}"
+        return f"{self.visualization_type_display} - {self.target_pathology} for X-ray #{self.xray.pk}"
+
+    @property
+    def visualization_type_display(self) -> str:
+        """Return human-readable label for visualization_type."""
+        choices_map = {key: label for key, label in self.VISUALIZATION_TYPES}
+        return str(choices_map.get(self.visualization_type, self.visualization_type))
     
     @property
     def visualization_url(self):
@@ -466,4 +478,4 @@ class SavedRecord(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.user.username} saved #{self.prediction_history.id}"
+        return f"{self.user.username} saved #{self.prediction_history.pk}"

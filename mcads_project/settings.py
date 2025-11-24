@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 import environ
+from typing import cast
 from django.core.management.utils import get_random_secret_key
 
 # Fix PyTorch CPU backend issues - must be set before torch import
@@ -42,9 +43,9 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True  # Temporary for CSS fix
-
-ALLOWED_HOSTS = ['mcads.casa', 'www.mcads.casa', '203.161.58.22', 'server1.mcads.casa', 'localhost', '127.0.0.1']
+# Types resolved via Env defaults declared above
+DEBUG: bool = cast(bool, env('DEBUG'))
+ALLOWED_HOSTS: list[str] = cast(list[str], env('ALLOWED_HOSTS'))
 
 
 # Application definition
@@ -58,16 +59,22 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_bootstrap5',
     'csp',  # Content Security Policy
+    'django_celery_beat',  # Celery beat scheduler
+    'django_celery_results',  # Celery result backend
     'xrayapp',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'csp.middleware.CSPMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'xrayapp.middleware.RateLimitMiddleware',
+    'xrayapp.middleware.RoleBasedAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -96,17 +103,30 @@ WSGI_APPLICATION = 'mcads_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME', default='mcads_db'),
-        'USER': env('DB_USER', default='mcads_user'),
-        'PASSWORD': env('DB_PASSWORD', default=''),
-        'HOST': env('DB_HOST', default='localhost'),
-        'PORT': env('DB_PORT', default='5432'),
-        'OPTIONS': {},
+# Use PostgreSQL in production, SQLite in development
+if os.environ.get('DB_HOST'):
+    # Production: PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'mcads_db'),
+            'USER': os.environ.get('DB_USER', 'mcads_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'mcads_secure_password_2024'),
+            'HOST': os.environ.get('DB_HOST', 'db'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'OPTIONS': {
+                'sslmode': 'disable',
+            },
+        }
     }
-}
+else:
+    # Development: SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -136,6 +156,9 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year for production
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Respect HTTPS when behind a reverse proxy (Nginx)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Session security
 SESSION_COOKIE_AGE = 3600  # 1 hour
@@ -203,55 +226,72 @@ LOGGING = {
 logs_dir = BASE_DIR / 'logs'
 os.makedirs(logs_dir, exist_ok=True)
 
-# Redis caching configuration for production performance
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-        'TIMEOUT': 300,  # 5 minutes
-        'OPTIONS': {
-            'db': '1',
+# Cache configuration
+# Use Redis if REDIS_CACHE_URL is provided; otherwise fall back to in-memory cache for development
+_redis_cache_url = os.environ.get('REDIS_CACHE_URL')
+if _redis_cache_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_cache_url,
+            'TIMEOUT': 300,  # 5 minutes
         }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mcads-local',
+            'TIMEOUT': 300,
+        }
+    }
 
 # Cache middleware (add to MIDDLEWARE for full page caching if needed)
 CACHE_MIDDLEWARE_ALIAS = 'default'
 CACHE_MIDDLEWARE_SECONDS = 300
 CACHE_MIDDLEWARE_KEY_PREFIX = 'mcads'
 
-# Content Security Policy settings (django-csp 4.0+ format)
+# Content Security Policy (django-csp 3.8 format)
+# Allow Bootstrap via jsDelivr CDN; tighten other sources.
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_BASE_URI = ("'self'",)
+CSP_CONNECT_SRC = ("'self'",)
+CSP_FONT_SRC = ("'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+CSP_FRAME_ANCESTORS = ("'none'",)
+CSP_IMG_SRC = ("'self'", 'data:')
+CSP_OBJECT_SRC = ("'none'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net')
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+# Explicitly allow stylesheet <link>/<style> sources
+CSP_STYLE_SRC_ELEM = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+
+# Back-compat structure (has no effect for django-csp 3.8, retained for clarity)
 CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'base-uri': ("'self'",),
         'connect-src': ("'self'",),
         'default-src': ("'self'",),
-        'font-src': (
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        ),
+        'font-src': ("'self'", 'https://cdn.jsdelivr.net'),
         'frame-ancestors': ("'none'",),
-        'img-src': ("'self'", "data:", "https:"),
+        'img-src': ("'self'", 'data:'),
         'object-src': ("'none'",),
-        'script-src': (
-            "'self'",
-            "'unsafe-inline'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        ),
-        'style-src': (
-            "'self'",
-            "'unsafe-inline'",
-            "https://cdn.jsdelivr.net",
-            "https://cdnjs.cloudflare.com"
-        )
+        'script-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
+        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
     }
 }
 
-# Static files optimization with WhiteNoise  
-# Note: Using default storage to work with nginx serving static files directly
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Static files storage
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Use CDN Bootstrap assets with django-bootstrap5
+BOOTSTRAP5 = {
+    "include_jquery": False,
+    "css_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
+    "javascript_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -304,3 +344,36 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
+
+# Celery Configuration
+USE_CELERY = os.environ.get('USE_CELERY', '0') == '1'
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
+# Celery task settings
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Task routing and worker settings
+CELERY_TASK_ROUTES = {
+    'xrayapp.tasks.*': {'queue': 'celery'},
+}
+
+# Worker settings
+CELERY_WORKER_CONCURRENCY = 1  # Single worker for memory constrained environment
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_DISABLE_RATE_LIMITS = False
+
+# Task execution settings
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 360  # 6 minutes
+CELERY_TASK_ALWAYS_EAGER = False  # Set to True for testing without Celery
+
+# Beat scheduler settings
+CELERY_BEAT_SCHEDULE = {
+    # Add scheduled tasks here if needed
+}
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

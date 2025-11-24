@@ -303,11 +303,11 @@
 
 {% block extra_js %}
 {% load static %}
-<script src="{% static 'xrayapp/js/analysis.js' %}?v=1.0.1"></script>
+<script src="{% static 'xrayapp/js/analysis.js' %}?v=1.0.3"></script>
 <script>
   // Register service worker to clean cache
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register("{% static 'xrayapp/js/service-worker.js' %}?v=1.0.1")
+    navigator.serviceWorker.register("{% static 'xrayapp/js/service-worker.js' %}?v=1.0.3")
       .then(reg => console.log('Service Worker registered:', reg))
       .catch(err => console.error('Service Worker registration failed:', err));
   }
