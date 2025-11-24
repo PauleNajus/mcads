@@ -1,133 +1,63 @@
-<!DOCTYPE html>
+{% extends "xrayapp/base.html" %}
 {% load i18n %}
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Error{% endblock %} - MCADS</title>
-    {% load bootstrap5 %}
-    {% bootstrap_css %}
-    <link href="{% static 'xrayapp/css/bootstrap-icons.min.css' %}" rel="stylesheet">
-    {% load static %}
-    <link rel="stylesheet" type="text/css" href="{% static 'xrayapp/css/style.css' %}">
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .error-container {
-            text-align: center;
-            color: white;
-            padding: 3rem 0;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .error-code {
-            font-size: 6rem;
-            font-weight: 900;
-            margin-bottom: 1rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .error-divider {
-            width: 100px;
-            height: 4px;
-            background-color: white;
-            margin: 0 auto 2rem;
-            border-radius: 2px;
-        }
-        
-        .error-message {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-        
-        .error-description {
-            font-size: 1.1rem;
-            margin-bottom: 3rem;
-            opacity: 0.9;
-            max-width: 600px;
-        }
-        
-        .home-button {
-            background-color: rgba(255,255,255,0.2);
-            border: 2px solid white;
-            color: white;
-            padding: 12px 30px;
-            font-size: 1.1rem;
-            border-radius: 50px;
-            transition: all 0.3s ease;
-        }
-        
-        .home-button:hover {
-            background-color: white;
-            color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-body-tertiary">
-        <div class="container-fluid">
-            <div class="container">
-                <a class="navbar-brand" href="/">
-                    <i class="bi bi-lungs"></i> MCADS
-                </a>
-            </div>
-        </div>
-    </nav>
 
-    <div class="container-fluid flex-grow-1">
-        <div class="container">
-            <div class="error-container">
-                <h1 class="error-code">{% block error_code %}{% endblock %}</h1>
-                <div class="error-divider"></div>
-                <h2 class="error-message">{% block error_message %}{% endblock %}</h2>
-                <p class="error-description">{% block error_description %}{% endblock %}</p>
-                <a href="/" class="btn btn-primary home-button">
-                    <i class="bi bi-house-door me-2"></i>{% trans "Go to Homepage" %}
-                </a>
-            </div>
+{% block title %}{% block error_title %}Error{% endblock %} - MCADS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-container {
+        text-align: center;
+        padding: 4rem 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-code {
+        font-size: 6rem;
+        font-weight: 900;
+        margin-bottom: 1rem;
+        color: #572437;
+        opacity: 0.8;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .error-divider {
+        width: 80px;
+        height: 4px;
+        background-color: var(--bs-secondary);
+        margin: 0 auto 2rem;
+        border-radius: 2px;
+        opacity: 0.5;
+    }
+    
+    .error-message {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+    
+    .error-description {
+        font-size: 1.1rem;
+        margin-bottom: 3rem;
+        max-width: 600px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="error-container">
+            <h1 class="error-code">{% block error_code %}{% endblock %}</h1>
+            <div class="error-divider"></div>
+            <h2 class="error-message">{% block error_message %}{% endblock %}</h2>
+            <p class="error-description text-muted">{% block error_description %}{% endblock %}</p>
+            <a href="{% url 'home' %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-house-door me-2"></i>{% trans "Go to Homepage" %}
+            </a>
         </div>
     </div>
-
-    <footer class="mt-auto" style="background-color: var(--bs-tertiary-bg); width: 100vw; margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%); margin-bottom: 0; padding: 1rem 0 0 0; position: relative; bottom: 0;">
-        <div class="container-fluid" style="background-color: var(--bs-tertiary-bg); width: 100%; margin: 0; padding: 0;">
-            <div class="container" style="max-width: 1140px; margin: 0 auto; padding: 0 15px 1rem 15px;">
-                <div class="row">
-                    <div class="col-md-6">
-                        <p class="mb-0 text-muted small">
-                            &copy; {% now "Y" %} MCADS. {% trans "All rights reserved." %} Paulius Bundza {% trans "and" %} Justas Trinkūnas. Vilnius Tech.
-                        </p>
-                        <p class="mb-0 text-muted small">
-                            <a href="/terms-of-service/" class="link-secondary text-decoration-none">
-                                <i class="bi bi-file-earmark-text"></i> {% trans "Terms of Service" %}
-                            </a>
-                        </p>
-                    </div>
-                    <div class="col-md-6 text-md-end">
-                        <p class="mb-0 text-muted small">
-                            MCADS (Multi-label Chest Abnormality Detection System) demo v0.2.6
-                        </p>
-                        <p class="mb-0 text-muted small">
-                            Powered by TorchXRayVision
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    {% bootstrap_javascript %}
-</body>
-</html> 
+</div>
+{% endblock %}

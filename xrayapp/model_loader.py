@@ -74,7 +74,7 @@ def load_autoencoder() -> Tuple[torch.nn.Module, int]:
     ae = xrv.autoencoders.ResNetAE(weights=ae_weights)
     ae.to(device)
     ae.eval()
-    ae_resize = int(os.environ.get('XRV_AE_INPUT_SIZE', '64'))
+    ae_resize = int(os.environ.get('XRV_AE_INPUT_SIZE', '224'))
     _model_cache[_AE_CACHE_KEY] = (ae, ae_resize)
     return ae, ae_resize
 
