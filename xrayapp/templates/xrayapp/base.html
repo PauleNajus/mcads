@@ -8,7 +8,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#7b3349">
-    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}MCADS{% endblock %}</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -195,10 +194,17 @@
                     </div>
                     <div class="col-md-6 text-md-end">
                         <p class="mb-0 text-muted small">
-                            MCADS (Multi-label Chest Abnormality Detection System) demo v1.2.0
+                            MCADS (Multi-label Chest Abnormality Detection System) demo v0.2.6
                         </p>
                         <p class="mb-0 text-muted small">
                             {% trans "Powered by" %} TorchXRayVision
+                        </p>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12 text-center">
+                        <p class="mb-0 text-muted small">
+                            X-ray images for demonstration: <a href="https://drive.google.com/drive/folders/18uSJ7PaBOHDb-9n760ziAjjjZ_fLiMl_" target="_blank" class="link-secondary text-decoration-none">https://drive.google.com/drive/folders/18uSJ7PaBOHDb-9n760ziAjjjZ_fLiMl_</a>
                         </p>
                     </div>
                 </div>
@@ -235,20 +241,22 @@
         
         // Get CSRF token from DOM or cookies
         function getCSRFToken() {
-            // First try to get from meta tag
-            let token = document.querySelector('meta[name=csrf-token]');
-            if (token) {
-                return token.getAttribute('content');
-            }
-            
-            // Then try from form
+            // First try from form input (most reliable for POST requests)
             let csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
             if (csrfInput) {
+                console.log('CSRF token from form input:', csrfInput.value);
                 return csrfInput.value;
             }
             
-            // Finally try from cookie
-            return getCookie('csrftoken');
+            // Then try from cookie
+            let cookieToken = getCookie('csrftoken');
+            if (cookieToken) {
+                console.log('CSRF token from cookie:', cookieToken);
+                return cookieToken;
+            }
+            
+            console.error('CSRF token not found!');
+            return null;
         }
     </script>
     

@@ -124,20 +124,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return response.json();
       })
       .then(data => {
+        console.log('Server response:', data);
         if (data.upload_id) {
           console.log('Upload successful, tracking progress for ID:', data.upload_id);
           // Start tracking progress
           trackProgress(data.upload_id);
         } else if (data.error) {
           // Handle validation errors
+          console.error('Form validation error:', data.error);
+          if (data.errors) {
+            console.error('Detailed errors:', data.errors);
+          }
           alert(gettext('Error: ') + data.error);
         } else {
           // Generic error handling
+          console.error('Unexpected response format:', data);
           alert(gettext('Error starting analysis. Please try again.'));
         }
       })
       .catch(error => {
         console.error('Error submitting form:', error);
+        console.error('Error details:', error.message, error.stack);
         alert(gettext('Error submitting form. Please try again.'));
       });
     });

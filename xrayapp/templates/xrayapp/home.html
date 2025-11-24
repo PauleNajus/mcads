@@ -11,6 +11,17 @@
             <h2 class="text-center fs-4 mb-0">MCADS</h2>
         </div>
         <div class="card-body compact-card-body">
+            <!-- Permission Check -->
+            {% if not can_upload %}
+            <div class="alert alert-warning text-center">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>{% trans "Access Restricted" %}</strong>
+                <p class="mb-0 mt-2">{% trans "You do not have permission to upload X-ray images. Only users with Administrator, Radiographer, or Technologist roles can upload images." %}</p>
+                <p class="mb-0 mt-2">{% trans "Please contact your system administrator if you believe you should have access." %}</p>
+                <hr>
+                <a href="{% url 'prediction_history' %}" class="btn btn-primary mt-2">{% trans "View Prediction History" %}</a>
+            </div>
+            {% else %}
             <!-- Form Wrapper - Will be hidden during processing -->
             <div id="form-wrapper">
                 <p class="lead text-center mb-2">
@@ -190,6 +201,7 @@
                     </p>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

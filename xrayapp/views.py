@@ -5,7 +5,7 @@ from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone, translation
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Case, When, IntegerField, Avg, F, Value, FloatField
 from django.core.paginator import Paginator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
@@ -61,6 +61,8 @@ def process_image_async(image_path, xray_instance, model_type):
         if 'Lung Lesion' in results:
             xray_instance.lung_lesion = results.get('Lung Lesion', None)
         
+        # Calculate and save severity level
+        xray_instance.severity_level = xray_instance.calculate_severity_level
         xray_instance.save()
         
         # Create prediction history record
@@ -473,10 +475,39 @@ def update_existing_prediction_history(xray_instance, model_type):
 
 @login_required
 def home(request):
-    """Home page with image upload form"""
+    """
+    Home page with image upload form.
+    
+    Only users with Administrator, Radiographer, or Technologist roles
+    are allowed to upload X-ray images. Radiologists can view but not upload.
+    """
     if request.method == 'POST':
+        # Check if user has permission to upload X-rays
+        # Allowed roles: Administrator, Radiographer, Technologist
+        try:
+            if not request.user.profile.can_upload_xrays():
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'error': _('You do not have permission to upload X-ray images. Please contact your administrator.')
+                    }, status=403)
+                else:
+                    messages.error(request, _('You do not have permission to upload X-ray images.'))
+                    return redirect('home')
+        except AttributeError:
+            # User doesn't have a profile - create one with default role
+            logger.warning(f"User {request.user.username} doesn't have a profile. Creating one.")
+            UserProfile.objects.create(user=request.user, role='Radiographer')
+            # Continue with upload since default role allows it
+        
         form = XRayUploadForm(request.POST, request.FILES, user=request.user)
+        
+        # Debug logging for troubleshooting
+        logger.info(f"Upload attempt by user: {request.user.username} (ID: {request.user.id})")
+        logger.info(f"Form fields received: {list(request.POST.keys())}")
+        logger.info(f"Files received: {list(request.FILES.keys())}")
+        
         if form.is_valid():
+            logger.info(f"Form validation PASSED for user {request.user.username}")
             # Create a new XRayImage instance with all form data but don't save yet
             xray_instance = form.save(commit=False)
             # Assign the current user
@@ -514,8 +545,6 @@ def home(request):
                 xray_instance.save()
             except Exception as e:
                 # Log the error for debugging
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Error saving XRayImage: {e}")
                 
                 # Return error response for AJAX requests
@@ -541,6 +570,7 @@ def home(request):
             
             # Check if it's an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                logger.info(f"Returning success response for upload ID: {xray_instance.pk}")
                 # Return JSON response for AJAX requests
                 return JsonResponse({
                     'upload_id': xray_instance.pk,
@@ -551,6 +581,10 @@ def home(request):
                 return redirect('xray_results', pk=xray_instance.pk)
         else:
             # Handle form validation errors for AJAX requests
+            logger.error(f"Form validation FAILED for user {request.user.username}")
+            logger.error(f"Form errors: {form.errors}")
+            logger.error(f"Form errors as JSON: {form.errors.as_json()}")
+            
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({
                     'error': 'Form validation failed',
@@ -558,12 +592,16 @@ def home(request):
                 }, status=400)
     else:
         form = XRayUploadForm(user=request.user)
+    
+    # Check if user has upload permission to conditionally display form
+    can_upload = request.user.profile.can_upload_xrays() if hasattr(request.user, 'profile') else False
         
     return render(request, 'xrayapp/home.html', {
         'form': form,
         'today_date': timezone.now(),
         'user_first_name': request.user.first_name if request.user.is_authenticated else '',
         'user_last_name': request.user.last_name if request.user.is_authenticated else '',
+        'can_upload': can_upload,
     })
 
 
@@ -753,8 +791,7 @@ def prediction_history(request):
     # Filter by users from the same hospital instead of just current user
     query = PredictionHistory.objects.filter(user__profile__hospital=user_hospital)\
                                     .select_related('xray', 'user', 'user__profile')\
-                                    .prefetch_related('xray__user')\
-                                    .order_by('-created_at')
+                                    .prefetch_related('xray__user')
     
     # Apply filters if the form is valid
     if form.is_valid():
@@ -788,6 +825,61 @@ def prediction_history(request):
             # Dynamic field filtering
             filter_kwargs = {f"{field_name}__gte": threshold}
             query = query.filter(**filter_kwargs)
+        
+        # Apply sorting
+        sort_by = form.cleaned_data.get('sort_by', '')
+        sort_order = form.cleaned_data.get('sort_order', 'desc')
+        
+        if sort_by == 'severity':
+            # Sort by severity_level (1=Insignificant, 2=Moderate, 3=Significant)
+            # For records without severity_level, calculate it dynamically
+            from django.db.models.functions import Coalesce
+            
+            # List of all pathology fields
+            pathology_fields = [
+                'atelectasis', 'cardiomegaly', 'consolidation', 'edema', 'effusion',
+                'emphysema', 'fibrosis', 'hernia', 'infiltration', 'mass', 'nodule',
+                'pleural_thickening', 'pneumonia', 'pneumothorax', 'fracture',
+                'lung_opacity', 'enlarged_cardiomediastinum', 'lung_lesion'
+            ]
+            
+            # Calculate average of all pathology fields for records without severity_level
+            sum_expr = sum([Coalesce(F(field), Value(0.0), output_field=FloatField()) 
+                           for field in pathology_fields], Value(0.0, output_field=FloatField()))
+            avg_expr = sum_expr / Value(len(pathology_fields), output_field=FloatField())
+            
+            # First, annotate with average pathology
+            query = query.annotate(avg_pathology=avg_expr)
+            
+            # Then, use existing severity_level if available, otherwise calculate it
+            query = query.annotate(
+                sort_severity=Case(
+                    # If severity_level exists, use it
+                    When(severity_level__isnull=False, then=F('severity_level')),
+                    # Otherwise calculate from average pathology probability
+                    When(avg_pathology__lte=0.19, then=Value(1)),
+                    When(avg_pathology__lte=0.30, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField()
+                )
+            )
+            
+            # Sort by severity
+            # desc: Significant → Moderate → Insignificant (3, 2, 1)
+            # asc: Insignificant → Moderate → Significant (1, 2, 3)
+            order_field = 'sort_severity' if sort_order == 'asc' else '-sort_severity'
+            query = query.order_by(order_field, '-created_at')
+        elif sort_by == 'xray_date':
+            # Sort by X-ray date
+            order_field = 'xray__date_of_xray' if sort_order == 'asc' else '-xray__date_of_xray'
+            query = query.order_by(order_field, '-created_at')
+        else:
+            # Default sorting by prediction date (created_at)
+            order_field = 'created_at' if sort_order == 'asc' else '-created_at'
+            query = query.order_by(order_field)
+    else:
+        # If form is not valid, apply default sorting
+        query = query.order_by('-created_at')
     
     # Add pagination for better performance
     records_per_page = 25  # Default value

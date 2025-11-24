@@ -174,6 +174,11 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'verbose',
         },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'django.security': {
@@ -184,6 +189,11 @@ LOGGING = {
         'django.request': {
             'handlers': ['security_file'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        'xrayapp': {
+            'handlers': ['console', 'security_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

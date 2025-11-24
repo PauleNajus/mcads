@@ -169,6 +169,26 @@ class PredictionHistoryFilterForm(forms.Form):
         required=False,
         label=_("Records per page")
     )
+    # Sorting fields
+    sort_by = forms.ChoiceField(
+        choices=[
+            ('', _('Default (Prediction date)')),
+            ('severity', _('Severity')),
+            ('xray_date', _('X-ray date'))
+        ],
+        initial='',
+        required=False,
+        label=_("Sort by")
+    )
+    sort_order = forms.ChoiceField(
+        choices=[
+            ('desc', _('Highest to lowest')),
+            ('asc', _('Lowest to highest'))
+        ],
+        initial='desc',
+        required=False,
+        label=_("Sort order")
+    )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -677,7 +677,7 @@
                                                 {% else %}Very Low
                                                 {% endif %}
                                             </span>
-                                            <small class="fw-bold fs-7 fs-sm-6">{{ prob|floatformat:1 }}%</small>
+                                            <small class="fw-bold fs-7 fs-sm-6">{{ prob|multiply:100|floatformat:0 }}%</small>
                                         </div>
                                         <div class="progress position-relative mobile-progress-bar" style="height: 18px;">
                                             <div class="progress-bar {% if prob > 0.7 %}bg-very-high{% elif prob > 0.5 %}bg-high{% elif prob >= 0.3 %}bg-medium{% elif prob >= 0.15 %}bg-low{% else %}bg-very-low{% endif %}" 
