@@ -13,8 +13,17 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 - **User Management**: Secure authentication system with user profiles and hospital affiliations
 - **Image Upload & Analysis**: Support for various image formats with preprocessing
 - **Prediction History**: Track and review past analyses
-- **Interpretability**: Grad-CAM and Pixel-Level visualizations to understand model predictions
+- **Interpretability**: Visualizations to understand model predictions
 - **Responsive UI**: Bootstrap-based interface optimized for medical workflows
+
+## X & Y
+
+- X (input) --> chest X-ray
+- Y (output) --> 18 per-class pathologies probabilities and GRAD-CAM heatmap.
+
+Example of a GRAD-CAM heatmap:
+
+![GRAD-CAM heatmap example](https://github.com/user-attachments/assets/f9f422bb-3954-4290-9320-b3e2dfd529bb)
 
 ## Technology Stack
 
@@ -96,7 +105,7 @@ The application will be available at `http://127.0.0.1:8000/`
 1. **Login/Register**: Create an account or log in with existing credentials
 2. **Upload Image**: Navigate to the analysis page and upload a chest X-ray image
 3. **View Results**: Review prediction scores for all pathologies
-4. **Interpretability**: View Grad-CAM visualizations to understand model decisions
+4. **Interpretability**: View visualizations to understand model decisions
 5. **History**: Access previous analyses and results
 
 ## Project Structure
@@ -108,7 +117,7 @@ mcads/
 │   ├── models.py          # Database models
 │   ├── views.py           # View controllers
 │   ├── forms.py           # Form definitions
-│   ├── interpretability.py # Grad-CAM implementation
+│   ├── interpretability.py # Interpretability implementation
 │   ├── utils.py           # Utility functions
 │   └── templates/         # HTML templates
 ├── static/                # Static files (CSS, JS, images)
@@ -191,31 +200,11 @@ EXPOSE 8000
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - [TorchXRayVision](https://github.com/mlmed/torchxrayvision) for the pre-trained models
 - Django and PyTorch communities for excellent documentation
 - Healthcare professionals for domain expertise
-
-## Support
-
-For issues and questions:
-
-- Create an issue in the repository
-- Check the documentation in the `docs/` directory
-- Review the test cases for usage examples
 
 ## Disclaimer
 

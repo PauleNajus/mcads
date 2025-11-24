@@ -12,6 +12,7 @@
   --warning: #ffc107;
   --success: #198754;
   --info: #0dcaf0;
+  --info-rgb: 13, 202, 240;
   --light: #f8f9fa;
   --dark: #212529;
   --white: #fff;
@@ -449,6 +450,13 @@ footer {
   background-color: rgba(var(--primary-rgb), 0.1);
 }
 
+/* Theme toggle icon visibility control */
+.theme-toggle i {
+  font-size: 1.1rem;
+  color: var(--bs-body-color);
+  transition: all var(--transition-fast);
+}
+
 /* ==========================================
    LANGUAGE SWITCH
    ========================================== */
@@ -591,9 +599,16 @@ footer {
   --bs-table-hover-bg: rgba(var(--primary-rgb), 0.05);
 }
 
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .table-container .table {
   table-layout: fixed;
   width: 100%;
+  min-width: 600px; /* Minimum width before horizontal scroll */
 }
 
 .table-container .table td {
@@ -605,94 +620,1129 @@ footer {
 .table-container .table td:nth-child(2) { width: 45%; }
 .table-container .table td:last-child { width: 20%; }
 
+/* Mobile-specific table styles */
+@media (max-width: 768px) {
+  .table-container .table {
+    min-width: 100%;
+    table-layout: auto;
+  }
+  
+  .table-container {
+    overflow-x: visible;
+  }
+}
+
 /* ==========================================
-   PROGRESS BAR STYLES WITH ANIMATIONS
+   MODERN LOADING SYSTEM
    ========================================== */
-@keyframes spin-stripes {
-  0% { background-position: 0 0, 0 0; }
-  100% { background-position: var(--progress-stripe-size) 0, 0 0; }
+
+/* Modern loading animations */
+@keyframes modern-flow {
+  0% { 
+    background-position: -200% center; 
+    opacity: 0.8;
+  }
+  50% { 
+    opacity: 1;
+  }
+  100% { 
+    background-position: 200% center; 
+    opacity: 0.8;
+  }
 }
 
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 5px rgba(var(--primary-rgb), var(--progress-glow-opacity)); }
-  50% { box-shadow: 0 0 13px rgba(var(--primary-rgb), 0.4), 0 0 20px rgba(var(--primary-rgb), 0.3); }
+@keyframes modern-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.4);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(var(--primary-rgb), 0.1);
+    transform: scale(1.01);
+  }
 }
 
-@keyframes border-pulse {
-  0%, 100% { border: 2px solid rgba(var(--primary-rgb), 0.1); }
-  50% { border: 2px solid rgba(var(--primary-rgb), 0.3); }
+@keyframes modern-spinner {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-@keyframes intense-shimmer {
-  0% { transform: translateX(-100%) scale(1); opacity: 0; }
-  50% { opacity: 1; transform: translateX(0%) scale(1.1); }
-  100% { transform: translateX(100%) scale(1); opacity: 0; }
+@keyframes modern-dots {
+  0%, 80%, 100% { 
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% { 
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
-.progress {
-  overflow: visible;
-  background-clip: padding-box;
-  position: relative;
-  border-radius: 6px;
-}
-
-.progress:has(.progress-bar.bg-loading.progress-bar-animated) {
-  box-shadow: 0 0 3px rgba(var(--primary-rgb), 0.1);
-  animation: border-pulse var(--animation-duration-slow) ease-in-out infinite;
-}
-
-.progress-bar.bg-loading {
-  background: linear-gradient(90deg, var(--light-bg) 0%, var(--primary) 100%) !important;
+/* Modern progress container */
+.modern-progress {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 3px;
   position: relative;
   overflow: hidden;
-  background-clip: padding-box;
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(var(--primary-rgb), 0.1);
+}
+
+.modern-progress-bar {
+  background: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    rgba(var(--primary-rgb), 0.9) 25%,
+    var(--primary) 50%,
+    rgba(var(--primary-rgb), 0.9) 75%,
+    var(--primary) 100%
+  );
+  background-size: 200% 100%;
+  height: 100%;
+  border-radius: 10px;
+  position: relative;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 2px 8px rgba(var(--primary-rgb), 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.modern-progress-bar.animated {
+  animation: modern-flow 2s ease-in-out infinite;
+}
+
+.modern-progress.pulsing {
+  animation: modern-pulse 2s ease-in-out infinite;
+}
+
+.modern-progress-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: modern-flow 1.5s ease-in-out infinite;
+}
+
+/* Modern loading text */
+.modern-progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--dark);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  z-index: 3;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
+/* Modern spinner component */
+.modern-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-top: 2px solid var(--primary);
+  border-right: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: modern-spinner 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  display: inline-block;
+}
+
+.modern-spinner.lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.modern-spinner.sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* Modern dots loader */
+.modern-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.modern-dots::before,
+.modern-dots::after,
+.modern-dots {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: modern-dots 1.4s ease-in-out infinite;
+}
+
+.modern-dots::before { animation-delay: -0.32s; }
+.modern-dots::after { animation-delay: 0.32s; }
+
+/* Static progress bars with modern styling */
+.progress {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: visible;
+  position: relative;
+  height: 1.5rem;
+}
+
+.progress-bar {
+  border-radius: 6px;
+  position: relative;
+  transition: width 0.3s ease;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.progress-bar.bg-success { 
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+}
+
+.progress-bar.bg-warning { 
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.progress-bar.bg-danger { 
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.progress-bar.bg-info { 
+  background: linear-gradient(135deg, var(--info) 0%, #0bb5d6 100%) !important;
+}
+
+.progress-bar.bg-primary:not(.modern-progress-bar) { 
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+}
+
+.progress-bar.bg-secondary { 
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important;
+}
+
+/* Legacy support for existing progress bars */
+.progress-bar.bg-loading {
+  background: var(--primary) !important;
 }
 
 .progress-bar.bg-loading.progress-bar-animated {
-  background-image: 
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9) var(--progress-stripe-width), rgba(255, 255, 255, 0.3) var(--progress-stripe-width), rgba(255, 255, 255, 0.3) var(--progress-stripe-size)),
-    linear-gradient(90deg, var(--light-bg) 0%, var(--primary) 100%) !important;
-  background-size: var(--progress-stripe-size) var(--progress-stripe-size), 100% 100%;
-  animation: 
-    spin-stripes var(--animation-duration-fast) linear infinite,
-    glow-pulse var(--animation-duration-normal) ease-in-out infinite,
-    border-pulse var(--animation-duration-slow) ease-in-out infinite;
-  will-change: background-position, box-shadow, border;
-  transform: translateZ(0);
-  background-repeat: repeat, no-repeat;
-  background-clip: padding-box;
-  border-radius: 4px;
-  position: relative;
-  overflow: visible;
+  animation: modern-flow 2s ease-in-out infinite;
+  background: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    rgba(var(--primary-rgb), 0.9) 25%,
+    var(--primary) 50%,
+    rgba(var(--primary-rgb), 0.9) 75%,
+    var(--primary) 100%
+  ) !important;
+  background-size: 200% 100%;
 }
-
-.progress-bar.bg-loading.progress-bar-animated::before {
-  content: '';
-  position: absolute;
-  top: -2px; left: -2px; right: -2px; bottom: -2px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 1.0), rgba(255, 255, 255, 0.8), transparent);
-  animation: intense-shimmer var(--animation-duration-slow) ease-in-out infinite;
-  border-radius: 4px;
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  pointer-events: none;
-}
-
-/* Static progress bars - preserve original Bootstrap colors */
-.progress-bar.bg-success { background-color: var(--success) !important; animation: none !important; background-image: none !important; }
-.progress-bar.bg-warning { background-color: var(--warning) !important; animation: none !important; background-image: none !important; }
-.progress-bar.bg-danger { background-color: var(--danger) !important; animation: none !important; background-image: none !important; }
-.progress-bar.bg-primary:not(.bg-loading), .progress-bar.bg-info:not(.bg-loading) { background-color: var(--secondary) !important; animation: none !important; background-image: none !important; }
 
 .progress-text {
   position: absolute;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-md);
-  color: var(--bs-body-color);
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #333;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
   z-index: 2;
+  letter-spacing: 0.3px;
+}
+
+/* Button loading states */
+.btn.loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  border-radius: 50%;
+  animation: modern-spinner 0.8s linear infinite;
+  color: white;
+}
+
+/* Accessibility improvements */
+.modern-progress[role="progressbar"] {
+  position: relative;
+}
+
+.modern-progress[role="progressbar"]::after {
+  content: attr(aria-label);
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .modern-progress-bar.animated,
+  .modern-spinner,
+  .modern-dots,
+  .modern-dots::before,
+  .modern-dots::after,
+  .progress-bar.bg-loading.progress-bar-animated,
+  .modern-progress.pulsing {
+    animation: none !important;
+  }
+  
+  .modern-progress-bar::before {
+    display: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .modern-progress {
+    background: white;
+    border: 2px solid black;
+  }
+  
+  .modern-progress-bar {
+    background: black !important;
+  }
+  
+  .modern-spinner {
+    border-top-color: black !important;
+    border-right-color: black !important;
+  }
+  
+  .modern-dots::before,
+  .modern-dots::after,
+  .modern-dots {
+    background: black !important;
+  }
+}
+
+/* Focus states for accessibility */
+.modern-progress:focus-within,
+.progress:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn.loading:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Screen reader announcements */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Loading skeleton animation for slow connections */
+@keyframes skeleton-loading {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.loading-skeleton {
+  background-color: #eee;
+  background-image: linear-gradient(90deg, #eee, #f5f5f5, #eee);
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  animation: skeleton-loading 1.3s ease-in-out infinite;
+}
+
+/* Enhanced progress bar for better UX */
+.modern-progress-enhanced {
+  position: relative;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 16px;
+  padding: 4px;
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(var(--primary-rgb), 0.15);
+}
+
+.modern-progress-enhanced .modern-progress-bar {
+  border-radius: 12px;
+  box-shadow: 
+    0 3px 12px rgba(var(--primary-rgb), 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* ==========================================
+   MOBILE OPTIMIZATIONS
+   ========================================== */
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+  /* Larger progress bars for touch devices */
+  .modern-progress {
+    min-height: 28px;
+    border-radius: 14px;
+    padding: 4px;
+  }
+  
+  .modern-progress-bar {
+    border-radius: 10px;
+    min-height: 20px;
+  }
+  
+  .progress {
+    min-height: 20px;
+  }
+  
+  .progress-bar {
+    min-height: 16px;
+  }
+  
+  /* Larger spinners for better visibility */
+  .modern-spinner {
+    width: 24px;
+    height: 24px;
+    border-width: 3px;
+  }
+  
+  .modern-spinner.lg {
+    width: 40px;
+    height: 40px;
+    border-width: 4px;
+  }
+  
+  .modern-spinner.sm {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+  }
+  
+  /* Larger dots for touch accessibility */
+  .modern-dots::before,
+  .modern-dots::after,
+  .modern-dots {
+    width: 8px;
+    height: 8px;
+  }
+  
+  /* Touch-friendly progress text */
+  .modern-progress-text {
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  
+  .progress-text {
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  
+  /* Mobile-specific spacing */
+  #progress-wrapper {
+    padding: 1rem;
+  }
+  
+  #interpretation-progress .card-body {
+    padding: 1.25rem;
+  }
+  
+  /* Larger touch targets for buttons */
+  .btn.loading {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .btn.loading::after {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 576px) {
+  /* Even larger progress elements for small screens */
+  .modern-progress {
+    min-height: 32px;
+    border-radius: 16px;
+    padding: 5px;
+  }
+  
+  .modern-progress-bar {
+    border-radius: 11px;
+    min-height: 22px;
+  }
+  
+  .progress {
+    min-height: 24px;
+  }
+  
+  .progress-bar {
+    min-height: 18px;
+  }
+  
+  /* Simplified animations for performance */
+  .modern-progress-bar.animated {
+    animation-duration: 3s;
+  }
+  
+  .modern-spinner {
+    animation-duration: 1s;
+  }
+  
+  .modern-dots::before,
+  .modern-dots::after,
+  .modern-dots {
+    animation-duration: 1.8s;
+  }
+  
+  /* Larger text for readability */
+  .modern-progress-text {
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  
+  .progress-text {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  
+  /* Compact layout adjustments */
+  .alert.medical-warning {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .alert.medical-warning .row {
+    --bs-gutter-x: 0.75rem;
+  }
+  
+  /* Stack severity level info vertically on small screens */
+  .d-flex.align-items-center.mb-3 {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 1rem;
+  }
+  
+  .d-flex.align-items-center.mb-3 .text-center {
+    min-width: auto !important;
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Pathology table mobile optimization */
+  .table-responsive {
+    font-size: 0.875rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-pathology-progress {
+    min-width: 140px !important;
+    max-width: 160px !important;
+  }
+  
+  .mobile-pathology-progress .progress {
+    height: 16px !important;
+  }
+  
+  .mobile-pathology-progress .progress-text {
+    font-size: 0.7rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex {
+    margin-bottom: 0.25rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex small {
+    font-size: 0.65rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex .badge {
+    font-size: 0.6rem !important;
+    padding: 0.2rem 0.4rem !important;
+    margin-right: 0.25rem;
+  }
+  
+  .badge.small {
+    font-size: 0.6rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  /* Mobile table layout optimization */
+  .table td:first-child { width: 30% !important; }
+  .table td:nth-child(2) { width: 50% !important; }
+  .table td:last-child { width: 20% !important; }
+  
+  /* Override any inline min-width styles on mobile */
+  .mobile-pathology-progress[style*="min-width"] {
+    min-width: 140px !important;
+    max-width: 160px !important;
+    width: 100% !important;
+  }
+}
+
+/* Ultra-small devices (phones in portrait) */
+@media (max-width: 375px) {
+  /* Maximum touch-friendly sizing */
+  .modern-progress {
+    min-height: 36px;
+    padding: 6px;
+  }
+  
+  .modern-progress-bar {
+    min-height: 24px;
+  }
+  
+  .progress {
+    min-height: 28px;
+  }
+  
+  .progress-bar {
+    min-height: 20px;
+  }
+  
+  /* Reduced animation complexity for very small devices */
+  .modern-progress.pulsing {
+    animation: none;
+  }
+  
+  .modern-progress-bar::before {
+    display: none;
+  }
+  
+  /* Larger, clearer text */
+  .modern-progress-text {
+    font-size: 1.1rem;
+    font-weight: 900;
+  }
+  
+  .progress-text {
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  
+  /* Simplified card headers */
+  .card-header .d-flex {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+  
+  .card-header .modern-spinner {
+    margin: 0 auto;
+  }
+  
+  /* Ultra-compact pathology progress bars */
+  .mobile-pathology-progress {
+    min-width: 100px !important;
+    max-width: 120px !important;
+  }
+  
+  .mobile-pathology-progress .progress {
+    height: 14px !important;
+  }
+  
+  .mobile-pathology-progress .progress-text {
+    font-size: 0.6rem !important;
+    font-weight: 900 !important;
+  }
+  
+  .mobile-pathology-progress .d-flex .badge {
+    font-size: 0.55rem !important;
+    padding: 0.15rem 0.3rem !important;
+    margin-right: 0.2rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex small {
+    font-size: 0.7rem !important;
+    font-weight: 800 !important;
+  }
+  
+  .badge.small {
+    font-size: 0.55rem;
+    padding: 0.15rem 0.3rem;
+  }
+  
+  /* Ultra-compact table layout */
+  .table td:first-child { 
+    width: 35% !important; 
+    font-size: 0.8rem !important;
+    padding-right: 0.25rem !important;
+  }
+  .table td:nth-child(2) { 
+    width: 45% !important; 
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+  .table td:last-child { 
+    width: 20% !important; 
+    padding-left: 0.25rem !important;
+  }
+  
+  /* Ensure proper alignment for compact badge layout */
+  .mobile-pathology-progress .d-flex {
+    align-items: center !important;
+    gap: 0.25rem;
+  }
+}
+
+/* Medium-small devices (most phones) */
+@media (max-width: 414px) and (min-width: 360px) {
+  .mobile-pathology-progress {
+    min-width: 120px !important;
+    max-width: 140px !important;
+  }
+  
+  .mobile-pathology-progress .progress {
+    height: 15px !important;
+  }
+  
+  .mobile-pathology-progress .progress-text {
+    font-size: 0.65rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex small {
+    font-size: 0.6rem !important;
+  }
+  
+  .mobile-pathology-progress .d-flex .badge {
+    font-size: 0.58rem !important;
+    padding: 0.18rem 0.35rem !important;
+    margin-right: 0.25rem;
+  }
+  
+  .badge.small {
+    font-size: 0.58rem;
+    padding: 0.18rem 0.35rem;
+  }
+  
+  /* Optimize table spacing for common phone sizes */
+  .table td:first-child { width: 32% !important; }
+  .table td:nth-child(2) { width: 48% !important; }
+  .table td:last-child { width: 20% !important; }
+}
+
+/* Battery optimization for mobile devices */
+@media (max-device-width: 768px) {
+  /* Reduce animation complexity on actual mobile devices */
+  .modern-progress-bar.animated {
+    animation-iteration-count: 3;
+    animation-direction: alternate;
+  }
+  
+  .modern-spinner {
+    animation-timing-function: steps(8, end);
+  }
+  
+  .modern-dots::before,
+  .modern-dots::after,
+  .modern-dots {
+    animation-iteration-count: 3;
+  }
+}
+
+/* Dark mode mobile optimizations */
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  .modern-progress {
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+    border-color: rgba(var(--primary-rgb), 0.3);
+  }
+  
+  .modern-progress-text,
+  .progress-text {
+    color: #e2e8f0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+  
+  .alert.medical-warning {
+    background-color: rgba(var(--primary-rgb), 0.15) !important;
+    border-color: rgba(var(--primary-rgb), 0.4) !important;
+    color: #e2e8f0 !important;
+  }
+}
+
+/* High DPI/Retina mobile displays */
+@media (max-width: 768px) and (-webkit-min-device-pixel-ratio: 2) {
+  .modern-progress,
+  .progress {
+    border-width: 0.5px;
+  }
+  
+  .modern-spinner {
+    border-width: 1.5px;
+  }
+  
+  .modern-spinner.lg {
+    border-width: 2px;
+  }
+}
+
+/* Landscape mobile orientation */
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Reduce vertical spacing in landscape */
+  .modern-progress {
+    min-height: 24px;
+  }
+  
+  .progress {
+    min-height: 18px;
+  }
+  
+  #progress-wrapper,
+  #interpretation-progress .card-body {
+    padding: 0.75rem;
+  }
+  
+  .alert.medical-warning {
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Horizontal layout for severity levels in landscape */
+  .mobile-severity-layout {
+    flex-direction: row !important;
+  }
+}
+
+/* Mobile-specific component styling */
+.mobile-optimized {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-pathology-progress {
+  touch-action: manipulation;
+}
+
+.mobile-progress-bar {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-risk-badge {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Badge positioning improvements for desktop and mobile */
+.mobile-pathology-progress .d-flex {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mobile-pathology-progress .d-flex .badge {
+  flex-shrink: 0;
+  margin-right: 0;
+}
+
+/* Desktop badge styling */
+@media (min-width: 769px) {
+  .mobile-pathology-progress .d-flex .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* Custom risk level badge colors */
+.badge.bg-very-high {
+  background-color: #dc2626 !important; /* Red */
+  color: white !important;
+}
+
+.badge.bg-high {
+  background-color: #f87171 !important; /* Light Red */
+  color: white !important;
+}
+
+.badge.bg-medium {
+  background-color: #f59e0b !important; /* Yellow */
+  color: #1f2937 !important;
+}
+
+.badge.bg-low {
+  background-color: #16a34a !important; /* Green */
+  color: white !important;
+}
+
+.badge.bg-very-low {
+  background-color: #86efac !important; /* Light Green */
+  color: #1f2937 !important;
+}
+
+/* Progress bar colors to match badge colors */
+.progress-bar.bg-very-high {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+}
+
+.progress-bar.bg-high {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%) !important;
+}
+
+.progress-bar.bg-medium {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.progress-bar.bg-low {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+}
+
+.progress-bar.bg-very-low {
+  background: linear-gradient(135deg, #86efac 0%, #4ade80 100%) !important;
+}
+
+/* High contrast mode support for custom badges */
+@media (prefers-contrast: high) {
+  .badge.bg-very-high {
+    background-color: #b91c1c !important;
+    border: 2px solid #ffffff !important;
+  }
+  
+  .badge.bg-high {
+    background-color: #dc2626 !important;
+    border: 2px solid #ffffff !important;
+  }
+  
+  .badge.bg-medium {
+    background-color: #d97706 !important;
+    border: 2px solid #000000 !important;
+    color: #000000 !important;
+  }
+  
+  .badge.bg-low {
+    background-color: #15803d !important;
+    border: 2px solid #ffffff !important;
+  }
+  
+  .badge.bg-very-low {
+    background-color: #22c55e !important;
+    border: 2px solid #000000 !important;
+    color: #000000 !important;
+  }
+}
+
+/* Dark mode support for custom badges */
+@media (prefers-color-scheme: dark) {
+  .badge.bg-very-high {
+    background-color: #ef4444 !important;
+  }
+  
+  .badge.bg-high {
+    background-color: #f87171 !important;
+  }
+  
+  .badge.bg-medium {
+    background-color: #fbbf24 !important;
+    color: #111827 !important;
+  }
+  
+  .badge.bg-low {
+    background-color: #22c55e !important;
+  }
+  
+  .badge.bg-very-low {
+    background-color: #86efac !important;
+    color: #111827 !important;
+  }
+}
+
+.mobile-severity-label {
+  touch-action: manipulation;
+}
+
+/* Mobile table improvements */
+@media (max-width: 768px) {
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+  }
+  
+  .table-container .table {
+    min-width: 100%;
+    table-layout: auto;
+    white-space: nowrap;
+  }
+  
+  .table-container .table td {
+    padding: 0.5rem 0.25rem;
+    vertical-align: middle;
+  }
+  
+  /* Visualization buttons mobile optimization */
+  .table-container .table td:last-child .btn {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+    margin: 0.1rem;
+    display: block;
+    width: 100%;
+    min-width: auto;
+  }
+  
+  /* Pathology name column mobile optimization */
+  .table-container .table td:first-child {
+    font-size: 0.85rem;
+    font-weight: 600;
+    max-width: 120px;
+    word-wrap: break-word;
+    white-space: normal;
+  }
+}
+
+/* Ultra-mobile table layout */
+@media (max-width: 480px) {
+  .table-container .table {
+    font-size: 0.8rem;
+  }
+  
+  .table-container .table td:first-child {
+    max-width: 100px;
+    font-size: 0.8rem;
+  }
+  
+  .table-container .table td:last-child .btn {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.3rem;
+  }
+}
+
+/* Performance optimizations for mobile */
+@media (max-width: 768px) {
+  /* Use hardware acceleration for smooth animations */
+  .modern-progress-bar,
+  .modern-spinner,
+  .modern-dots {
+  transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Reduce repaints by containing layout */
+  .modern-progress,
+  .progress {
+    contain: layout style paint;
+  }
+  
+  /* Optimize text rendering on mobile */
+  .modern-progress-text,
+.progress-text {
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* iOS Safari specific optimizations */
+@supports (-webkit-touch-callout: none) {
+  .modern-progress,
+  .progress {
+    -webkit-transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+  }
+  
+  .modern-spinner {
+    -webkit-transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+  }
+}
+
+/* Android Chrome specific optimizations */
+@media (max-width: 768px) and (-webkit-min-device-pixel-ratio: 1.5) {
+  .modern-progress-bar.animated {
+    animation-timing-function: ease-out;
+  }
+  
+  .modern-spinner {
+    animation-timing-function: linear;
+  }
+}
+
+/* Touch device optimizations */
+@media (pointer: coarse) {
+  /* Larger touch targets for coarse pointers (fingers) */
+  .btn.loading {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Increase tap target size for interactive elements */
+  .mobile-pathology-progress {
+    padding: 0.25rem;
+    margin: -0.25rem;
+  }
+  
+  /* Better touch feedback */
+  .modern-progress:active,
+  .progress:active {
+    transform: scale(0.99);
+    transition: transform 0.1s ease;
+  }
+}
+
+/* Network-aware animations */
+@media (prefers-reduced-data: reduce) {
+  /* Reduce animation complexity for slow connections */
+  .modern-progress-bar.animated,
+  .modern-spinner,
+  .modern-dots {
+    animation-duration: 2s;
+    animation-iteration-count: 2;
+  }
+  
+  .modern-progress-bar::before {
+    display: none;
+  }
+}
+
+/* Font size utilities for better mobile typography */
+@media (max-width: 576px) {
+  .fs-7 { font-size: 0.75rem !important; }
+  .fs-sm-6 { font-size: 0.8rem !important; }
+  .fs-sm-5 { font-size: 0.9rem !important; }
+  .fs-sm-4 { font-size: 1rem !important; }
+  .fs-sm-3 { font-size: 1.1rem !important; }
+}
+
+@media (min-width: 577px) {
+  .fs-sm-6 { font-size: 0.875rem !important; }
+  .fs-sm-5 { font-size: 1rem !important; }
+  .fs-sm-4 { font-size: 1.25rem !important; }
+  .fs-sm-3 { font-size: 1.5rem !important; }
 }
 
 /* ==========================================
@@ -897,8 +1947,8 @@ footer {
 }
 
 .btn-info-pathology:hover {
-  color: #0d6efd;
-  background-color: rgba(13, 110, 253, 0.1);
+  color: var(--info);
+  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.1);
   transform: scale(1.1);
 }
 
@@ -970,14 +2020,50 @@ footer {
 }
 
 [data-bs-theme="dark"] .btn-info-pathology { color: #adb5bd; }
-[data-bs-theme="dark"] .btn-info-pathology:hover { color: #66b3ff; background-color: rgba(102, 179, 255, 0.1); }
+[data-bs-theme="dark"] .btn-info-pathology:hover { color: var(--info); background-color: rgba(var(--info-rgb, 13, 202, 240), 0.1); }
+
+/* ==========================================
+   FILTER ACTION BUTTONS - EQUAL HEIGHT
+   ========================================== */
+/* Ensure equal height for filter action buttons on all screen sizes */
+.advanced-filters .filter-actions .btn {
+  height: auto;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.75rem;
+  line-height: 1.5;
+}
 
 /* ==========================================
    RESPONSIVE DESIGN - MOBILE OPTIMIZATIONS
    ========================================== */
 @media (max-width: 768px) {
+  /* Remove side margins on mobile - make content full width */
+  .container-fluid .container {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* Also ensure container-fluid has minimal side padding */
+  .container-fluid {
+    padding-left: var(--spacing-sm) !important;
+    padding-right: var(--spacing-sm) !important;
+  }
+  
+  /* Ensure cards have minimal padding to reach near screen edges */
+  .card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: var(--spacing-lg);
+  }
+  
   /* Base mobile adjustments */
-  .card { margin-bottom: var(--spacing-lg); }
   .advanced-filters .card-body { padding: var(--spacing-lg); }
   
   /* Button groups and actions */
@@ -1135,6 +2221,16 @@ footer {
   #languageDropdown .flag-icon {
     font-size: 1em !important;
   }
+  
+  /* Account settings mobile spacing - ensure proper spacing between Save profile button and Account information */
+  button[name="update_profile"] {
+    margin-bottom: var(--spacing-lg) !important;
+  }
+  
+  /* Create visual separation for Account Information card on mobile */
+  .col-md-6 .card.border {
+    margin-top: var(--spacing-lg) !important;
+  }
 }
 
 /* Extra mobile adjustments for very small screens */
@@ -1184,17 +2280,12 @@ footer {
     border-bottom: 1px solid var(--light-border) !important;
   }
   
-  /* Account settings mobile spacing */
-  button[name="update_profile"] {
-    margin-bottom: calc(var(--spacing-lg) * 2) !important;
-  }
-  
+  /* Account settings mobile spacing for password form */
   button[name="change_password"] {
     margin-bottom: calc(var(--spacing-lg) * 2) !important;
   }
   
-  /* Create visual separation for Account Information and Danger Zone cards */
-  .card.border,
+  /* Create visual separation for Danger Zone card on very small screens */
   .card.border-warning {
     margin-top: var(--spacing-lg) !important;
   }

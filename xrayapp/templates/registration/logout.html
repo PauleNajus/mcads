@@ -10,7 +10,7 @@
     <p>{% trans "Are you sure you want to log out?" %}</p>
     <form method="post" action="{% url 'logout' %}">
       {% csrf_token %}
-      <button type="submit" class="btn btn-primary" style="height: 38px; line-height: 1.5;">{% trans "Yes, logout" %}</button>
+      <button type="submit" class="btn btn-primary" style="height: 38px; line-height: 1.5; display: inline-flex; align-items: center;">{% trans "Yes, logout" %}</button>
       <a href="{% url 'home' %}" class="btn btn-outline-secondary" style="height: 38px; line-height: 1.5; display: inline-flex; align-items: center;">{% trans "Cancel" %}</a>
     </form>
   </div>

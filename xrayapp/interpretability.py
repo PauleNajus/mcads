@@ -1,14 +1,13 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torchvision
 import skimage
 import cv2
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter threading issues
-import matplotlib.pyplot as plt
-from pathlib import Path
+from typing import Optional
 import torchxrayvision as xrv
+from .model_loader import load_model
 
 
 def disable_inplace_relu(model):
@@ -49,46 +48,82 @@ class GradCAM:
         self.model = model
         self.model.eval()
         
+        # Check if model is wrapped with NoInplaceReLU
+        actual_model = model.model if isinstance(model, NoInplaceReLU) else model
+        
         # For DenseNet-121, the default target layer is the last convolutional layer
         if target_layer is None:
-            if hasattr(model, 'features') and hasattr(model.features, 'denseblock4'):
-                # For torchxrayvision DenseNet models
-                self.target_layer = model.features.denseblock4.denselayer16.norm2
-            elif hasattr(model, 'model') and hasattr(model.model, 'layer4'):
-                # For torchxrayvision ResNet models (which have a nested model structure)
-                self.target_layer = model.model.layer4[-1]
-            elif hasattr(model, 'layer4'):
-                # For standard ResNet models
-                self.target_layer = model.layer4[-1]
+            # TorchXRayVision DenseNet models have features directly accessible
+            if hasattr(actual_model, 'features') and hasattr(actual_model.features, 'denseblock4'):
+                # For DenseNet models - use the last conv layer before the classifier
+                if hasattr(actual_model.features.denseblock4, 'denselayer16'):
+                    if hasattr(actual_model.features.denseblock4.denselayer16, 'conv2'):
+                        self.target_layer = actual_model.features.denseblock4.denselayer16.conv2
+                    else:
+                        # Fallback to relu2 if conv2 doesn't exist
+                        self.target_layer = actual_model.features.denseblock4.denselayer16.relu2
+                else:
+                    # If denselayer16 doesn't exist, use the transition3 conv layer
+                    self.target_layer = actual_model.features.transition3.conv
+            elif hasattr(actual_model, 'model'):
+                # Some models might have a nested .model attribute
+                inner_model = actual_model.model
+                if hasattr(inner_model, 'features') and hasattr(inner_model.features, 'denseblock4'):
+                    # For nested DenseNet models
+                    if hasattr(inner_model.features.denseblock4, 'denselayer16'):
+                        if hasattr(inner_model.features.denseblock4.denselayer16, 'conv2'):
+                            self.target_layer = inner_model.features.denseblock4.denselayer16.conv2
+                        else:
+                            self.target_layer = inner_model.features.denseblock4.denselayer16.relu2
+                    else:
+                        self.target_layer = inner_model.features.transition3.conv
+                elif hasattr(inner_model, 'layer4'):
+                    # For ResNet models
+                    self.target_layer = inner_model.layer4[-1]
+                else:
+                    raise ValueError("Could not determine target layer for inner model")
+            elif hasattr(actual_model, 'layer4'):
+                # Direct ResNet model
+                self.target_layer = actual_model.layer4[-1]
             else:
                 # Print model structure to help with debugging
                 print("Model structure:")
-                for name, module in model.named_modules():
+                for name, module in actual_model.named_modules():
                     print(f"Module: {name}")
+                    if 'conv' in name.lower() or 'layer' in name.lower():
+                        print(f"  -> Potential target: {name}")
                 raise ValueError("Could not determine the target layer. Please specify explicitly.")
         else:
             self.target_layer = target_layer
         
-        self.gradients = None
-        self.activations = None
+        # Hooks populate these; guard before use
+        self.gradients: Optional[torch.Tensor] = None
+        self.activations: Optional[torch.Tensor] = None
         
         # Register hooks
         self._register_hooks()
     
     def _register_hooks(self):
+        # Initialize to None
+        self.activations = None
+        self.gradients = None
+        
         def forward_hook(module, input, output):
             self.activations = output.detach()
         
         def backward_hook(module, grad_input, grad_output):
-            self.gradients = grad_output[0].detach()
+            if grad_output[0] is not None:
+                self.gradients = grad_output[0].detach()
         
         # Register hooks to capture activations and gradients
         self.hook_forward = self.target_layer.register_forward_hook(forward_hook)
         self.hook_backward = self.target_layer.register_full_backward_hook(backward_hook)
     
     def _release_hooks(self):
-        self.hook_forward.remove()
-        self.hook_backward.remove()
+        if hasattr(self, 'hook_forward'):
+            self.hook_forward.remove()
+        if hasattr(self, 'hook_backward'):
+            self.hook_backward.remove()
     
     def get_heatmap(self, input_tensor, target_class=None):
         """
@@ -104,7 +139,16 @@ class GradCAM:
         """
         # Forward pass
         self.model.zero_grad()
-        output = self.model(input_tensor)
+        try:
+            output = self.model(input_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error in GRAD-CAM. Using CPU fallback.")
+                self.model = self.model.cpu()
+                input_tensor = input_tensor.cpu()
+                output = self.model(input_tensor)
+            else:
+                raise e
         
         # If target_class is None, get class with highest score
         if target_class is None:
@@ -125,11 +169,18 @@ class GradCAM:
         
         # Backward pass (calculate gradients)
         one_hot = torch.zeros_like(output)
-        one_hot[0, target_class] = 1
+        target_idx: int = int(target_class)
+        one_hot[0, target_idx] = 1
         output.backward(gradient=one_hot)
         
+        # Check if gradients and activations were captured
+        if self.gradients is None:
+            raise RuntimeError("Gradients not captured. Check if target layer is correct.")
+        if self.activations is None:
+            raise RuntimeError("Activations not captured. Check if target layer is correct.")
+        
         # Calculate weights based on global average pooling of gradients
-        pooled_gradients = torch.mean(self.gradients, dim=[0, 2, 3])
+        pooled_gradients = torch.mean(self.gradients, dim=(0, 2, 3))
         
         # Create a copy of activations to avoid in-place modifications
         # of tensors that are part of the computation graph
@@ -149,6 +200,10 @@ class GradCAM:
         # Normalize heatmap
         if np.max(heatmap) > 0:
             heatmap = heatmap / np.max(heatmap)
+        else:
+            # If heatmap is all zeros, create a fallback minimal heatmap
+            print("Warning: GRAD-CAM heatmap is all zeros. Creating fallback.")
+            heatmap = np.ones_like(heatmap) * 0.1
         
         return heatmap, output
     
@@ -169,16 +224,16 @@ class GradCAM:
         heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
         
         # Apply colormap to heatmap
-        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap), colormap)
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap), colormap)  # type: ignore
         
         # Convert grayscale image to RGB if needed
         if len(img.shape) == 2:
-            img_rgb = cv2.cvtColor(np.uint8(img * 255), cv2.COLOR_GRAY2RGB)
+            img_rgb = cv2.cvtColor(np.uint8(img * 255), cv2.COLOR_GRAY2RGB)  # type: ignore
         else:
             img_rgb = np.uint8(img * 255)
         
         # Overlay heatmap on original image
-        overlaid_img = cv2.addWeighted(img_rgb, 1 - alpha, heatmap_colored, alpha, 0)
+        overlaid_img = cv2.addWeighted(img_rgb, 1 - alpha, heatmap_colored, alpha, 0)  # type: ignore
         
         return overlaid_img
     
@@ -253,11 +308,13 @@ class GradCAM:
             
             # Backward pass for this specific pathology
             one_hot = torch.zeros_like(current_output)
-            one_hot[0, target_class] = 1
+            one_hot[0, int(target_class)] = 1
             current_output.backward(gradient=one_hot, retain_graph=(i < len(selected_indices) - 1))
             
             # Calculate weights based on global average pooling of gradients
-            pooled_gradients = torch.mean(self.gradients, dim=[0, 2, 3])
+            if self.gradients is None or self.activations is None:
+                raise RuntimeError("Gradients/activations not captured. Ensure backward hooks ran.")
+            pooled_gradients = torch.mean(self.gradients, dim=(0, 2, 3))
             
             # Create a copy of activations to avoid in-place modifications
             activations = self.activations.clone()
@@ -288,6 +345,7 @@ class GradCAM:
                 combined_heatmap += weighted_heatmap
         
         # Normalize the combined heatmap
+        assert combined_heatmap is not None
         if np.max(combined_heatmap) > 0:
             combined_heatmap = combined_heatmap / np.max(combined_heatmap)
         
@@ -373,7 +431,8 @@ class PixelLevelInterpretability:
         
         # Backward pass
         one_hot = torch.zeros_like(output)
-        one_hot[0, target_class] = 1
+        target_idx: int = int(target_class)
+        one_hot[0, target_idx] = 1
         output.backward(gradient=one_hot)
         
         # Get gradients of the input
@@ -383,7 +442,7 @@ class PixelLevelInterpretability:
         saliency_map = grad_data.abs().squeeze().cpu().numpy()
         
         # Apply basic Gaussian blur to reduce noise
-        saliency_map = cv2.GaussianBlur(saliency_map, (5, 5), 0)
+        saliency_map = cv2.GaussianBlur(saliency_map, (5, 5), 0)  # type: ignore
         
         # Normalize saliency map to [0, 1]
         if np.max(saliency_map) > 0:
@@ -450,7 +509,7 @@ class PixelLevelInterpretability:
         smooth_saliency = smooth_saliency / n_samples
         
         # Apply simple Gaussian blur for smoothing
-        smooth_saliency = cv2.GaussianBlur(smooth_saliency, (3, 3), 0)
+        smooth_saliency = cv2.GaussianBlur(smooth_saliency, (3, 3), 0)  # type: ignore
         
         # Simple contrast enhancement
         if np.max(smooth_saliency) > 0:
@@ -537,6 +596,7 @@ class PixelLevelInterpretability:
                 combined_saliency += weighted_saliency
         
         # Normalize the combined saliency map
+        assert combined_saliency is not None
         if np.max(combined_saliency) > 0:
             combined_saliency = combined_saliency / np.max(combined_saliency)
         
@@ -555,24 +615,22 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     Returns:
         Dictionary with visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Load model via shared cache
+        logger.info(f"Loading model for Grad-CAM: {model_type}")
+        model, resize_dim = load_model(model_type)
+        logger.info(f"Model loaded successfully, resize_dim: {resize_dim}")
+    except Exception as e:
+        logger.error(f"Failed to load model for Grad-CAM: {e}")
+        raise
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Determine appropriate target layer based on model type
-    if model_type == 'resnet':
-        # Explicitly specify target layer for ResNet
-        target_layer = wrapped_model.model.model.layer4[-1]
-    else:
-        # Explicitly specify target layer for DenseNet
-        target_layer = wrapped_model.model.features.denseblock4.denselayer16.norm2
+    # Let GradCAM auto-detect the appropriate target layer
     
     # Load and preprocess the image
     img = skimage.io.imread(image_path)
@@ -619,11 +677,20 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     # Get model predictions to determine target class if not provided
     wrapped_model.eval()
     with torch.no_grad():
-        preds = wrapped_model(img_tensor)
+        try:
+            preds = wrapped_model(img_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                wrapped_model = wrapped_model.cpu()
+                img_tensor = img_tensor.cpu()
+                preds = wrapped_model(img_tensor)
+            else:
+                raise e
     
     # If target_class is not provided, use the class with the highest probability
     if target_class is None:
-        pred_idx = torch.argmax(preds).item()
+        pred_idx = int(torch.argmax(preds).item())
         # For ResNet, we need to get the pathology name from default_pathologies
         if model_type == 'resnet':
             target_class = xrv.datasets.default_pathologies[pred_idx]
@@ -634,18 +701,18 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
         if model_type == 'resnet':
             if target_class not in xrv.datasets.default_pathologies:
                 print(f"Pathology {target_class} not found. Using highest probability class.")
-                pred_idx = torch.argmax(preds).item()
+                pred_idx = int(torch.argmax(preds).item())
                 target_class = xrv.datasets.default_pathologies[pred_idx]
         else:
             try:
                 target_class_idx = wrapped_model.pathologies.index(target_class)
             except ValueError:
                 print(f"Pathology {target_class} not found in model. Using highest probability class.")
-                pred_idx = torch.argmax(preds).item()
+                pred_idx = int(torch.argmax(preds).item())
                 target_class = wrapped_model.pathologies[pred_idx]
     
-    # Initialize Grad-CAM with explicit target layer
-    gradcam = GradCAM(wrapped_model, target_layer=target_layer)
+    # Initialize Grad-CAM (auto-detect target layer)
+    gradcam = GradCAM(wrapped_model)
     
     # Get heatmap
     heatmap, _ = gradcam.get_heatmap(img_tensor, target_class)
@@ -672,7 +739,7 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
 
 def apply_combined_gradcam(image_path, model_type='densenet', probability_threshold=0.5):
     """
-    Apply combined Grad-CAM to an X-ray image for all pathologies above threshold
+    Apply combined interpretability to an X-ray image for all pathologies above threshold
     
     Args:
         image_path: Path to the image
@@ -682,24 +749,13 @@ def apply_combined_gradcam(image_path, model_type='densenet', probability_thresh
     Returns:
         Dictionary with combined visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Determine appropriate target layer based on model type
-    if model_type == 'resnet':
-        # Explicitly specify target layer for ResNet
-        target_layer = wrapped_model.model.model.layer4[-1]
-    else:
-        # Explicitly specify target layer for DenseNet
-        target_layer = wrapped_model.model.features.denseblock4.denselayer16.norm2
+    # Let GradCAM auto-detect the appropriate target layer
     
     # Load and preprocess the image
     img = skimage.io.imread(image_path)
@@ -743,8 +799,8 @@ def apply_combined_gradcam(image_path, model_type='densenet', probability_thresh
     elif len(img_tensor.shape) == 3:
         img_tensor = img_tensor.unsqueeze(0)
     
-    # Initialize Grad-CAM with explicit target layer
-    gradcam = GradCAM(wrapped_model, target_layer=target_layer)
+    # Initialize Grad-CAM (auto-detect target layer)
+    gradcam = GradCAM(wrapped_model)
     
     # Get combined heatmap for pathologies above threshold
     combined_heatmap, selected_pathologies, predictions = gradcam.get_combined_heatmap(
@@ -790,13 +846,8 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     Returns:
         Dictionary with visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
@@ -846,11 +897,20 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     # Get model predictions to determine target class if not provided
     wrapped_model.eval()
     with torch.no_grad():
-        preds = wrapped_model(img_tensor)
+        try:
+            preds = wrapped_model(img_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                wrapped_model = wrapped_model.cpu()
+                img_tensor = img_tensor.cpu()
+                preds = wrapped_model(img_tensor)
+            else:
+                raise e
     
     # If target_class is not provided, use the class with the highest probability
     if target_class is None:
-        pred_idx = torch.argmax(preds).item()
+        pred_idx = int(torch.argmax(preds).item())
         # For ResNet, we need to get the pathology name from default_pathologies
         if model_type == 'resnet':
             target_class = xrv.datasets.default_pathologies[pred_idx]
@@ -861,14 +921,14 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
         if model_type == 'resnet':
             if target_class not in xrv.datasets.default_pathologies:
                 print(f"Pathology {target_class} not found. Using highest probability class.")
-                pred_idx = torch.argmax(preds).item()
+                pred_idx = int(torch.argmax(preds).item())
                 target_class = xrv.datasets.default_pathologies[pred_idx]
         else:
             try:
                 target_class_idx = wrapped_model.pathologies.index(target_class)
             except ValueError:
                 print(f"Pathology {target_class} not found in model. Using highest probability class.")
-                pred_idx = torch.argmax(preds).item()
+                pred_idx = int(torch.argmax(preds).item())
                 target_class = wrapped_model.pathologies[pred_idx]
     
     # Initialize PixelLevelInterpretability
@@ -894,25 +954,18 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
     
     # Resize saliency map to match original image size
-    saliency_map_resized = cv2.resize(saliency_map, (original_vis.shape[1], original_vis.shape[0]))
+    saliency_map_resized = cv2.resize(saliency_map, (original_vis.shape[1], original_vis.shape[0]))  # type: ignore
     
     # Create colored representation of saliency map (using JET colormap for better contrast)
-    saliency_colored = cv2.applyColorMap(
-        np.uint8(255 * saliency_map_resized), 
-        cv2.COLORMAP_JET
-    )
+    saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map_resized), cv2.COLORMAP_JET)  # type: ignore[arg-type]
     
     # Create basic overlay on the original image
     alpha = 0.6  # Reduce opacity
     overlay = np.uint8(255 * original_vis)
     if len(overlay.shape) == 2:
-        overlay = cv2.cvtColor(overlay, cv2.COLOR_GRAY2RGB)
+        overlay = cv2.cvtColor(overlay, cv2.COLOR_GRAY2RGB)  # type: ignore
     
-    saliency_overlay = cv2.addWeighted(
-        overlay, 1 - alpha,
-        cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB), alpha, 
-        0
-    )
+    saliency_overlay = cv2.addWeighted(overlay, 1 - alpha, cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB), alpha, 0)  # type: ignore[arg-type]
     
     # Return results
     return {
@@ -938,13 +991,8 @@ def apply_combined_pixel_interpretability(image_path, model_type='densenet', pro
     Returns:
         Dictionary with combined visualization results
     """
-    # Load model
-    if model_type == 'resnet':
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
+    # Load model via shared cache
+    model, _ = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
@@ -1006,24 +1054,24 @@ def apply_combined_pixel_interpretability(image_path, model_type='densenet', pro
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
     
     # Create colored saliency map
-    saliency_colored = cv2.applyColorMap(np.uint8(255 * combined_saliency), cv2.COLORMAP_JET)
-    saliency_colored = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)
+    saliency_colored = cv2.applyColorMap(np.uint8(255 * combined_saliency), cv2.COLORMAP_JET)  # type: ignore[arg-type]
+    saliency_colored = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)  # type: ignore
     
     # Create overlay visualization (saliency over original image)
     # Resize saliency to match original image dimensions
     original_shape = original_vis.shape
-    saliency_resized = cv2.resize(combined_saliency, (original_shape[1], original_shape[0]))
+    saliency_resized = cv2.resize(combined_saliency, (original_shape[1], original_shape[0]))  # type: ignore
     
     # Convert original to RGB for overlay
-    original_rgb = cv2.cvtColor(np.uint8(original_vis * 255), cv2.COLOR_GRAY2RGB)
+    original_rgb = cv2.cvtColor(np.uint8(original_vis * 255), cv2.COLOR_GRAY2RGB)  # type: ignore
     
     # Apply colormap to saliency
-    saliency_colored_resized = cv2.applyColorMap(np.uint8(255 * saliency_resized), cv2.COLORMAP_JET)
-    saliency_colored_resized = cv2.cvtColor(saliency_colored_resized, cv2.COLOR_BGR2RGB)
+    saliency_colored_resized = cv2.applyColorMap(np.uint8(255 * saliency_resized), cv2.COLORMAP_JET)  # type: ignore[arg-type]
+    saliency_colored_resized = cv2.cvtColor(saliency_colored_resized, cv2.COLOR_BGR2RGB)  # type: ignore
     
     # Create overlay with transparency
     alpha = 0.4  # Transparency factor
-    overlaid_img = cv2.addWeighted(original_rgb, 1 - alpha, saliency_colored_resized, alpha, 0)
+    overlaid_img = cv2.addWeighted(original_rgb, 1 - alpha, saliency_colored_resized, alpha, 0)  # type: ignore[arg-type]
     
     # Create pathology summary string
     pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])

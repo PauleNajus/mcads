@@ -267,10 +267,8 @@ msgid "Main Visualization"
 msgstr "GRAD-CAM vizualizacija"
 
 #: .\xrayapp\admin.py:381
-#, fuzzy
-#| msgid "GRAD-CAM Heatmap"
 msgid "Heatmap"
-msgstr "GRAD-CAM šilumos žemėlapis"
+msgstr "Šilumos žemėlapis"
 
 #: .\xrayapp\admin.py:383
 #, fuzzy
@@ -602,10 +600,8 @@ msgid "Unknown patient"
 msgstr "Nežinomas pacientas"
 
 #: .\xrayapp\models.py:288
-#, fuzzy
-#| msgid "GRAD-CAM Heatmap"
 msgid "GRAD-CAM"
-msgstr "GRAD-CAM šilumos žemėlapis"
+msgstr "GRAD-CAM"
 
 #: .\xrayapp\models.py:289
 #, fuzzy
@@ -615,7 +611,7 @@ msgstr "Pikselių lygio interpretavimas"
 
 #: .\xrayapp\models.py:290
 msgid "Combined GRAD-CAM"
-msgstr ""
+msgstr "Kombinuotas GRAD-CAM"
 
 #: .\xrayapp\models.py:291
 msgid "Combined PLI"
@@ -1173,22 +1169,16 @@ msgid "Edit prediction"
 msgstr "Redaguoti prognozes"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:12
-#, fuzzy
-#| msgid "Edit prediction record"
 msgid "Edit prediction for"
-msgstr "Redaguoti prognozės įrašą"
+msgstr "Redaguoti prognozę pacientui"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:16
-#, fuzzy
-#| msgid "X-ray Date:"
 msgid "X-ray taken on:"
-msgstr "Rentgeno data:"
+msgstr "Rentgenas atliktas:"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:17
-#, fuzzy
-#| msgid "Uploaded on"
 msgid "Uploaded on:"
-msgstr "Įkelta"
+msgstr "Įkelta:"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:18
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:90
@@ -1660,7 +1650,7 @@ msgstr "Tikimybė"
 
 #: .\xrayapp\templates\xrayapp\results.html:626
 msgid "Visualize"
-msgstr ""
+msgstr "Vizualizacija"
 
 #: .\xrayapp\templates\xrayapp\results.html:634
 msgid "Learn more about"
@@ -1696,8 +1686,6 @@ msgstr ""
 
 #: .\xrayapp\templates\xrayapp\results.html:683
 #: .\xrayapp\templates\xrayapp\results.html:1109
-#, fuzzy
-#| msgid "GRAD-CAM Visualization"
 msgid "GRAD-CAM visualization"
 msgstr "GRAD-CAM vizualizacija"
 
@@ -1717,10 +1705,7 @@ msgstr "Generuoti vizualizaciją"
 msgid "Original X-ray"
 msgstr "Originalus rentgenas"
 
-#: .\xrayapp\templates\xrayapp\results.html:702
-#: .\xrayapp\templates\xrayapp\results.html:1128
-msgid "GRAD-CAM Heatmap"
-msgstr "GRAD-CAM šilumos žemėlapis"
+
 
 #: .\xrayapp\templates\xrayapp\results.html:706
 #: .\xrayapp\templates\xrayapp\results.html:1132
@@ -1731,10 +1716,8 @@ msgstr "GRAD-CAM perdanga"
 #: .\xrayapp\templates\xrayapp\results.html:805
 #: .\xrayapp\templates\xrayapp\results.html:1138
 #: .\xrayapp\templates\xrayapp\results.html:1253
-#, fuzzy
-#| msgid "Page Not Found"
 msgid "Image Controls"
-msgstr "Puslapis nerastas"
+msgstr "Vaizdo valdymas"
 
 #: .\xrayapp\templates\xrayapp\results.html:714
 #: .\xrayapp\templates\xrayapp\results.html:807
@@ -1746,93 +1729,89 @@ msgstr "Atkurti"
 #: .\xrayapp\templates\xrayapp\results.html:718
 #: .\xrayapp\templates\xrayapp\results.html:811
 msgid "Invert Colors"
-msgstr ""
+msgstr "Apversti spalvas"
 
 #: .\xrayapp\templates\xrayapp\results.html:720
 #: .\xrayapp\templates\xrayapp\results.html:813
 msgid "Invert"
-msgstr ""
+msgstr "Apversti"
 
 #: .\xrayapp\templates\xrayapp\results.html:722
 #: .\xrayapp\templates\xrayapp\results.html:815
 msgid "Flip Horizontal"
-msgstr ""
+msgstr "Apversti horizontaliai"
 
 #: .\xrayapp\templates\xrayapp\results.html:724
 #: .\xrayapp\templates\xrayapp\results.html:817
 msgid "Flip H"
-msgstr ""
+msgstr "Apversti H"
 
 #: .\xrayapp\templates\xrayapp\results.html:726
 #: .\xrayapp\templates\xrayapp\results.html:819
 msgid "Flip Vertical"
-msgstr ""
+msgstr "Apversti vertikaliai"
 
 #: .\xrayapp\templates\xrayapp\results.html:728
 #: .\xrayapp\templates\xrayapp\results.html:821
 msgid "Flip V"
-msgstr ""
+msgstr "Apversti V"
 
 #: .\xrayapp\templates\xrayapp\results.html:730
 #: .\xrayapp\templates\xrayapp\results.html:823
 msgid "Rotate 90°"
-msgstr ""
+msgstr "Pasukti 90°"
 
 #: .\xrayapp\templates\xrayapp\results.html:732
 #: .\xrayapp\templates\xrayapp\results.html:825
 msgid "Rotate"
-msgstr ""
+msgstr "Pasukti"
 
 #: .\xrayapp\templates\xrayapp\results.html:734
 #: .\xrayapp\templates\xrayapp\results.html:736
 #: .\xrayapp\templates\xrayapp\results.html:827
 #: .\xrayapp\templates\xrayapp\results.html:829
 msgid "Sharpen"
-msgstr ""
+msgstr "Aštrinti"
 
 #: .\xrayapp\templates\xrayapp\results.html:738
 #: .\xrayapp\templates\xrayapp\results.html:831
 msgid "Increase Brightness"
-msgstr ""
+msgstr "Padidinti šviesumą"
 
 #: .\xrayapp\templates\xrayapp\results.html:740
 #: .\xrayapp\templates\xrayapp\results.html:833
-#, fuzzy
-#| msgid "Light"
 msgid "Bright +"
-msgstr "Šviesi"
+msgstr "Apšvietimas +"
 
 #: .\xrayapp\templates\xrayapp\results.html:742
 #: .\xrayapp\templates\xrayapp\results.html:835
 msgid "Decrease Brightness"
-msgstr ""
+msgstr "Sumažinti šviesumą"
 
 #: .\xrayapp\templates\xrayapp\results.html:744
 #: .\xrayapp\templates\xrayapp\results.html:837
-#, fuzzy
-#| msgid "Light"
 msgid "Bright -"
-msgstr "Šviesi"
+msgstr "Apšvietimas -"
 
 #: .\xrayapp\templates\xrayapp\results.html:746
 #: .\xrayapp\templates\xrayapp\results.html:839
 msgid "Increase Contrast"
-msgstr ""
+msgstr "Padidinti kontrastą"
 
 #: .\xrayapp\templates\xrayapp\results.html:748
 #: .\xrayapp\templates\xrayapp\results.html:841
 msgid "Contrast +"
-msgstr ""
+msgstr "Kontrastas +"
 
 #: .\xrayapp\templates\xrayapp\results.html:750
 #: .\xrayapp\templates\xrayapp\results.html:843
 msgid "Decrease Contrast"
-msgstr ""
+msgstr "Sumažinti kontrastą"
 
 #: .\xrayapp\templates\xrayapp\results.html:752
 #: .\xrayapp\templates\xrayapp\results.html:845
 msgid "Contrast -"
-msgstr ""
+msgstr "Kontrastas -"
 
 #: .\xrayapp\templates\xrayapp\results.html:758
 #: .\xrayapp\templates\xrayapp\results.html:1184
@@ -1846,10 +1825,8 @@ msgstr ""
 #: .\xrayapp\templates\xrayapp\results.html:854
 #: .\xrayapp\templates\xrayapp\results.html:1187
 #: .\xrayapp\templates\xrayapp\results.html:1302
-#, fuzzy
-#| msgid "Generate visualization"
 msgid "Generated on"
-msgstr "Generuoti vizualizaciją"
+msgstr "Sugeneruota"
 
 #: .\xrayapp\templates\xrayapp\results.html:762
 #: .\xrayapp\templates\xrayapp\results.html:855
@@ -1862,17 +1839,12 @@ msgstr ""
 msgid "Pixel-level interpretability"
 msgstr "Pikselių lygio interpretavimas"
 
-#: .\xrayapp\templates\xrayapp\results.html:795
-#: .\xrayapp\templates\xrayapp\results.html:1243
-msgid "Pixel saliency map"
-msgstr ""
+
 
 #: .\xrayapp\templates\xrayapp\results.html:799
 #: .\xrayapp\templates\xrayapp\results.html:1247
-#, fuzzy
-#| msgid "Pixel-level interpretability"
 msgid "Pixel-level overlay"
-msgstr "Pikselių lygio interpretavimas"
+msgstr "Pikselių lygio perdanga"
 
 #: .\xrayapp\templates\xrayapp\results.html:851
 #: .\xrayapp\templates\xrayapp\results.html:1299
@@ -1928,26 +1900,20 @@ msgid "View all history"
 msgstr "Peržiūrėti visą istoriją"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:93
-#, fuzzy
-#| msgid "Save changes"
 msgid "Saved date"
-msgstr "Išsaugoti pakeitimus"
+msgstr "Išsaugojimo data"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:206
-#, fuzzy
-#| msgid "X-ray Date:"
 msgid "Saved Date:"
-msgstr "Rentgeno data:"
+msgstr "Išsaugojimo data:"
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:236
 msgid "You haven't saved any records yet."
-msgstr ""
+msgstr "Jūs dar neišsaugojote jokių įrašų."
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:237
-#, fuzzy
-#| msgid "prediction history records?"
 msgid "Go to prediction history to save records."
-msgstr "prognozių istorijos įrašus?"
+msgstr "Eikite į prognozių istoriją, kad išsaugotumėte įrašus."
 
 #: .\xrayapp\templates\xrayapp\saved_records.html:245
 msgid "Saved records pagination"
@@ -1964,7 +1930,7 @@ msgstr "Daugiaetiketė krūtinės anomalijų aptikimo sistema (MCADS)"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:15
 msgid "By using MCADS, you acknowledge and agree to the following terms:"
-msgstr ""
+msgstr "Naudodamiesi MCADS, jūs pripažįstate ir sutinkate su šiomis sąlygomis:"
 
 # Terms of Service translations
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:25
@@ -2084,11 +2050,8 @@ msgid "validated for clinical diagnosis"
 msgstr "patvirtintas klinikiniam diagnozavimui"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:57
-msgid ""
-"approved by any medical regulatory authority (FDA, CE, Health Canada, etc.)"
-msgstr ""
-"patvirtintas jokios medicinos reguliavimo institucijos (FDA, CE, Health "
-"Canada ir kt.)"
+msgid "approved by any medical regulatory authority (State Medicines Control Agency under the Ministry of Health of the Republic of Lithuania, etc.)"
+msgstr "patvirtintas jokios medicinos reguliavimo institucijos (Valstybinės vaistų kontrolės tarnybos prie Lietuvos Respublikos sveikatos apsaugos ministerijos ir kt.)"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:58
 msgid "intended to replace professional medical judgment"
@@ -2148,9 +2111,7 @@ msgstr "VISADA"
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:72
 msgid "consult qualified healthcare professionals for medical decisions"
 msgstr ""
-"konsultuokitės su kvalifikuotais sveikatos priežiūros specialistais dėl "
-"medicinos sprendimųkonsultuokitės su kvalifikuotais sveikatos priežiūros "
-"specialistais dėl medicinos sprendimų"
+"konsultuokitės su kvalifikuotais sveikatos priežiūros specialistais dėl medicinos sprendimų"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:73
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:74
@@ -2164,9 +2125,7 @@ msgstr "priimkite medicinos sprendimų vien tik pagal MCADS išvestį"
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:74
 msgid "delay seeking medical attention based on Software results"
 msgstr ""
-"atidėliokite medicinos pagalbos ieškojimo pagal programinės įrangos "
-"rezultatusatidėliokite medicinos pagalbos ieškojimo pagal programinės "
-"įrangos rezultatus"
+"neatidėliokite medicinos pagalbos ieškojimo pagal programinės įrangos rezultatus"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:75
 msgid ""
@@ -2185,22 +2144,13 @@ msgid "No Liability for Medical Decisions"
 msgstr "Jokia atsakomybė už medicinos sprendimus"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:85
-#, fuzzy
-#| msgid ""
-#| "The authors, developers, contributors, and affiliated institutions "
-#| "(\"Providers\") shall not be liable for:"
-msgid "The authors, developers, contributors, and affiliated institutions (\\"
-msgstr ""
-"Autoriai, kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Autoriai, "
-"kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Teikėjai\") nebus "
-"atsakingi už:"
+msgid "The authors, developers, contributors, and affiliated institutions (\"Providers\") shall not be liable for:"
+msgstr "Autoriai, kūrėjai, prisidėję asmenys ir susijusios institucijos (\"Teikėjai\") nebus atsakingi už:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:87
 msgid "Any medical decisions made based on Software output"
 msgstr ""
-"Bet kokius medicinos sprendimus, priimtus pagal programinės įrangos "
-"išvestįBet kokius medicinos sprendimus, priimtus pagal programinės įrangos "
-"išvestį"
+"Bet kokius medicinos sprendimus, priimtus pagal programinės įrangos išvestį"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:88
 msgid "Any misdiagnosis or delayed diagnosis"
@@ -2242,10 +2192,8 @@ msgid "Disclaimer of All Warranties"
 msgstr "Visų garantijų atsisakymas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:107
-#, fuzzy
-#| msgid "The Software provides probability scores,"
-msgid "The Software is provided \\"
-msgstr "Programinė įranga teikia tikimybės balus,"
+msgid "The Software is provided \"as is\" without warranty of any kind, including but not limited to:"
+msgstr "Programinė įranga teikiama \"tokia, kokia yra\" be jokių garantijų, įskaitant, bet neapsiribojant:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:109
 msgid "Warranties of merchantability"
@@ -2332,10 +2280,7 @@ msgstr "Duomenys ir privatumas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:145
 msgid "Ensure proper authorization before uploading any medical images"
-msgstr ""
-"Užtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias medicinos "
-"nuotraukasUžtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias "
-"medicinos nuotraukas"
+msgstr "Užtikrinkite tinkamą autorizaciją prieš įkeliant bet kokias medicinos nuotraukas"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:146
 msgid "Comply with HIPAA, GDPR, and other privacy regulations"
@@ -2363,10 +2308,7 @@ msgstr "NEGALI"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:158
 msgid "Use the Software for clinical diagnosis or treatment decisions"
-msgstr ""
-"Naudoti programinę įrangą klinikiniam diagnozavimui ar gydymo "
-"sprendimamsNaudoti programinę įrangą klinikiniam diagnozavimui ar gydymo "
-"sprendimams"
+msgstr "Naudoti programinę įrangą klinikiniam diagnozavimui ar gydymo sprendimams"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:159
 msgid "Present Software output as medical advice"
@@ -2449,7 +2391,7 @@ msgid ""
 "claims, damages, losses, or expenses arising from:"
 msgstr ""
 "Naudotojai sutinka atlyginti žalą, ginti ir apsaugoti teikėjus nuo bet kokių "
-"reikalavimų, žalos, nuostolių ar išlaidų, kylantin iš:"
+"reikalavimų, žalos, nuostolių ar išlaidų, kylančių iš:"
 
 #: .\xrayapp\templates\xrayapp\terms_of_service.html:193
 msgid "User's violation of these Terms"
@@ -3027,34 +2969,26 @@ msgstr ""
 "galutinei diagnozei nustatyti ir tinkamam gydymui orientuoti."
 
 #: .\xrayapp\views.py:602
-#, fuzzy
-#| msgid "Full Name"
 msgid "Name"
-msgstr "Pilnas vardas"
+msgstr "Vardas"
 
 #: .\xrayapp\views.py:604
-#, fuzzy
-#| msgid "Min Age"
 msgid "Age"
-msgstr "Min. amžius"
+msgstr "Amžius"
 
 #: .\xrayapp\views.py:604
 msgid "years"
 msgstr "metai"
 
 #: .\xrayapp\views.py:605
-#, fuzzy
-#| msgid "Date of Birth:"
 msgid "Date of Birth"
-msgstr "Gimimo data:"
+msgstr "Gimimo data"
 
 #: .\xrayapp\views.py:606
 msgid "X-ray Date"
 msgstr "Rentgeno data"
 
 #: .\xrayapp\views.py:607
-#, fuzzy
-#| msgid "Additional information"
 msgid "Additional Information"
 msgstr "Papildoma informacija"
 
@@ -3069,6 +3003,22 @@ msgstr "Formatas"
 #: .\xrayapp\views.py:615
 msgid "Size"
 msgstr "Dydis"
+
+# New translations for risk levels and severity
+msgid "Risk Level"
+msgstr "Rizikos lygis"
+
+msgid "Moderate Risk"
+msgstr "Vidutinė rizika"
+
+msgid "High Risk"
+msgstr "Aukšta rizika"
+
+msgid "Low Risk"
+msgstr "Žema rizika"
+
+msgid "Severity Range"
+msgstr "Sunkumo intervalas"
 
 #: .\xrayapp\views.py:616
 msgid "Resolution"

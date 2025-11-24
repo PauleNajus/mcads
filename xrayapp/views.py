@@ -1,29 +1,35 @@
 from django.shortcuts import render, redirect
 import threading
-import os
 from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone, translation
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Case, When, IntegerField, Avg, F, Value, FloatField
 from django.core.paginator import Paginator
-from django.views.decorators.cache import cache_page
-from django.core.cache import cache
-from django.db import transaction
-from datetime import datetime, timedelta
+"""Views for MCADS.
+
+This module contains various view functions. Some dynamic attributes on Django
+models (like `.id`) are accessed via `.pk` to satisfy static type checkers.
+User profile access is guarded because `request.user` may not have a related
+`profile` yet at the time of access.
+"""
 from dateutil.relativedelta import relativedelta
 from .forms import XRayUploadForm, PredictionHistoryFilterForm, UserInfoForm, UserProfileForm, ChangePasswordForm
 from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SavedRecord
-from .utils import (process_image, process_image_with_interpretability,
+from .utils import (process_image,
                    save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
-                   save_gradcam_heatmap, save_gradcam_overlay)
+                   save_heatmap, save_overlay)
+from .tasks import run_inference_task, run_interpretability_task, run_segmentation_task
+from typing import Any
+from celery import Task
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.utils.translation import activate, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import logging
+# import os  # Currently unused
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -32,48 +38,51 @@ logger = logging.getLogger(__name__)
 def process_image_async(image_path, xray_instance, model_type):
     """Process the image in a background thread and update the model with progress"""
     try:
-        results = process_image(image_path, xray_instance, model_type)
+        logger.info(f"Starting image processing for {image_path} with model {model_type}")
         
-        # Use transaction to ensure atomicity
-        with transaction.atomic():
-            # Save predictions to the database - only save what's available in the results
-            xray_instance.atelectasis = results.get('Atelectasis', None)
-            xray_instance.cardiomegaly = results.get('Cardiomegaly', None)
-            xray_instance.consolidation = results.get('Consolidation', None)
-            xray_instance.edema = results.get('Edema', None)
-            xray_instance.effusion = results.get('Effusion', None)
-            xray_instance.emphysema = results.get('Emphysema', None)
-            xray_instance.fibrosis = results.get('Fibrosis', None)
-            xray_instance.hernia = results.get('Hernia', None)
-            xray_instance.infiltration = results.get('Infiltration', None)
-            xray_instance.mass = results.get('Mass', None)
-            xray_instance.nodule = results.get('Nodule', None)
-            xray_instance.pleural_thickening = results.get('Pleural_Thickening', None)
-            xray_instance.pneumonia = results.get('Pneumonia', None)
-            xray_instance.pneumothorax = results.get('Pneumothorax', None)
-            xray_instance.fracture = results.get('Fracture', None)
-            xray_instance.lung_opacity = results.get('Lung Opacity', None)
-            
-            # These fields will only be present in DenseNet results
-            if 'Enlarged Cardiomediastinum' in results:
-                xray_instance.enlarged_cardiomediastinum = results.get('Enlarged Cardiomediastinum', None)
-            if 'Lung Lesion' in results:
-                xray_instance.lung_lesion = results.get('Lung Lesion', None)
-
-            
-            xray_instance.save()
-            
-            # Create prediction history record
-            create_prediction_history(xray_instance, model_type)
+        # Simple processing without signal timeout (signals don't work well with threads)
+        results = process_image(image_path, xray_instance, model_type)
+        logger.info(f"Image processing completed successfully")
+        
+        # Save predictions to the database - only save what's available in the results
+        xray_instance.atelectasis = results.get('Atelectasis', None)
+        xray_instance.cardiomegaly = results.get('Cardiomegaly', None)
+        xray_instance.consolidation = results.get('Consolidation', None)
+        xray_instance.edema = results.get('Edema', None)
+        xray_instance.effusion = results.get('Effusion', None)
+        xray_instance.emphysema = results.get('Emphysema', None)
+        xray_instance.fibrosis = results.get('Fibrosis', None)
+        xray_instance.hernia = results.get('Hernia', None)
+        xray_instance.infiltration = results.get('Infiltration', None)
+        xray_instance.mass = results.get('Mass', None)
+        xray_instance.nodule = results.get('Nodule', None)
+        xray_instance.pleural_thickening = results.get('Pleural_Thickening', None)
+        xray_instance.pneumonia = results.get('Pneumonia', None)
+        xray_instance.pneumothorax = results.get('Pneumothorax', None)
+        xray_instance.fracture = results.get('Fracture', None)
+        xray_instance.lung_opacity = results.get('Lung Opacity', None)
+        
+        # These fields will only be present in DenseNet results
+        if 'Enlarged Cardiomediastinum' in results:
+            xray_instance.enlarged_cardiomediastinum = results.get('Enlarged Cardiomediastinum', None)
+        if 'Lung Lesion' in results:
+            xray_instance.lung_lesion = results.get('Lung Lesion', None)
+        
+        # Calculate and save severity level
+        xray_instance.severity_level = xray_instance.calculate_severity_level
+        xray_instance.save()
+        
+        # Create prediction history record
+        create_prediction_history(xray_instance, model_type)
+        
+        logger.info(f"Successfully processed and saved results for {image_path}")
         
     except Exception as e:
         logger.error(f"Error processing image {image_path}: {str(e)}")
-        # Ensure we can still update the error status even if transaction failed
-        try:
-            xray_instance.processing_status = 'error'
-            xray_instance.save()
-        except Exception as save_error:
-            logger.error(f"Failed to save error status: {str(save_error)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        xray_instance.processing_status = 'error'
+        xray_instance.save()
 
 
 def process_with_interpretability_async(image_path, xray_instance, model_type, interpretation_method, target_class=None):
@@ -138,7 +147,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 
                 # Generate filenames
                 combined_filename = f"gradcam_{xray_instance.id}_{results['target_class']}.png"
-                heatmap_filename = f"gradcam_heatmap_{xray_instance.id}_{results['target_class']}.png"
+                heatmap_filename = f"heatmap_{xray_instance.id}_{results['target_class']}.png"
                 overlay_filename = f"gradcam_overlay_{xray_instance.id}_{results['target_class']}.png"
                 
                 # Generate paths
@@ -151,15 +160,15 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 # Save combined visualization
                 save_interpretability_visualization(results, combined_path)
                 
-                logger.info(f"Saving Grad-CAM heatmap to {heatmap_path}")
+                logger.info(f"Saving heatmap to {heatmap_path}")
                 
                 # Save heatmap separately
-                save_gradcam_heatmap(results, heatmap_path)
+                save_heatmap(results, heatmap_path)
                 
-                logger.info(f"Saving Grad-CAM overlay to {overlay_path}")
+                logger.info(f"Saving overlay to {overlay_path}")
                 
                 # Save overlay separately
-                save_gradcam_overlay(results, overlay_path)
+                save_overlay(results, overlay_path)
                 
                 # Create VisualizationResult record
                 visualization_data = {
@@ -234,7 +243,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 
                 # Generate filenames
                 combined_filename = f"combined_gradcam_{xray_instance.id}_threshold_{results['threshold']}.png"
-                heatmap_filename = f"combined_gradcam_heatmap_{xray_instance.id}_threshold_{results['threshold']}.png"
+                heatmap_filename = f"combined_heatmap_{xray_instance.id}_threshold_{results['threshold']}.png"
                 overlay_filename = f"combined_gradcam_overlay_{xray_instance.id}_threshold_{results['threshold']}.png"
                 
                 # Generate paths
@@ -247,15 +256,15 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 # Save combined visualization
                 save_interpretability_visualization(results, combined_path)
                 
-                logger.info(f"Saving Combined Grad-CAM heatmap to {heatmap_path}")
+                logger.info(f"Saving combined heatmap to {heatmap_path}")
                 
                 # Save heatmap separately
-                save_gradcam_heatmap(results, heatmap_path)
+                save_heatmap(results, heatmap_path)
                 
-                logger.info(f"Saving Combined Grad-CAM overlay to {overlay_path}")
+                logger.info(f"Saving combined overlay to {overlay_path}")
                 
                 # Save overlay separately
-                save_gradcam_overlay(results, overlay_path)
+                save_overlay(results, overlay_path)
                 
                 # Create VisualizationResult record
                 visualization_data = {
@@ -320,7 +329,7 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
                 xray_instance.pli_target_class = results['pathology_summary']  # Store summary of selected pathologies
         
         xray_instance.progress = 90
-        xray_instance.processing_status = 'complete'
+        xray_instance.processing_status = 'completed'
         xray_instance.save()
         
         # Update existing prediction history record instead of creating a new one
@@ -418,7 +427,7 @@ def create_visualization_result(xray_instance, visualization_type, target_pathol
         visualization.save()
         
         action = "Created" if created else "Updated"
-        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.id}")
+        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.pk}")
         
         return visualization
         
@@ -460,7 +469,7 @@ def update_existing_prediction_history(xray_instance, model_type):
                 existing_history.model_used = f"{existing_history.model_used}+{model_type}"
             
             existing_history.save()
-            logger.info(f"Updated existing prediction history record #{existing_history.id} with visualization data")
+            logger.info(f"Updated existing prediction history record #{existing_history.pk} with visualization data")
         else:
             # If no existing record found, create a new one as fallback
             logger.warning(f"No existing prediction history found for XRayImage #{xray_instance.id}, creating new record")
@@ -473,32 +482,118 @@ def update_existing_prediction_history(xray_instance, model_type):
 
 @login_required
 def home(request):
-    """Home page with image upload form"""
+    """
+    Home page with image upload form.
+    
+    Only users with Administrator, Radiographer, or Technologist roles
+    are allowed to upload X-ray images. Radiologists can view but not upload.
+    """
     if request.method == 'POST':
+        # Check if user has permission to upload X-rays
+        # Allowed roles: Administrator, Radiographer, Technologist
+        try:
+            if not request.user.profile.can_upload_xrays():
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'error': _('You do not have permission to upload X-ray images. Please contact your administrator.')
+                    }, status=403)
+                else:
+                    messages.error(request, _('You do not have permission to upload X-ray images.'))
+                    return redirect('home')
+        except AttributeError:
+            # User doesn't have a profile - create one with default role
+            logger.warning(f"User {request.user.username} doesn't have a profile. Creating one.")
+            UserProfile.objects.create(user=request.user, role='Radiographer')
+            # Continue with upload since default role allows it
+        
         form = XRayUploadForm(request.POST, request.FILES, user=request.user)
+        
+        # Debug logging for troubleshooting
+        logger.info(f"Upload attempt by user: {request.user.username} (ID: {request.user.id})")
+        logger.info(f"Form fields received: {list(request.POST.keys())}")
+        logger.info(f"Files received: {list(request.FILES.keys())}")
+        
         if form.is_valid():
+            logger.info(f"Form validation PASSED for user {request.user.username}")
             # Create a new XRayImage instance with all form data but don't save yet
             xray_instance = form.save(commit=False)
             # Assign the current user
             xray_instance.user = request.user
-            # Now save the instance
-            xray_instance.save()
+            # Set the requires_expert_review field (default to False)
+            xray_instance.requires_expert_review = False
             
-            # Get the model type from the form
+            # Set default values for fields that cannot be NULL in database
+            if not xray_instance.first_name:
+                xray_instance.first_name = ''
+            if not xray_instance.last_name:
+                xray_instance.last_name = ''
+            if not xray_instance.patient_id:
+                xray_instance.patient_id = ''
+            if not xray_instance.gender:
+                xray_instance.gender = ''
+            if not xray_instance.additional_info:
+                xray_instance.additional_info = ''
+            if not xray_instance.technologist_first_name:
+                xray_instance.technologist_first_name = ''
+            if not xray_instance.technologist_last_name:
+                xray_instance.technologist_last_name = ''
+            if not xray_instance.image_format:
+                xray_instance.image_format = ''
+            if not xray_instance.image_size:
+                xray_instance.image_size = ''
+            if not xray_instance.image_resolution:
+                xray_instance.image_resolution = ''
+            
+            # Set model_used field
             model_type = request.POST.get('model_type', 'densenet')
-            
+            xray_instance.model_used = model_type
+            # Now save the instance
+            try:
+                xray_instance.save()
+            except Exception as e:
+                # Log the error for debugging
+                logger.error(f"Error saving XRayImage: {e}")
+                
+                # Return error response for AJAX requests
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'error': 'Database error occurred while saving image',
+                        'details': str(e)
+                    }, status=500)
+                else:
+                    # For non-AJAX requests, re-raise the exception
+                    raise
+
+            # Set immediate queued state to avoid UI showing 0% for long
+            xray_instance.processing_status = 'queued'
+            xray_instance.progress = 1
+            xray_instance.save(update_fields=['processing_status', 'progress'])
+
             # Save image to disk
             image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
             
-            # Start background processing
-            thread = threading.Thread(
-                target=process_image_async, 
-                args=(image_path, xray_instance, model_type)
-            )
-            thread.start()
+            # Start background processing (prefer Celery only if explicitly enabled)
+            use_celery = settings.USE_CELERY
+            started = False
+            if use_celery:
+                try:
+                    task: Any = run_inference_task
+                    task.delay(xray_instance.pk, model_type)
+                    started = True
+                except Exception as e:
+                    logger.warning(f"Celery unavailable; falling back to thread: {e}")
+            if not started:
+                # Fallback to lightweight thread on the web worker
+                thread = threading.Thread(
+                    target=process_image_async,
+                    args=(image_path, xray_instance, model_type),
+                    daemon=True,
+                )
+                thread.start()
             
             # Check if it's an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                logger.info(f"Returning success response for upload ID: {xray_instance.pk}")
                 # Return JSON response for AJAX requests
                 return JsonResponse({
                     'upload_id': xray_instance.pk,
@@ -507,14 +602,29 @@ def home(request):
             else:
                 # Redirect for normal form submissions
                 return redirect('xray_results', pk=xray_instance.pk)
+        else:
+            # Handle form validation errors for AJAX requests
+            logger.error(f"Form validation FAILED for user {request.user.username}")
+            logger.error(f"Form errors: {form.errors}")
+            logger.error(f"Form errors as JSON: {form.errors.as_json()}")
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'error': 'Form validation failed',
+                    'errors': form.errors
+                }, status=400)
     else:
         form = XRayUploadForm(user=request.user)
+    
+    # Check if user has upload permission to conditionally display form
+    can_upload = request.user.profile.can_upload_xrays() if hasattr(request.user, 'profile') else False
         
     return render(request, 'xrayapp/home.html', {
         'form': form,
         'today_date': timezone.now(),
         'user_first_name': request.user.first_name if request.user.is_authenticated else '',
         'user_last_name': request.user.last_name if request.user.is_authenticated else '',
+        'can_upload': can_upload,
     })
 
 
@@ -522,7 +632,9 @@ def home(request):
 def xray_results(request, pk):
     """View the results of the X-ray analysis"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -642,10 +754,11 @@ def xray_results(request, pk):
     # Group visualizations by type for display
     gradcam_visualizations = []
     pli_visualizations = []
+    segmentation_visualizations = []
     
     for viz in visualizations:
         viz_data = {
-            'id': viz.id,
+            'id': viz.pk,
             'target_pathology': viz.target_pathology,
             'created_at': viz.created_at,
             'model_used': viz.model_used,
@@ -654,18 +767,23 @@ def xray_results(request, pk):
             'overlay_url': viz.overlay_url,
             'saliency_url': viz.saliency_url,
             'threshold': viz.threshold,
-            'visualization_type': viz.visualization_type
+            'visualization_type': viz.visualization_type,
+            'confidence_score': viz.confidence_score,
+            'metadata': viz.metadata,
+            'visualization_path': viz.visualization_path
         }
         
         if viz.visualization_type in ['gradcam', 'combined_gradcam']:
             gradcam_visualizations.append(viz_data)
         elif viz.visualization_type in ['pli', 'combined_pli']:
             pli_visualizations.append(viz_data)
+        elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+            segmentation_visualizations.append(viz_data)
     
     # Prepare legacy GRAD-CAM URLs for backward compatibility
     media_url = settings.MEDIA_URL
     gradcam_url = f"{media_url}{xray_instance.gradcam_visualization}" if xray_instance.has_gradcam and xray_instance.gradcam_visualization else None
-    gradcam_heatmap_url = f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.has_gradcam and xray_instance.gradcam_heatmap else None
+    heatmap_url = f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.has_gradcam and xray_instance.gradcam_heatmap else None
     gradcam_overlay_url = f"{media_url}{xray_instance.gradcam_overlay}" if xray_instance.has_gradcam and xray_instance.gradcam_overlay else None
 
     context = {
@@ -679,11 +797,12 @@ def xray_results(request, pk):
         # Multiple visualization support
         'gradcam_visualizations': gradcam_visualizations,
         'pli_visualizations': pli_visualizations,
+        'segmentation_visualizations': segmentation_visualizations,
         'has_multiple_visualizations': len(visualizations) > 0,
         # Legacy support for single visualizations
         'has_gradcam': xray_instance.has_gradcam,
         'gradcam_url': gradcam_url,
-        'gradcam_heatmap_url': gradcam_heatmap_url,
+        'heatmap_url': heatmap_url,
         'gradcam_overlay_url': gradcam_overlay_url,
         'gradcam_target': xray_instance.gradcam_target_class,
         'pathology_explanations': pathology_explanations,
@@ -698,14 +817,15 @@ def prediction_history(request):
     form = PredictionHistoryFilterForm(request.GET)
     
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Initialize query with optimized select_related to avoid N+1 queries
     # Filter by users from the same hospital instead of just current user
     query = PredictionHistory.objects.filter(user__profile__hospital=user_hospital)\
                                     .select_related('xray', 'user', 'user__profile')\
-                                    .prefetch_related('xray__user')\
-                                    .order_by('-created_at')
+                                    .prefetch_related('xray__user')
     
     # Apply filters if the form is valid
     if form.is_valid():
@@ -739,6 +859,61 @@ def prediction_history(request):
             # Dynamic field filtering
             filter_kwargs = {f"{field_name}__gte": threshold}
             query = query.filter(**filter_kwargs)
+        
+        # Apply sorting
+        sort_by = form.cleaned_data.get('sort_by', '')
+        sort_order = form.cleaned_data.get('sort_order', 'desc')
+        
+        if sort_by == 'severity':
+            # Sort by severity_level (1=Insignificant, 2=Moderate, 3=Significant)
+            # For records without severity_level, calculate it dynamically
+            from django.db.models.functions import Coalesce
+            
+            # List of all pathology fields
+            pathology_fields = [
+                'atelectasis', 'cardiomegaly', 'consolidation', 'edema', 'effusion',
+                'emphysema', 'fibrosis', 'hernia', 'infiltration', 'mass', 'nodule',
+                'pleural_thickening', 'pneumonia', 'pneumothorax', 'fracture',
+                'lung_opacity', 'enlarged_cardiomediastinum', 'lung_lesion'
+            ]
+            
+            # Calculate average of all pathology fields for records without severity_level
+            sum_expr = sum([Coalesce(F(field), Value(0.0), output_field=FloatField()) 
+                           for field in pathology_fields], Value(0.0, output_field=FloatField()))
+            avg_expr = sum_expr / Value(len(pathology_fields), output_field=FloatField())
+            
+            # First, annotate with average pathology
+            query = query.annotate(avg_pathology=avg_expr)
+            
+            # Then, use existing severity_level if available, otherwise calculate it
+            query = query.annotate(
+                sort_severity=Case(
+                    # If severity_level exists, use it
+                    When(severity_level__isnull=False, then=F('severity_level')),
+                    # Otherwise calculate from average pathology probability
+                    When(avg_pathology__lte=0.19, then=Value(1)),
+                    When(avg_pathology__lte=0.30, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField()
+                )
+            )
+            
+            # Sort by severity
+            # desc: Significant → Moderate → Insignificant (3, 2, 1)
+            # asc: Insignificant → Moderate → Significant (1, 2, 3)
+            order_field = 'sort_severity' if sort_order == 'asc' else '-sort_severity'
+            query = query.order_by(order_field, '-created_at')
+        elif sort_by == 'xray_date':
+            # Sort by X-ray date
+            order_field = 'xray__date_of_xray' if sort_order == 'asc' else '-xray__date_of_xray'
+            query = query.order_by(order_field, '-created_at')
+        else:
+            # Default sorting by prediction date (created_at)
+            order_field = 'created_at' if sort_order == 'asc' else '-created_at'
+            query = query.order_by(order_field)
+    else:
+        # If form is not valid, apply default sorting
+        query = query.order_by('-created_at')
     
     # Add pagination for better performance
     records_per_page = 25  # Default value
@@ -755,7 +930,7 @@ def prediction_history(request):
     # Get saved record IDs for current user to show star status
     saved_record_ids = set(SavedRecord.objects.filter(
         user=request.user,
-        prediction_history__in=[item.id for item in history_items]
+        prediction_history__in=[item.pk for item in history_items]
     ).values_list('prediction_history_id', flat=True))
     
     context = {
@@ -773,7 +948,9 @@ def delete_prediction_history(request, pk):
     """Delete a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow deletion of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -790,7 +967,9 @@ def delete_all_prediction_history(request):
     """Delete all prediction history records"""
     if request.method == 'POST':
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Count records before deletion for current hospital
         count = PredictionHistory.objects.filter(user__profile__hospital=user_hospital).count()
@@ -815,12 +994,17 @@ def delete_visualization(request, pk):
         visualization = VisualizationResult.objects.get(pk=pk)
         
         # Check if user has permission to delete (must be from same hospital)
-        user_hospital = request.user.profile.hospital
-        if visualization.xray.user.profile.hospital != user_hospital:
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
+        owner_profile = getattr(visualization.xray.user, 'profile', None)
+        owner_hospital = getattr(owner_profile, 'hospital', None)
+        if owner_hospital != user_hospital:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Delete associated files
-        import os
+        from pathlib import Path
+        import logging
         from django.conf import settings
         
         file_paths = [
@@ -830,14 +1014,15 @@ def delete_visualization(request, pk):
             visualization.saliency_path,
         ]
         
+        logger = logging.getLogger(__name__)
         for file_path in file_paths:
             if file_path:
                 try:
-                    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
-                    if os.path.exists(full_path):
-                        os.remove(full_path)
+                    full_path = Path(settings.MEDIA_ROOT) / file_path
+                    if full_path.exists():
+                        full_path.unlink()
                 except Exception as e:
-                    print(f"Error deleting file {file_path}: {e}")
+                    logger.warning(f"Error deleting file {file_path}: {e}")
         
         # Delete the visualization record
         visualization.delete()
@@ -855,7 +1040,9 @@ def edit_prediction_history(request, pk):
     """Edit a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        if user_hospital is None:
+            return redirect('prediction_history')
         
         # Allow editing of any record from the same hospital
         history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -884,7 +1071,9 @@ def edit_prediction_history(request, pk):
 def generate_interpretability(request, pk):
     """Generate interpretability visualization for an X-ray image"""
     # Get user's hospital from profile
-    user_hospital = request.user.profile.hospital
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
     
     # Allow access to any X-ray from the same hospital
     xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
@@ -902,12 +1091,23 @@ def generate_interpretability(request, pk):
     # Get the image path
     image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
     
-    # Start background processing
-    thread = threading.Thread(
-        target=process_with_interpretability_async,
-        args=(image_path, xray_instance, model_type, interpretation_method, target_class)
-    )
-    thread.start()
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = settings.USE_CELERY
+    started = False
+    if use_celery:
+        try:
+            task2: Any = run_interpretability_task
+            task2.delay(xray_instance.pk, model_type, interpretation_method, target_class)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        thread = threading.Thread(
+            target=process_with_interpretability_async,
+            args=(image_path, xray_instance, model_type, interpretation_method, target_class),
+            daemon=True,
+        )
+        thread.start()
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -923,14 +1123,68 @@ def generate_interpretability(request, pk):
 
 
 @login_required
+def generate_segmentation(request, pk):
+    """Generate anatomical segmentation for an X-ray image"""
+    # Get user's hospital from profile
+    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    if user_hospital is None:
+        return redirect('home')
+    
+    # Allow access to any X-ray from the same hospital
+    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    
+    # Reset progress to 0 and set status to processing
+    xray_instance.progress = 0
+    xray_instance.processing_status = 'processing'
+    xray_instance.save()
+    
+    # Start background processing (prefer Celery only if explicitly enabled)
+    use_celery = settings.USE_CELERY
+    started = False
+    if use_celery:
+        try:
+            task: Task = run_segmentation_task  # type: ignore
+            task.delay(xray_instance.pk)
+            started = True
+        except Exception as e:
+            logger.warning(f"Celery unavailable; falling back to thread: {e}")
+    if not started:
+        # For now, segmentation requires Celery
+        # Could implement a threaded version later if needed
+        messages.error(request, _('Segmentation processing is currently unavailable. Please try again later.'))
+        return redirect('xray_results', pk=pk)
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+        # Return JSON response for AJAX requests
+        return JsonResponse({
+            'status': 'started',
+            'message': _('Segmentation processing started'),
+            'xray_id': xray_instance.pk
+        })
+    
+    # Redirect to the results page for non-AJAX requests
+    return redirect('xray_results', pk=pk)
+
+
 def check_progress(request, pk):
-    """AJAX endpoint to check processing progress"""
+    """AJAX endpoint to check processing progress - lightweight version for memory-constrained systems"""
+    
+    # Import here to avoid loading heavy dependencies
+    import gc
+    from django.http import JsonResponse
+    
+    # Check authentication manually to provide better JSON error responses
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': 'Authentication required',
+            'message': 'Please log in to check progress'
+        }, status=401)
+    
     try:
-        # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
-        
-        # Allow access to any X-ray from the same hospital
-        xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+        # For now, allow access to any X-ray the user uploaded
+        # TODO: Implement proper hospital-based access control later
+        xray_instance = XRayImage.objects.get(pk=pk, user=request.user)
         
         response_data = {
             'status': xray_instance.processing_status,
@@ -939,7 +1193,7 @@ def check_progress(request, pk):
         }
         
         # If processing is complete, include visualization data
-        if xray_instance.progress >= 100 and xray_instance.processing_status == 'complete':
+        if xray_instance.progress >= 100 and xray_instance.processing_status == 'completed':
             media_url = settings.MEDIA_URL
             
             # Get all visualizations for this X-ray
@@ -948,10 +1202,11 @@ def check_progress(request, pk):
             # Group visualizations by type
             gradcam_visualizations = []
             pli_visualizations = []
+            segmentation_visualizations = []
             
             for viz in visualizations:
                 viz_data = {
-                    'id': viz.id,
+                    'id': viz.pk,
                     'target_pathology': viz.target_pathology,
                     'created_at': viz.created_at.isoformat(),
                     'model_used': viz.model_used,
@@ -959,13 +1214,18 @@ def check_progress(request, pk):
                     'heatmap_url': viz.heatmap_url,
                     'overlay_url': viz.overlay_url,
                     'saliency_url': viz.saliency_url,
-                    'threshold': viz.threshold
+                    'threshold': viz.threshold,
+                    'confidence_score': viz.confidence_score,
+                    'metadata': viz.metadata,
+                    'visualization_path': viz.visualization_path
                 }
                 
                 if viz.visualization_type in ['gradcam', 'combined_gradcam']:
                     gradcam_visualizations.append(viz_data)
                 elif viz.visualization_type in ['pli', 'combined_pli']:
                     pli_visualizations.append(viz_data)
+                elif viz.visualization_type in ['segmentation', 'segmentation_combined']:
+                    segmentation_visualizations.append(viz_data)
             
             # Include visualization data in response
             if gradcam_visualizations:
@@ -980,11 +1240,17 @@ def check_progress(request, pk):
                     'visualizations': pli_visualizations
                 }
             
+            if segmentation_visualizations:
+                response_data['segmentation'] = {
+                    'has_segmentation': True,
+                    'visualizations': segmentation_visualizations
+                }
+            
             # Include backward compatibility data for latest visualizations
             if xray_instance.has_gradcam:
                 response_data['gradcam_legacy'] = {
                     'gradcam_url': f"{media_url}{xray_instance.gradcam_visualization}" if xray_instance.gradcam_visualization else None,
-                    'gradcam_heatmap_url': f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.gradcam_heatmap else None,
+                    'heatmap_url': f"{media_url}{xray_instance.gradcam_heatmap}" if xray_instance.gradcam_heatmap else None,
                     'gradcam_overlay_url': f"{media_url}{xray_instance.gradcam_overlay}" if xray_instance.gradcam_overlay else None,
                     'gradcam_target': xray_instance.gradcam_target_class
                 }
@@ -1000,9 +1266,30 @@ def check_progress(request, pk):
             # Include image URL for display
             response_data['image_url'] = xray_instance.image.url
         
+        # Force garbage collection to free memory
+        gc.collect()
         return JsonResponse(response_data)
     except XRayImage.DoesNotExist:
-        return JsonResponse({'error': _('Image not found')}, status=404)
+        # Log the 404 for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"XRayImage {pk} not found for user {request.user.username}")
+        
+        return JsonResponse({
+            'error': 'Image not found or access denied',
+            'message': f'X-ray image {pk} was not found or you do not have permission to access it.'
+        }, status=404)
+    except Exception as e:
+        # Log the error for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in check_progress for pk={pk}: {e}")
+        
+        # Return JSON error response instead of HTML error page
+        return JsonResponse({
+            'error': 'An error occurred while checking progress',
+            'details': str(e)
+        }, status=500)
 
 
 @login_required

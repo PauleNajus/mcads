@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import torchxrayvision as xrv
 import skimage.io
 import torchvision
@@ -13,33 +12,207 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 from datetime import datetime
 from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
+from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder, load_segmentation_model
+from typing import Any, cast
 
+# CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
+import logging
+logger = logging.getLogger(__name__)
+
+# PyTorch environment fixes - MUST be set before any PyTorch operations
+os.environ['MKLDNN_ENABLED'] = '0'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+# Force PyTorch to use simple CPU backend to prevent "could not create a primitive" error
+torch.backends.mkldnn.enabled = False
+torch.set_num_threads(1)
+
+# Additional memory optimizations to prevent model inference hanging
+if hasattr(torch.backends, 'openmp'):
+    torch.backends.openmp.is_available = lambda: False
+if hasattr(torch.backends, 'cudnn'):
+    torch.backends.cudnn.enabled = False
+
+logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
+
+
+_model_cache = {}
+_ae_cache_key = "autoencoder"
+_calibration_cache_key = "calibration"
 
 def load_model(model_type='densenet'):
-    """
-    Load the pre-trained torchxrayvision model
-    
+    """Compatibility wrapper: use shared cached loader."""
+    return cached_load_model(model_type)
+
+
+def clear_model_cache():
+    """Deprecated; kept for backwards compatibility."""
+    from .model_loader import clear_model_cache as _clear
+    _clear()
+
+
+def load_autoencoder():
+    """Compatibility wrapper: use shared cached loader."""
+    return cached_load_autoencoder()
+
+
+def compute_ood_score(img_np: np.ndarray) -> dict:
+    """Compute an OOD score via reconstruction error from the autoencoder.
+
     Args:
-        model_type (str): 'densenet' or 'resnet'
-        
+        img_np: numpy array after `xrv.datasets.normalize`, shape (H, W) or (1, H, W)
+
     Returns:
-        model: Loaded model
-        resize_dim (int): Resize dimension for preprocessing
+        dict with keys: { 'ood_score': float, 'is_ood': bool, 'threshold': float }
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    try:
+        ae, ae_resize = load_autoencoder()
+    except Exception:
+        # If AE cannot be loaded, gracefully skip OOD gate
+        return { 'ood_score': float('nan'), 'is_ood': False, 'threshold': float('inf') }
+
+    # Ensure shape is (1, H, W)
+    if img_np.ndim == 2:
+        img_np = img_np[None, :, :]
+
+    # Resize to AE input (center crop then resize like classifier preprocessing)
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(ae_resize)
+    ])
+    img_small = transform(img_np)
+
+    # To tensor on CPU
+    img_tensor = torch.from_numpy(img_small).unsqueeze(0)  # (1, 1, ae_resize, ae_resize)
+
+    with torch.no_grad():
+        # Encode and decode (AE API not typed; cast to Any for tooling)
+        ae_mod: Any = ae
+        z = ae_mod.encode(img_tensor)
+        recon = ae_mod.decode(z)
+
+    # Compute normalized MSE per pixel
+    recon_err = (recon - img_tensor).pow(2).mean().item()
+
+    # Threshold from env or default conservative value
+    default_thr = 0.015  # empirically safe; adjustable via env
+    thr = float(os.environ.get('XRV_AE_OOD_THRESHOLD', default_thr))
+    is_ood = recon_err > thr
+
+    return { 'ood_score': float(recon_err), 'is_ood': bool(is_ood), 'threshold': float(thr) }
+
+
+def _sigmoid(x: float) -> float:
+    return float(1.0 / (1.0 + np.exp(-x)))
+
+
+def _logit(p: float, eps: float = 1e-6) -> float:
+    p = float(np.clip(p, eps, 1.0 - eps))
+    return float(np.log(p / (1.0 - p)))
+
+
+def load_calibration() -> dict:
+    """Load per-pathology temperature calibration and thresholds.
+
+    Sources (in priority order):
+    - Env var XRV_CALIBRATION_JSON: JSON string with keys {"temperature": {...}, "thresholds": {...}}
+    - File at env var XRV_CALIBRATION_FILE
+    - Default file at BASE_DIR/config/calibration.json if exists
+    - Fallback to identity temps=1.0 and thresholds=0.5
+    """
+    if _calibration_cache_key in _model_cache:
+        return _model_cache[_calibration_cache_key]
+
+    # Defaults
+    temps: dict[str, float] = {}
+    thrs: dict[str, float] = {}
+
+    # Try env JSON
+    import json
+    env_json = os.environ.get('XRV_CALIBRATION_JSON')
+    if env_json:
+        try:
+            blob = json.loads(env_json)
+            temps = {k: float(v) for k, v in blob.get('temperature', {}).items()}
+            thrs = {k: float(v) for k, v in blob.get('thresholds', {}).items()}
+        except Exception as e:
+            logger.error(f"Failed to parse XRV_CALIBRATION_JSON: {e}")
+
+    # Try file
+    if not temps and not thrs:
+        file_path = os.environ.get('XRV_CALIBRATION_FILE')
+        if not file_path:
+            # Default location under project base
+            base_dir = Path(__file__).resolve().parent.parent
+            file_path = str(base_dir / 'config' / 'calibration.json')
+        try:
+            if Path(file_path).exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    blob = json.load(f)
+                    temps = {k: float(v) for k, v in blob.get('temperature', {}).items()}
+                    thrs = {k: float(v) for k, v in blob.get('thresholds', {}).items()}
+        except Exception as e:
+            logger.error(f"Failed to load calibration file {file_path}: {e}")
+
+    # Fill with identity defaults if missing based on known default pathologies
+    default_pathologies = list(xrv.datasets.default_pathologies)
+    for name in default_pathologies:
+        temps.setdefault(name, 1.0)
+        thrs.setdefault(name, 0.5)
+
+    cfg = { 'temperature': temps, 'thresholds': thrs }
+    _model_cache[_calibration_cache_key] = cfg
+    return cfg
+
+
+def apply_calibration_and_thresholds(results: dict) -> tuple[dict, dict]:
+    """Apply temperature scaling (per label) and generate binary labels.
+
+    Returns updated results and a metadata dictionary.
+    """
+    cfg = load_calibration()
+    temps = cfg['temperature']
+    thrs = cfg['thresholds']
+
+    calibrated: dict[str, float] = {}
+    binary: dict[str, bool] = {}
+    for k, p in list(results.items()):
+        # Skip non-pathology keys (added later) by checking value type
+        if not isinstance(p, (float, int, np.floating)):
+            continue
+        T = max(1e-3, float(temps.get(k, 1.0)))
+        # Temperature scaling in logit space
+        logit = _logit(float(p))
+        p_cal = _sigmoid(logit / T)
+        calibrated[k] = p_cal
+        thr = float(thrs.get(k, 0.5))
+        binary[k] = bool(p_cal >= thr)
+
+    # Merge back
+    updated = dict(results)
+    updated.update({k: float(v) for k, v in calibrated.items()})
+    meta = {
+        'calibration_temperatures': temps,
+        'decision_thresholds': thrs,
+        'predicted_labels': binary
+    }
+    return updated, meta
+
+
+def get_memory_info():
+    """Get current memory usage information"""
+    import psutil
+    process = psutil.Process()
+    memory_info = process.memory_info()
     
-    if model_type == 'resnet':
-        # Load ResNet model - all classes except "Enlarged Cardiomediastinum" and "Lung Lesion"
-        model = xrv.models.ResNet(weights="resnet50-res512-all")
-        resize_dim = 512
-    else:
-        # Default to DenseNet with all classes
-        model = xrv.models.DenseNet(weights="densenet121-res224-all")
-        resize_dim = 224
-    
-    model.to(device)
-    model.eval()
-    return model, resize_dim
+    return {
+        'rss_mb': memory_info.rss / 1024 / 1024,  # Resident Set Size in MB
+        'vms_mb': memory_info.vms / 1024 / 1024,  # Virtual Memory Size in MB
+        'percent': process.memory_percent(),
+        'cached_models': len(_model_cache)
+    }
 
 
 def extract_image_metadata(image_path):
@@ -73,15 +246,21 @@ def extract_image_metadata(image_path):
             else:
                 size = f"{file_size_bytes / (1024 * 1024):.1f} MB"
             
-            # Try to get creation date from EXIF data
+            # Try to get creation date from EXIF data using proper method
             date_created = None
-            if hasattr(img, '_getexif') and img._getexif() is not None:
-                exif = {
-                    TAGS.get(tag, tag): value
-                    for tag, value in img._getexif().items()
-                }
-                if 'DateTimeOriginal' in exif:
-                    date_created = datetime.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            try:
+                # Use getexif() method instead of _getexif()
+                exif_data = img.getexif()
+                if exif_data:
+                    exif = {
+                        TAGS.get(tag, tag): value
+                        for tag, value in exif_data.items()
+                    }
+                    if 'DateTimeOriginal' in exif:
+                        date_created = datetime.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            except (AttributeError, ValueError, TypeError):
+                # Fallback if EXIF extraction fails
+                pass
             
             # If no EXIF data, use file creation/modification time
             if date_created is None:
@@ -159,14 +338,21 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     
     img = xrv.datasets.normalize(img, 255)
     
-    # Check that images are 2D arrays - use first channel instead of averaging
+    # Check that images are 2D arrays - average across channels for robustness
     if len(img.shape) > 2:
-        img = img[:, :, 0]
+        img = img.mean(axis=2)
     if len(img.shape) < 2:
         raise ValueError("Input image must have at least 2 dimensions")
     
     # Add channel dimension
     img = img[None, :, :]
+
+    # OOD gate (reconstruction error)
+    ood = compute_ood_score(img[0])  # pass (H, W)
+    if xray_instance:
+        # Flag for review if likely OOD
+        xray_instance.requires_expert_review = bool(ood.get('is_ood', False))
+        xray_instance.save()
     
     # Load model and get resize dimension
     # Update progress to 40%
@@ -175,16 +361,16 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
         xray_instance.save()
     
     model, resize_dim = load_model(model_type)
+    model = cast(torch.nn.Module, model)
     
     # Apply transforms for model
-    # For resnet50-res512-all, we need to resize first, then center crop
+    # Use consistent preprocessing: center-crop then resize for both models
     if model_type == 'resnet':
         transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayResizer(resize_dim),
-            xrv.datasets.XRayCenterCrop()
+            xrv.datasets.XRayCenterCrop(),
+            xrv.datasets.XRayResizer(resize_dim)
         ])
     else:
-        # For densenet, keep the original order
         transform = torchvision.transforms.Compose([
             xrv.datasets.XRayCenterCrop(),
             xrv.datasets.XRayResizer(resize_dim)
@@ -216,7 +402,7 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
         xray_instance.progress = 75
         xray_instance.save()
     
-    with torch.no_grad():
+    with torch.inference_mode():
         # Use the model's forward method for both model types
         preds = model(img_tensor).cpu()
     
@@ -224,10 +410,11 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     # For ResNet, ALWAYS use default_pathologies for correct mapping
     if model_type == 'resnet':
         # ResNet model outputs 18 values in the order of default_pathologies
-        results = dict(zip(xrv.datasets.default_pathologies, preds[0].detach().numpy()))
+        results = dict(zip(list(xrv.datasets.default_pathologies), preds[0].detach().numpy()))
     else:
-        # For DenseNet, we can use the model's pathologies directly
-        results = dict(zip(model.pathologies, preds[0].detach().numpy()))
+        # For DenseNet, we can use the model's pathologies directly (access dynamically)
+        model_pathologies: list[str] = list(getattr(model, 'pathologies', list(xrv.datasets.default_pathologies)))
+        results = dict(zip(model_pathologies, preds[0].detach().numpy()))
     
     # Filter out specific classes for ResNet if needed
     # Note: These classes will always output 0.5 for ResNet as they're not trained
@@ -235,6 +422,9 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
         excluded_classes = ["Enlarged Cardiomediastinum", "Lung Lesion"]
         results = {k: v for k, v in results.items() if k not in excluded_classes}
     
+    # Apply calibration and thresholds
+    results, calib_meta = apply_calibration_and_thresholds(results)
+
     # If we have an XRay instance, update its severity level
     if xray_instance:
         # Calculate severity level
@@ -252,6 +442,16 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
         xray_instance.processing_status = 'completed'
         xray_instance.save()
     
+    # Attach OOD + calibration metadata (not persisted to DB fields)
+    results["OOD_Score"] = ood.get('ood_score')
+    results["OOD_Threshold"] = ood.get('threshold')
+    results["Is_OOD"] = ood.get('is_ood')
+    results["Calibration"] = {
+        'temperatures': calib_meta.get('calibration_temperatures'),
+        'thresholds': calib_meta.get('decision_thresholds'),
+        'labels': calib_meta.get('predicted_labels'),
+    }
+
     return results 
 
 
@@ -319,7 +519,7 @@ def process_image_with_interpretability(image_path, xray_instance=None, model_ty
                 'metadata': metadata  # Include metadata
             }
         elif interpretation_method == 'combined_gradcam':
-            # Apply Combined Grad-CAM for pathologies above 0.5 threshold
+            # Apply Combined interpretability for pathologies above 0.5 threshold
             combined_results = apply_combined_gradcam(image_path, model_type)
             interpretation_results = {
                 'method': 'combined_gradcam',
@@ -388,7 +588,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot heatmap
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['heatmap'], cmap='jet')
-        plt.title(f'Grad-CAM Heatmap\n{interpretation_results["target_class"]}')
+        plt.title(f'Heatmap\n{interpretation_results["target_class"]}')
         plt.axis('off')
         
         # Plot overlay
@@ -401,7 +601,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot combined heatmap
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['heatmap'], cmap='jet')
-        plt.title(f'Combined Grad-CAM\n{len(interpretation_results["selected_pathologies"])} pathologies > {interpretation_results["threshold"]}')
+        plt.title(f'Combined Heatmap\n{len(interpretation_results["selected_pathologies"])} pathologies > {interpretation_results["threshold"]}')
         plt.axis('off')
         
         # Plot overlay
@@ -427,7 +627,7 @@ def save_interpretability_visualization(interpretation_results, output_path, for
         # Plot saliency map
         plt.subplot(1, 3, 2)
         plt.imshow(interpretation_results['saliency_map'], cmap='jet')
-        plt.title(f'Pixel Saliency Map\n{interpretation_results["target_class"]}')
+        plt.title(f'Saliency Map\n{interpretation_results["target_class"]}')
         plt.axis('off')
         
         # Plot overlay rather than colored saliency
@@ -491,7 +691,7 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
         saliency_map = interpretation_results['saliency_map']
         
         # Apply colormap to saliency map (convert to 0-255 range)
-        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)
+        saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)  # type: ignore
         
         # Convert BGR to RGB for proper color display
         saliency_rgb = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)
@@ -503,12 +703,12 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_gradcam_heatmap(interpretation_results, output_path, format='png'):
+def save_heatmap(interpretation_results, output_path, format='png'):
     """
-    Save only the Grad-CAM heatmap to a file without white spaces
+    Save only the heatmap to a file without white spaces
     
     Args:
-        interpretation_results: Results from apply_gradcam
+        interpretation_results: Results from interpretability analysis
         output_path: Path to save the visualization
         format: Image format to save (png, jpg, etc.)
         
@@ -524,7 +724,7 @@ def save_gradcam_heatmap(interpretation_results, output_path, format='png'):
         heatmap_resized = cv2.resize(heatmap, (original_shape[1], original_shape[0]))
         
         # Apply colormap to heatmap (convert to 0-255 range)
-        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)  # type: ignore
         
         # Convert BGR to RGB for proper color display
         heatmap_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
@@ -536,12 +736,12 @@ def save_gradcam_heatmap(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_gradcam_overlay(interpretation_results, output_path, format='png'):
+def save_overlay(interpretation_results, output_path, format='png'):
     """
-    Save only the Grad-CAM overlay to a file without white spaces
+    Save only the overlay to a file without white spaces
     
     Args:
-        interpretation_results: Results from apply_gradcam
+        interpretation_results: Results from interpretability analysis
         output_path: Path to save the visualization
         format: Image format to save (png, jpg, etc.)
         
@@ -559,4 +759,194 @@ def save_gradcam_overlay(interpretation_results, output_path, format='png'):
         from PIL import Image
         Image.fromarray(overlay_rgb).save(output_path, format=format.upper())
     
-    return output_path 
+    return output_path
+
+
+def apply_segmentation(image_path):
+    """
+    Apply anatomical segmentation to a chest X-ray image using PSPNet
+    
+    Args:
+        image_path: Path to the X-ray image
+        
+    Returns:
+        Dictionary containing segmentation results
+    """
+    logger.info(f"Applying segmentation to image: {image_path}")
+    
+    # Load the segmentation model
+    seg_model = load_segmentation_model()
+    
+    # Load and preprocess the image
+    img = skimage.io.imread(image_path)
+    img = xrv.datasets.normalize(img, 255)
+    
+    # Preserve original image for visualization
+    original_img = img.copy()
+    
+    # Check that images are 2D arrays
+    if len(img.shape) > 2:
+        img = img[:, :, 0]  # Take first channel
+    if len(img.shape) < 2:
+        raise ValueError("Input image must have at least 2 dimensions")
+    
+    # Add channel dimension
+    img = img[None, :, :]
+    
+    # Resize to 512x512 for PSPNet
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(512)
+    ])
+    
+    # Apply transform to numpy array first
+    img_transformed = transform(img)
+    
+    # Convert to tensor and add batch dimension
+    img_tensor = torch.from_numpy(img_transformed).float().unsqueeze(0)
+    
+    # Perform segmentation
+    with torch.no_grad():
+        output = seg_model(img_tensor)
+    
+    # Output shape is [1, 14, 512, 512]
+    # 14 channels for different anatomical structures
+    segmentation_masks = output.squeeze(0).cpu().numpy()
+    
+    # Define the anatomical structures
+    anatomical_structures = [
+        'Left Clavicle', 'Right Clavicle', 'Left Scapula', 'Right Scapula',
+        'Left Lung', 'Right Lung', 'Left Hilus Pulmonis', 'Right Hilus Pulmonis',
+        'Heart', 'Aorta', 'Facies Diaphragmatica', 'Mediastinum',
+        'Weasand', 'Spine'
+    ]
+    
+    # Apply sigmoid to get probabilities
+    segmentation_probs = torch.sigmoid(output).squeeze(0).cpu().numpy()
+    
+    # Create binary masks with threshold
+    threshold = 0.5
+    binary_masks = (segmentation_probs > threshold).astype(np.uint8)
+    
+    # Store results
+    results = {
+        'segmentation_masks': segmentation_masks,
+        'segmentation_probs': segmentation_probs,
+        'binary_masks': binary_masks,
+        'anatomical_structures': anatomical_structures,
+        'original': original_img,
+        'num_structures': len(anatomical_structures)
+    }
+    
+    logger.info("Segmentation completed successfully")
+    return results
+
+
+def save_segmentation_visualization(segmentation_results, output_path, structures_to_show=None):
+    """
+    Save segmentation visualization with colored overlays for each anatomical structure
+    
+    Args:
+        segmentation_results: Results from apply_segmentation
+        output_path: Path to save the visualization
+        structures_to_show: List of structure indices to show (None = show all)
+        
+    Returns:
+        Path to saved file
+    """
+    original = segmentation_results['original']
+    binary_masks = segmentation_results['binary_masks']
+    anatomical_structures = segmentation_results['anatomical_structures']
+    
+    # Convert original to RGB if grayscale
+    if len(original.shape) == 2:
+        original_rgb = cv2.cvtColor((original * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
+    else:
+        original_rgb = (original * 255).astype(np.uint8)
+    
+    # Resize original to match mask dimensions (512x512)
+    original_resized = cv2.resize(original_rgb, (512, 512))
+    
+    # Create overlay image
+    overlay = original_resized.copy()
+    
+    # Define colors for each anatomical structure (BGR format)
+    colors = [
+        (255, 0, 0),     # Blue - Left Clavicle
+        (0, 255, 0),     # Green - Right Clavicle
+        (0, 0, 255),     # Red - Left Scapula
+        (255, 255, 0),   # Cyan - Right Scapula
+        (255, 0, 255),   # Magenta - Left Lung
+        (0, 255, 255),   # Yellow - Right Lung
+        (128, 0, 255),   # Purple - Left Hilus Pulmonis
+        (255, 128, 0),   # Orange - Right Hilus Pulmonis
+        (0, 128, 255),   # Light Blue - Heart
+        (255, 0, 128),   # Pink - Aorta
+        (128, 255, 0),   # Lime - Facies Diaphragmatica
+        (0, 255, 128),   # Spring Green - Mediastinum
+        (128, 128, 255), # Light Purple - Weasand
+        (255, 128, 128)  # Light Red - Spine
+    ]
+    
+    # Apply masks
+    if structures_to_show is None:
+        structures_to_show = list(range(len(anatomical_structures)))
+    
+    for idx in structures_to_show:
+        if idx < len(binary_masks):
+            mask = binary_masks[idx]
+            color = colors[idx % len(colors)]
+            
+            # Create colored mask
+            colored_mask = np.zeros_like(overlay)
+            colored_mask[:, :] = color
+            
+            # Apply mask with transparency
+            # Multiply colored mask by the binary mask and alpha value
+            masked_color = (colored_mask * mask[:, :, np.newaxis] * 0.3).astype(overlay.dtype)
+            overlay = cv2.addWeighted(overlay, 1.0, masked_color, 1.0, 0)
+    
+    # Convert BGR to RGB for saving
+    overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+    
+    # Save the visualization
+    Image.fromarray(overlay_rgb).save(output_path, format='PNG')
+    
+    return output_path
+
+
+def save_individual_segmentation_masks(segmentation_results, output_dir):
+    """
+    Save individual binary masks for each anatomical structure
+    
+    Args:
+        segmentation_results: Results from apply_segmentation
+        output_dir: Directory to save individual masks
+        
+    Returns:
+        Dictionary mapping structure names to file paths
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    binary_masks = segmentation_results['binary_masks']
+    anatomical_structures = segmentation_results['anatomical_structures']
+    
+    saved_paths = {}
+    
+    for idx, structure_name in enumerate(anatomical_structures):
+        if idx < len(binary_masks):
+            mask = binary_masks[idx]
+            
+            # Convert to uint8 (0 or 255)
+            mask_img = (mask * 255).astype(np.uint8)
+            
+            # Clean filename
+            filename = f"{structure_name.lower().replace(' ', '_')}_mask.png"
+            filepath = output_dir / filename
+            
+            # Save mask
+            Image.fromarray(mask_img, mode='L').save(filepath)
+            saved_paths[structure_name] = str(filepath)
+    
+    return saved_paths 

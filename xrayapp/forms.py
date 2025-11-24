@@ -8,7 +8,7 @@ try:
     MAGIC_AVAILABLE = True
 except ImportError:
     MAGIC_AVAILABLE = False
-from .models import XRayImage, PredictionHistory, UserProfile
+from .models import XRayImage, UserProfile
 from django.contrib.auth.models import User
 
 class XRayUploadForm(forms.ModelForm):
@@ -169,6 +169,26 @@ class PredictionHistoryFilterForm(forms.Form):
         required=False,
         label=_("Records per page")
     )
+    # Sorting fields
+    sort_by = forms.ChoiceField(
+        choices=[
+            ('', _('Default (Prediction date)')),
+            ('severity', _('Severity')),
+            ('xray_date', _('X-ray date'))
+        ],
+        initial='',
+        required=False,
+        label=_("Sort by")
+    )
+    sort_order = forms.ChoiceField(
+        choices=[
+            ('desc', _('Highest to lowest')),
+            ('asc', _('Lowest to highest'))
+        ],
+        initial='desc',
+        required=False,
+        label=_("Sort order")
+    )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -285,7 +305,7 @@ class ChangePasswordForm(forms.Form):
     
     def clean_new_password(self):
         """Validate new password strength"""
-        new_password = self.cleaned_data.get('new_password')
+        new_password = self.cleaned_data.get('new_password') or ""
         
         # Basic password validation
         if len(new_password) < 8:

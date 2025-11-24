@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Function to simulate/track progress
+  // Function to track progress
   const trackProgress = (uploadId) => {
     let currentProgress = 0;
     
@@ -39,13 +39,33 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Check progress from the server
     const checkProgress = () => {
-      fetch(`/progress/${uploadId}/`)
+      fetch(`/progress/${uploadId}/`, { cache: 'no-store' })
         .then(response => response.json())
         .then(data => {
           // Update progress bar
           currentProgress = data.progress;
-          if (progressBar) progressBar.style.width = `${currentProgress}%`;
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}%`;
+          if (!Number.isFinite(currentProgress)) currentProgress = 0;
+          if (currentProgress < 1) currentProgress = 1; // never show 0%
+          if (progressBar) {
+            progressBar.style.width = `${currentProgress}%`;
+            progressBar.setAttribute('aria-valuenow', currentProgress);
+            progressBar.parentElement.setAttribute('aria-valuenow', currentProgress);
+          }
+          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% Complete`;
+          
+          // Update screen reader announcements
+          const statusElement = document.getElementById('analysis-status');
+          if (statusElement && currentProgress % 25 === 0) {
+            const statusMessages = {
+              25: 'Image uploaded successfully, analysis 25% complete',
+              50: 'AI model processing X-ray data, analysis 50% complete', 
+              75: 'Generating predictions, analysis 75% complete',
+              100: 'Analysis complete, redirecting to results'
+            };
+            if (statusMessages[currentProgress]) {
+              statusElement.textContent = statusMessages[currentProgress];
+            }
+          }
           
           // If not complete, check again
           if (currentProgress < 100) {
@@ -62,9 +82,12 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
           console.error('Error checking progress:', error);
           // Increase progress a bit anyway to give feedback
-          currentProgress = Math.min(currentProgress + 5, 95);
-          if (progressBar) progressBar.style.width = `${currentProgress}%`;
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}%`;
+          currentProgress = Math.min(Math.max(currentProgress, 1) + 5, 95);
+          if (progressBar) {
+            progressBar.style.width = `${currentProgress}%`;
+            progressBar.setAttribute('aria-valuenow', currentProgress);
+          }
+          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% Complete`;
           
           // Try again after a delay
           setTimeout(() => checkProgress(), 1000);
@@ -89,21 +112,42 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData,
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCSRFToken(),
         },
+        cache: 'no-store',
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Response is not JSON');
+        }
+        return response.json();
+      })
       .then(data => {
+        console.log('Server response:', data);
         if (data.upload_id) {
           console.log('Upload successful, tracking progress for ID:', data.upload_id);
           // Start tracking progress
           trackProgress(data.upload_id);
+        } else if (data.error) {
+          // Handle validation errors
+          console.error('Form validation error:', data.error);
+          if (data.errors) {
+            console.error('Detailed errors:', data.errors);
+          }
+          alert(gettext('Error: ') + data.error);
         } else {
-          // Error handling
+          // Generic error handling
+          console.error('Unexpected response format:', data);
           alert(gettext('Error starting analysis. Please try again.'));
         }
       })
       .catch(error => {
         console.error('Error submitting form:', error);
+        console.error('Error details:', error.message, error.stack);
         alert(gettext('Error submitting form. Please try again.'));
       });
     });

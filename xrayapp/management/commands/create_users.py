@@ -11,7 +11,7 @@ class Command(BaseCommand):
             {
                 'username': 'admin',
                 'password': 'Qazwsxedc2025!',
-                'email': 'admin@gmail.com',
+                'email': 'admin@mcads.casa',
                 'first_name': 'Adminfirst',
                 'last_name': 'Adminlast',
                 'role': 'Administrator',
@@ -22,7 +22,7 @@ class Command(BaseCommand):
             {
                 'username': 'paubun',
                 'password': 'PauBun2025!',
-                'email': 'paubun@gmail.com',
+                'email': 'paubun@mcads.casa',
                 'first_name': 'Paulius',
                 'last_name': 'Bundza',
                 'role': 'Radiographer',
@@ -33,7 +33,7 @@ class Command(BaseCommand):
             {
                 'username': 'justri',
                 'password': 'JusTri2025!',
-                'email': 'justri@gmail.com',
+                'email': 'justri@mcads.casa',
                 'first_name': 'Justas',
                 'last_name': 'Trinkūnas',
                 'role': 'Radiographer',
@@ -44,7 +44,7 @@ class Command(BaseCommand):
             {
                 'username': 'rolber',
                 'password': 'RolBer2025!',
-                'email': 'rolber@gmail.com',
+                'email': 'rolber@mcads.casa',
                 'first_name': 'Rolandas',
                 'last_name': 'Bėrontas',
                 'role': 'Radiographer',
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             {
                 'username': 'technologist',
                 'password': 'TechNologist2025!',
-                'email': 'technologist@gmail.com',
+                'email': 'technologist@mcads.casa',
                 'first_name': 'Tech',
                 'last_name': 'Nologist',
                 'role': 'Technologist',
@@ -66,7 +66,7 @@ class Command(BaseCommand):
             {
                 'username': 'radiologist',
                 'password': 'RadioLogist2025!',
-                'email': 'radiologist@gmail.com',
+                'email': 'radiologist@mcads.casa',
                 'first_name': 'Radio',
                 'last_name': 'Logist',
                 'role': 'Radiologist',
@@ -77,7 +77,7 @@ class Command(BaseCommand):
             {
                 'username': 'guest',
                 'password': 'GuestUser2025!',
-                'email': 'guestuser@gmail.com',
+                'email': 'guestuser@mcads.casa',
                 'first_name': 'Guest',
                 'last_name': 'User',
                 'role': 'Radiographer',
@@ -88,7 +88,7 @@ class Command(BaseCommand):
             {
                 'username': 'gabryl',
                 'password': 'GabRyl2025!',
-                'email': 'gabryl@gmail.com',
+                'email': 'gabryl@mcads.casa',
                 'first_name': 'Gabija',
                 'last_name': 'Ryliškytė',
                 'role': 'Radiographer',
@@ -99,7 +99,7 @@ class Command(BaseCommand):
             {
                 'username': 'augbun',
                 'password': 'AugBun2025!',
-                'email': 'augbun@gmail.com',
+                'email': 'augbun@mcads.casa',
                 'first_name': 'Augustė',
                 'last_name': 'Bundzaitė',
                 'role': 'Radiographer',
