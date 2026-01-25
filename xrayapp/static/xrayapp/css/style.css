@@ -91,6 +91,14 @@
   --bs-dropdown-link-active-color: var(--bs-body-color);
 }
 
+/* Results page: metadata header uses `thead.table-light`. In dark mode Bootstrap keeps it white,
+   so remap it to a theme-friendly background. */
+[data-bs-theme="dark"] .image-metadata-table thead.table-light {
+  --bs-table-bg: var(--bs-tertiary-bg);
+  --bs-table-color: var(--bs-body-color);
+  --bs-table-border-color: var(--bs-border-color);
+}
+
 /* Mobile tap highlight can briefly flash blue in some browsers. Keep it on-brand. */
 a,
 button,
@@ -432,12 +440,11 @@ button,
 
 @keyframes modern-pulse {
   0%, 100% { 
-    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.4);
-    transform: scale(1);
+    /* Keep container border/size static; only allow subtle opacity change. */
+    opacity: 1;
   }
   50% { 
-    box-shadow: 0 0 0 8px rgba(var(--primary-rgb), 0.1);
-    transform: scale(1.01);
+    opacity: 1;
   }
 }
 

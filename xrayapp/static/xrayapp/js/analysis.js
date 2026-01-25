@@ -27,6 +27,66 @@ document.addEventListener('DOMContentLoaded', () => {
         fileNameDisplay.classList.add('text-muted');
       }
     });
+
+    // Desktop drag & drop: allow dropping a file onto the "Browse" button.
+    // This intentionally reuses the existing <input type="file"> + change handler.
+    const canUseDesktopDnD = Boolean(
+      window.matchMedia &&
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+        window.DataTransfer
+    );
+
+    if (canUseDesktopDnD) {
+      customFileButton.setAttribute('title', gettext('Browse or drop a file'));
+
+      const setDragActive = (isActive) => {
+        // Use Bootstrap classes only (no extra CSS).
+        customFileButton.classList.toggle('btn-outline-primary', isActive);
+        customFileButton.classList.toggle('btn-outline-secondary', !isActive);
+      };
+
+      const isFileDrag = (event) => {
+        const types = event.dataTransfer?.types;
+        return Boolean(types && Array.from(types).includes('Files'));
+      };
+
+      customFileButton.addEventListener('dragenter', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        setDragActive(true);
+      });
+
+      customFileButton.addEventListener('dragover', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setDragActive(true);
+      });
+
+      customFileButton.addEventListener('dragleave', (event) => {
+        if (!isFileDrag(event)) return;
+        setDragActive(false);
+      });
+
+      customFileButton.addEventListener('drop', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        setDragActive(false);
+
+        const droppedFile = event.dataTransfer.files?.[0];
+        if (!droppedFile) return;
+
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(droppedFile);
+          fileInput.files = dt.files;
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          // If the browser forbids programmatic assignment, gracefully fall back.
+          console.warn('Drag-and-drop not supported for file input assignment:', err);
+        }
+      });
+    }
   }
   
   // Function to track progress
