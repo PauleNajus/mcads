@@ -397,7 +397,8 @@ footer {
 /* Card header icons using CSS classes for specificity */
 .card-header h5:before, .card-header .mb-0:before, .card-header h2:before, .card-header h3:before, .card-header h4:before {
   content: '\f0b0';
-  font-family: 'Font Awesome 5 Free';
+  /* Keep in sync with the vendored Font Awesome version (currently 6.x). */
+  font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
   margin-right: var(--spacing-sm);
   font-weight: 900;
 }
@@ -504,6 +505,12 @@ footer {
 }
 
 #languageDropdown .flag-icon {
+  margin-right: 0;
+}
+
+/* When using local SVG flags (<img class="flag-img">), rely on flex gap for spacing. */
+#languageDropdown .flag-img,
+.dropdown .dropdown-item-form .dropdown-item .flag-img {
   margin-right: 0;
 }
 
@@ -1787,7 +1794,8 @@ footer {
 
 .no-records-info:before {
   content: '\f059';
-  font-family: 'Font Awesome 5 Free';
+  /* Keep in sync with the vendored Font Awesome version (currently 6.x). */
+  font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
   font-weight: 900;
   position: absolute;
   left: var(--spacing-md);

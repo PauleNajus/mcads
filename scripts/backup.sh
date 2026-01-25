@@ -1,6 +1,24 @@
 #!/bin/bash
 # MCADS Docker Backup Script
-set -e
+set -euo pipefail
+
+# Prefer the modern Docker Compose plugin (`docker compose`). Fall back to legacy `docker-compose` if present.
+if command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+elif docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+else
+  echo "❌ Docker Compose is not available."
+  exit 1
+fi
+
+# Compose file selection:
+# - Always use docker-compose.yml
+# - If TLS certs exist, enable docker-compose.prod.yml (binds 443 + TLS config)
+COMPOSE_FILES=(-f docker-compose.yml)
+if [[ -f docker-compose.prod.yml && -f ssl/fullchain.pem && -f ssl/privkey.pem ]]; then
+  COMPOSE_FILES+=(-f docker-compose.prod.yml)
+fi
 
 BACKUP_DIR="./backups"
 DATE=$(date +"%Y%m%d_%H%M%S")
@@ -13,7 +31,7 @@ mkdir -p "${BACKUP_DIR}/${BACKUP_NAME}"
 
 # Backup PostgreSQL database
 echo "Backing up PostgreSQL database..."
-docker-compose exec -T db pg_dump -U mcads_user mcads_db > "${BACKUP_DIR}/${BACKUP_NAME}/database.sql"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db pg_dump -U mcads_user mcads_db > "${BACKUP_DIR}/${BACKUP_NAME}/database.sql"
 
 # Backup media files
 echo "Backing up media files..."
@@ -55,7 +73,7 @@ MCADS Backup Information
 ========================
 Backup Date: $(date)
 Backup Name: ${BACKUP_NAME}
-System Version: $(docker-compose exec -T web python manage.py --version)
+ System Version: $("${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T web python manage.py --version)
 Components:
 - PostgreSQL Database: database.sql
 - Media Files: media.tar.gz

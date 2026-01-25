@@ -23,8 +23,6 @@ wheels/
 # Django
 *.log
 local_settings.py
-db.sqlite3
-db.sqlite3-journal
 media/
 
 # Virtual Environments
@@ -62,3 +60,9 @@ staticfiles/
 CXR8 15 classes/
 CXR8 15/
 CXR8/
+
+# TLS / certificates (never commit)
+ssl/
+*.pem
+*.key
+*.crt

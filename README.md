@@ -30,7 +30,7 @@ Example of a GRAD-CAM heatmap:
 
 - **Backend**: Django 5.2, Python 3.11.9
 - **Machine Learning**: PyTorch 2.7.0, TorchXRayVision
-- **Database**: SQLite 3.49.1
+- **Database**: PostgreSQL (recommended: 15+)
 - **Frontend**: Django-Bootstrap5 25.1, HTML5, CSS3, JavaScript
 - **Deployment**: Cross-platform (Windows/Linux)
 
@@ -41,6 +41,7 @@ Example of a GRAD-CAM heatmap:
 - Python 3.11.9
 - pip (Python package manager)
 - Git
+- PostgreSQL (recommended: 15+)
 
 ### Setup Instructions
 
@@ -164,7 +165,11 @@ Create a `.env` file in the project root:
 SECRET_KEY=your-secret-key
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-DATABASE_URL=sqlite:///db.sqlite3
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=mcads_db
+DB_USER=mcads_user
+DB_PASSWORD=your-db-password
 ```
 
 ### Settings
@@ -196,7 +201,7 @@ Test images are available in the `tests/` directory:
 
 ### Production Considerations
 
-1. **Database**: Consider PostgreSQL for production
+1. **Database**: PostgreSQL (required)
 2. **Static Files**: Use a CDN or reverse proxy for static file serving
 3. **Security**: Update `SECRET_KEY` and disable `DEBUG`
 4. **WSGI Server**: Use Gunicorn or uWSGI

@@ -1,6 +1,24 @@
 #!/bin/bash
 # MCADS Docker Restore Script
-set -e
+set -euo pipefail
+
+# Prefer the modern Docker Compose plugin (`docker compose`). Fall back to legacy `docker-compose` if present.
+if command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+elif docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+else
+  echo "❌ Docker Compose is not available."
+  exit 1
+fi
+
+# Compose file selection:
+# - Always use docker-compose.yml
+# - If TLS certs exist, enable docker-compose.prod.yml (binds 443 + TLS config)
+COMPOSE_FILES=(-f docker-compose.yml)
+if [[ -f docker-compose.prod.yml && -f ssl/fullchain.pem && -f ssl/privkey.pem ]]; then
+  COMPOSE_FILES+=(-f docker-compose.prod.yml)
+fi
 
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <backup_name>"
@@ -22,7 +40,7 @@ echo "Starting MCADS restore from backup: $BACKUP_NAME"
 
 # Stop services
 echo "Stopping Docker services..."
-docker-compose down
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" down
 
 # Extract backup
 echo "Extracting backup..."
@@ -32,15 +50,15 @@ cd ..
 
 # Restore database
 echo "Restoring PostgreSQL database..."
-docker-compose up -d db
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d db
 sleep 10  # Wait for database to be ready
 
 # Drop and recreate database
-docker-compose exec -T db psql -U mcads_user -d postgres -c "DROP DATABASE IF EXISTS mcads_db;"
-docker-compose exec -T db psql -U mcads_user -d postgres -c "CREATE DATABASE mcads_db;"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d postgres -c "DROP DATABASE IF EXISTS mcads_db;"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d postgres -c "CREATE DATABASE mcads_db;"
 
 # Restore database data
-docker-compose exec -T db psql -U mcads_user -d mcads_db < "${BACKUP_DIR}/mcads_backup_${BACKUP_NAME}/database.sql"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d mcads_db < "${BACKUP_DIR}/mcads_backup_${BACKUP_NAME}/database.sql"
 
 # Restore media files
 echo "Restoring media files..."
@@ -62,7 +80,7 @@ rm -rf "${BACKUP_DIR}/mcads_backup_${BACKUP_NAME}/"
 
 # Start all services
 echo "Starting Docker services..."
-docker-compose up -d
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d
 
 # Wait for services to be ready
 echo "Waiting for services to be ready..."

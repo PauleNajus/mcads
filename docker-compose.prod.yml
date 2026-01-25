@@ -1,0 +1,19 @@
+services:
+  # Production reverse proxy: enable TLS on 443 and redirect 80 -> 443.
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/mcads.ssl.conf:/etc/nginx/conf.d/default.conf:ro
+      - mcads_staticfiles:/app/staticfiles:ro
+      - mcads_media:/app/media:ro
+      # Provide certs as ./ssl/fullchain.pem and ./ssl/privkey.pem (ignored by git)
+      - ./ssl:/etc/nginx/ssl:ro
+      # Optional ACME webroot (only needed if you later add certbot automation)
+      - certbot_www:/var/www/certbot
+
+volumes:
+  certbot_www:
+

@@ -57,7 +57,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django_bootstrap5',
     'csp',  # Content Security Policy
     'django_celery_beat',  # Celery beat scheduler
     'django_celery_results',  # Celery result backend
@@ -103,30 +102,30 @@ WSGI_APPLICATION = 'mcads_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Use PostgreSQL in production, SQLite in development
-if os.environ.get('DB_HOST'):
-    # Production: PostgreSQL
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'mcads_db'),
-            'USER': os.environ.get('DB_USER', 'mcads_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'mcads_secure_password_2024'),
-            'HOST': os.environ.get('DB_HOST', 'db'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-            'OPTIONS': {
-                'sslmode': 'disable',
-            },
-        }
+# MCADS uses PostgreSQL only (no fallback database backend).
+#
+# Supported env var sets:
+# - DB_* (preferred): DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+# - POSTGRES_* (Docker-friendly): POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+_db_name = os.environ.get('DB_NAME') or os.environ.get('POSTGRES_DB') or 'mcads_db'
+_db_user = os.environ.get('DB_USER') or os.environ.get('POSTGRES_USER') or 'mcads_user'
+_db_password = os.environ.get('DB_PASSWORD') or os.environ.get('POSTGRES_PASSWORD') or ''
+_db_host = os.environ.get('DB_HOST') or os.environ.get('POSTGRES_HOST') or 'localhost'
+_db_port = os.environ.get('DB_PORT') or os.environ.get('POSTGRES_PORT') or '5432'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': _db_name,
+        'USER': _db_user,
+        'PASSWORD': _db_password,
+        'HOST': _db_host,
+        'PORT': _db_port,
+        # Docker default: no TLS inside the private network.
+        # Override with DB_SSLMODE if you use a managed/external Postgres.
+        'OPTIONS': {'sslmode': os.environ.get('DB_SSLMODE', 'disable')},
     }
-else:
-    # Development: SQLite
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 
 # Password validation
@@ -252,18 +251,18 @@ CACHE_MIDDLEWARE_SECONDS = 300
 CACHE_MIDDLEWARE_KEY_PREFIX = 'mcads'
 
 # Content Security Policy (django-csp 3.8 format)
-# Allow Bootstrap via jsDelivr CDN; tighten other sources.
+# Serve all CSS/JS locally; keep CSP strict and simple.
 CSP_DEFAULT_SRC = ("'self'",)
 CSP_BASE_URI = ("'self'",)
 CSP_CONNECT_SRC = ("'self'",)
-CSP_FONT_SRC = ("'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+CSP_FONT_SRC = ("'self'",)
 CSP_FRAME_ANCESTORS = ("'none'",)
-CSP_IMG_SRC = ("'self'", 'data:', 'https://cdn.jsdelivr.net')
+CSP_IMG_SRC = ("'self'", 'data:')
 CSP_OBJECT_SRC = ("'none'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net')
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'",)
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'",)
 # Explicitly allow stylesheet <link>/<style> sources
-CSP_STYLE_SRC_ELEM = ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com')
+CSP_STYLE_SRC_ELEM = ("'self'", "'unsafe-inline'",)
 
 # Back-compat structure (has no effect for django-csp 3.8, retained for clarity)
 CONTENT_SECURITY_POLICY = {
@@ -271,12 +270,12 @@ CONTENT_SECURITY_POLICY = {
         'base-uri': ("'self'",),
         'connect-src': ("'self'",),
         'default-src': ("'self'",),
-        'font-src': ("'self'", 'https://cdn.jsdelivr.net'),
+        'font-src': ("'self'",),
         'frame-ancestors': ("'none'",),
-        'img-src': ("'self'", 'data:', 'https://cdn.jsdelivr.net'),
+        'img-src': ("'self'", 'data:',),
         'object-src': ("'none'",),
-        'script-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
-        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
+        'script-src': ("'self'", "'unsafe-inline'",),
+        'style-src': ("'self'", "'unsafe-inline'",),
     }
 }
 
@@ -285,13 +284,6 @@ if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 else:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-
-# Use CDN Bootstrap assets with django-bootstrap5
-BOOTSTRAP5 = {
-    "include_jquery": False,
-    "css_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
-    "javascript_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
-}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/

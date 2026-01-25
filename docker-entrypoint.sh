@@ -1,59 +1,100 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Starting MCADS Docker initialization..."
+# Minimal entrypoint for the MCADS Docker stack.
+#
+# Goals:
+# - Keep containers reproducible (no hardcoded credentials).
+# - Wait for DB/Redis without requiring extra OS tools (no pg_isready/redis-cli).
+# - Run migrations/collectstatic only for the web role (configurable).
 
-# Export critical environment variables to ensure they persist through worker restarts
-export USE_CELERY="${USE_CELERY:-1}"
-export REDIS_URL="${REDIS_URL}"
-export DB_HOST="${DB_HOST}"
-export DB_PORT="${DB_PORT}"
-export DB_USER="${DB_USER}"
-export DB_PASSWORD="${DB_PASSWORD}"
-export DB_NAME="${DB_NAME}"
+role="${MCADS_ROLE:-web}"
 
-echo "Environment variables exported (USE_CELERY=$USE_CELERY)"
+echo "MCADS entrypoint starting (role=${role})"
 
-# Wait for database to be ready
-echo "Waiting for database to be ready..."
-while ! pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
-    echo "Database is unavailable - sleeping"
-    sleep 2
-done
-echo "Database is ready!"
+# Ensure runtime directories exist (may be bind-mounted / empty).
+mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib
 
-# Wait for Redis to be ready
-echo "Waiting for Redis to be ready..."
-while ! redis-cli -h redis ping > /dev/null 2>&1; do
-    echo "Redis is unavailable - sleeping"
-    sleep 2
-done
-echo "Redis is ready!"
+# If we start as root (recommended for correct volume permissions), fix ownership
+# then re-exec as the unprivileged app user.
+if [[ "$(id -u)" == "0" && "${MCADS_ENTRYPOINT_REEXEC:-0}" != "1" ]]; then
+  chown -R mcads:mcads /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib
+  export MCADS_ENTRYPOINT_REEXEC=1
+  exec gosu mcads "$0" "$@"
+fi
 
-# Run database migrations
-echo "Running database migrations..."
-python manage.py migrate --noinput
+# Defaults mirror settings.py logic; only required when using Postgres.
+export DB_PORT="${DB_PORT:-5432}"
+export DB_NAME="${DB_NAME:-mcads_db}"
+export DB_USER="${DB_USER:-mcads_user}"
 
-# Create superuser if it doesn't exist
-echo "Creating superuser if needed..."
-python manage.py shell << EOF
-from django.contrib.auth import get_user_model
-User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@mcads.casa', 'admin123')
-    print('Superuser created successfully')
-else:
-    print('Superuser already exists')
-EOF
+wait_seconds="${MCADS_WAIT_TIMEOUT_SECONDS:-60}"
 
-# Collect static files
-echo "Collecting static files..."
-python manage.py collectstatic --noinput --clear
+if [[ -n "${DB_HOST:-}" ]]; then
+  echo "Waiting for Postgres (${DB_HOST}:${DB_PORT})..."
+  python - <<'PY'
+import os, sys, time
+import psycopg2
 
-# Create necessary directories
-mkdir -p /app/logs /app/media /app/data_exports /app/backups
+host = os.environ["DB_HOST"]
+port = int(os.environ.get("DB_PORT", "5432"))
+dbname = os.environ.get("DB_NAME", "mcads_db")
+user = os.environ.get("DB_USER", "mcads_user")
+password = os.environ.get("DB_PASSWORD", "")
+timeout = int(os.environ.get("MCADS_WAIT_TIMEOUT_SECONDS", "60"))
 
-echo "MCADS initialization completed successfully!"
+deadline = time.time() + timeout
+last_err: Exception | None = None
+while time.time() < deadline:
+    try:
+        conn = psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password, connect_timeout=3)
+        conn.close()
+        print("Postgres is ready.")
+        sys.exit(0)
+    except Exception as e:  # noqa: BLE001 - best effort readiness loop
+        last_err = e
+        time.sleep(2)
+print(f"Postgres not ready after {timeout}s: {last_err}", file=sys.stderr)
+sys.exit(1)
+PY
+fi
 
-# Execute the main command
+if [[ -n "${REDIS_URL:-}" ]]; then
+  echo "Waiting for Redis..."
+  python - <<'PY'
+import os, sys, time
+import redis
+
+url = os.environ["REDIS_URL"]
+timeout = int(os.environ.get("MCADS_WAIT_TIMEOUT_SECONDS", "60"))
+
+deadline = time.time() + timeout
+last_err: Exception | None = None
+client = redis.Redis.from_url(url)
+while time.time() < deadline:
+    try:
+        client.ping()
+        print("Redis is ready.")
+        sys.exit(0)
+    except Exception as e:  # noqa: BLE001 - best effort readiness loop
+        last_err = e
+        time.sleep(2)
+print(f"Redis not ready after {timeout}s: {last_err}", file=sys.stderr)
+sys.exit(1)
+PY
+fi
+
+if [[ "${role}" == "web" ]]; then
+  if [[ "${MCADS_RUN_MIGRATIONS:-1}" == "1" ]]; then
+    echo "Running migrations..."
+    python manage.py migrate --noinput
+  fi
+
+  if [[ "${MCADS_COLLECTSTATIC:-1}" == "1" ]]; then
+    echo "Collecting static files..."
+    python manage.py collectstatic --noinput --clear
+  fi
+fi
+
+echo "Starting process: $*"
 exec "$@"

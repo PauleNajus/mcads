@@ -16,8 +16,9 @@ max_requests = 1000  # Restart after 1000 requests to balance memory and perform
 max_requests_jitter = 50
 
 # Logging
-accesslog = "/opt/mcads/app/logs/gunicorn_access.log"
-errorlog = "/opt/mcads/app/logs/gunicorn_error.log"
+# In containers, prefer stdout/stderr so logs are captured by Docker.
+accesslog = "-"
+errorlog = "-"
 loglevel = "info"
 
 # Process naming
@@ -25,7 +26,7 @@ proc_name = 'mcads_gunicorn'
 
 # Server mechanics
 daemon = False
-pidfile = "/opt/mcads/app/gunicorn.pid"
+pidfile = "/tmp/gunicorn.pid"
 # user and group are handled by Docker container user context
 tmp_upload_dir = None
 
