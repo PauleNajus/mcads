@@ -15,6 +15,7 @@ A Django-based web application for automated chest X-ray analysis using deep lea
 - **Prediction History**: Track and review past analyses
 - **Interpretability**: Visualizations to understand model predictions
 - **Responsive UI**: Bootstrap-based interface optimized for medical workflows
+- **RESTful API**: Programmatic access to prediction services
 
 ## X & Y
 
@@ -109,6 +110,24 @@ The application will be available at `http://127.0.0.1:8000/`
 4. **Interpretability**: View visualizations to understand model decisions
 5. **History**: Access previous analyses and results
 
+### API Usage
+
+The application provides REST endpoints for programmatic access:
+
+```python
+import requests
+
+# Upload and analyze image
+with open('chest_xray.jpg', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/api/analyze/',
+        files={'image': f},
+        headers={'Authorization': 'Bearer your-token'}
+    )
+
+results = response.json()
+```
+
 ## Project Structure
 
 ```text
@@ -131,11 +150,10 @@ mcads/
 
 MCADS uses pre-trained models from the TorchXRayVision library:
 
-- **DenseNet-121**: Primary model for multi-label classification (all 18 pathologies)
-- **ResNet-50**: Alternative model with filtered pathology set (16 pathologies)
-- **Input Size**: 224x224 (DenseNet) or 512x512 (ResNet) pixels
+- **ResNet-50**: Primary model for multi-label classification
+- **Input Size**: 224x224 or 512x512 pixels
 - **Preprocessing**: Automatic normalization and resizing
-- **Output**: Probability scores for up to 18 pathologies
+- **Output**: Probability scores for 18 pathologies
 
 ## Configuration
 

@@ -4,6 +4,7 @@ django-environ==0.12.0
 
 # Security and validation packages
 python-magic==0.4.27  # For MIME type validation
+django-ratelimit==4.1.0  # Additional rate limiting
 django-csp==3.8  # Content Security Policy
 Pillow==11.3.0  # Keep updated for security
 
