@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Gunicorn configuration for MCADS Django application
 
 # Server socket
@@ -41,14 +43,15 @@ limit_request_field_size = 8190
 
 # Worker hooks to preserve environment variables
 import os
+from typing import Any
 
-def pre_fork(server, worker):
+def pre_fork(server: Any, worker: Any) -> None:
     """Called just before a worker is forked."""
     # Ensure critical environment variables are set
     if 'USE_CELERY' not in os.environ:
         os.environ['USE_CELERY'] = '1'
 
-def post_fork(server, worker):
+def post_fork(server: Any, worker: Any) -> None:
     """Called just after a worker has been forked."""
     # Verify environment variables are still set
     server.log.info(f"Worker {worker.pid} started with USE_CELERY={os.environ.get('USE_CELERY', 'NOT SET')}") 

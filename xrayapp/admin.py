@@ -1,10 +1,21 @@
+from __future__ import annotations
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult
+
+# Shared role colors used across admin displays.
+ROLE_COLORS: dict[str, str] = {
+    'Administrator': '#dc3545',  # Red
+    'Radiographer': '#28a745',   # Green
+    'Technologist': '#007bff',   # Blue
+    'Radiologist': '#6f42c1',    # Purple
+}
 
 
 # Unregister the default User admin
@@ -19,22 +30,20 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ('username', 'first_name', 'last_name', 'email')
     ordering = ('username',)
     
+    def get_queryset(self, request):
+        # Avoid N+1 queries in list_display (`obj.profile` access).
+        return super().get_queryset(request).select_related('profile')
+
     def get_role(self, obj):
         """Get user role with color coding"""
         try:
             role = obj.profile.role
-            colors = {
-                'Administrator': '#dc3545',  # Red
-                'Radiographer': '#28a745',   # Green
-                'Technologist': '#007bff',   # Blue
-                'Radiologist': '#6f42c1'     # Purple
-            }
-            color = colors.get(role, '#6c757d')
+            color = ROLE_COLORS.get(role, '#6c757d')
             return format_html(
                 '<span style="color: {}; font-weight: bold;">{}</span>',
                 color, role
             )
-        except:
+        except (ObjectDoesNotExist, AttributeError):
             return format_html('<span style="color: #dc3545;">{}</span>', _('No Profile'))
     get_role.short_description = _('Role')
     get_role.admin_order_field = 'profile__role'
@@ -63,7 +72,7 @@ class CustomUserAdmin(UserAdmin):
                 reverse('admin:xrayapp_userprofile_change', args=[profile.pk]),
                 _('Edit Profile & Role')
             )
-        except:
+        except (ObjectDoesNotExist, AttributeError):
             return format_html(
                 '<span style="color: red;">{}</span><br>'
                 '<a href="{}" class="button">{}</a>',
@@ -114,6 +123,9 @@ class UserProfileAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ('get_user_info', 'get_permissions_display', 'created_at', 'updated_at')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
 
     def get_user_full_name(self, obj):
         """Get user's full name"""
@@ -229,23 +241,20 @@ class XRayImageAdmin(admin.ModelAdmin):
         })
     )
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'user__profile')
+
     def get_user_with_role(self, obj):
         """Display user with their role"""
         try:
             role = obj.user.profile.role
-            colors = {
-                'Administrator': '#dc3545',
-                'Radiographer': '#28a745',
-                'Technologist': '#007bff',
-                'Radiologist': '#6f42c1'
-            }
-            color = colors.get(role, '#6c757d')
+            color = ROLE_COLORS.get(role, '#6c757d')
             return format_html(
                 '{} <span style="color: {}; font-size: 0.8em;">({})</span>',
                 obj.user.username, color, role
             )
-        except:
-            return obj.user.username
+        except (ObjectDoesNotExist, AttributeError):
+            return getattr(getattr(obj, "user", None), "username", _("Unknown"))
     get_user_with_role.short_description = _('User (Role)')
     get_user_with_role.admin_order_field = 'user__username'
 
@@ -261,7 +270,7 @@ class XRayImageAdmin(admin.ModelAdmin):
                 _('Can Edit Predictions'), '✅' if profile.can_edit_predictions() else '❌',
                 _('Can Delete'), '✅' if profile.can_delete_data() else '❌'
             )
-        except:
+        except (ObjectDoesNotExist, AttributeError):
             return _('No profile information available')
     get_user_role_info.short_description = _('User Role Info')
 
@@ -293,23 +302,21 @@ class PredictionHistoryAdmin(admin.ModelAdmin):
         'severity_level'
     )
 
+    def get_queryset(self, request):
+        # Avoid N+1 queries for user role and xray fields.
+        return super().get_queryset(request).select_related('user', 'user__profile', 'xray')
+
     def get_user_with_role(self, obj):
         """Display user with their role"""
         try:
             role = obj.user.profile.role
-            colors = {
-                'Administrator': '#dc3545',
-                'Radiographer': '#28a745',
-                'Technologist': '#007bff',
-                'Radiologist': '#6f42c1'
-            }
-            color = colors.get(role, '#6c757d')
+            color = ROLE_COLORS.get(role, '#6c757d')
             return format_html(
                 '{} <span style="color: {}; font-size: 0.8em;">({})</span>',
                 obj.user.username, color, role
             )
-        except:
-            return obj.user.username
+        except (ObjectDoesNotExist, AttributeError):
+            return getattr(getattr(obj, "user", None), "username", _("Unknown"))
     get_user_with_role.short_description = _('User (Role)')
     get_user_with_role.admin_order_field = 'user__username'
 
@@ -351,6 +358,9 @@ class VisualizationResultAdmin(admin.ModelAdmin):
         })
     )
     
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('xray', 'xray__user')
+
     def get_xray_info(self, obj):
         """Get X-ray information with link"""
         xray = obj.xray

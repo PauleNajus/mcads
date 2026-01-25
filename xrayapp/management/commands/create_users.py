@@ -1,16 +1,29 @@
+from __future__ import annotations
+
+import os
+import secrets
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
 from xrayapp.models import UserProfile
 
+
 class Command(BaseCommand):
     help = 'Creates default users for the system with roles'
 
     def handle(self, *args, **kwargs):
+        """Create a small set of default users for bootstrapping.
+
+        Security:
+        - Never hardcode passwords in source control.
+        - Passwords are read from environment variables if provided; otherwise a
+          strong random password is generated and printed once to stdout.
+        """
+
         users_data = [
             {
                 'username': 'admin',
-                'password': 'Qazwsxedc2025!',
                 'email': 'admin@mcads.casa',
                 'first_name': 'Adminfirst',
                 'last_name': 'Adminlast',
@@ -21,7 +34,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'paubun',
-                'password': 'PauBun2025!',
                 'email': 'paubun@mcads.casa',
                 'first_name': 'Paulius',
                 'last_name': 'Bundza',
@@ -32,7 +44,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'justri',
-                'password': 'JusTri2025!',
                 'email': 'justri@mcads.casa',
                 'first_name': 'Justas',
                 'last_name': 'Trinkūnas',
@@ -43,7 +54,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'rolber',
-                'password': 'RolBer2025!',
                 'email': 'rolber@mcads.casa',
                 'first_name': 'Rolandas',
                 'last_name': 'Bėrontas',
@@ -54,7 +64,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'technologist',
-                'password': 'TechNologist2025!',
                 'email': 'technologist@mcads.casa',
                 'first_name': 'Tech',
                 'last_name': 'Nologist',
@@ -65,7 +74,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'radiologist',
-                'password': 'RadioLogist2025!',
                 'email': 'radiologist@mcads.casa',
                 'first_name': 'Radio',
                 'last_name': 'Logist',
@@ -76,7 +84,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'guest',
-                'password': 'GuestUser2025!',
                 'email': 'guestuser@mcads.casa',
                 'first_name': 'Guest',
                 'last_name': 'User',
@@ -87,7 +94,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'gabryl',
-                'password': 'GabRyl2025!',
                 'email': 'gabryl@mcads.casa',
                 'first_name': 'Gabija',
                 'last_name': 'Ryliškytė',
@@ -98,7 +104,6 @@ class Command(BaseCommand):
             },
             {
                 'username': 'augbun',
-                'password': 'AugBun2025!',
                 'email': 'augbun@mcads.casa',
                 'first_name': 'Augustė',
                 'last_name': 'Bundzaitė',
@@ -109,12 +114,24 @@ class Command(BaseCommand):
             }
         ]
 
+        default_password = os.environ.get("MCADS_DEFAULT_USER_PASSWORD", "").strip() or None
+
         with transaction.atomic():
             for user_data in users_data:
                 username = user_data.pop('username')
-                password = user_data.pop('password')
                 role = user_data.pop('role')
                 hospital = user_data.pop('hospital')
+
+                # Password resolution order:
+                # 1) Per-user env var: MCADS_USER_PASSWORD_<USERNAME_UPPER>
+                # 2) Shared env var: MCADS_DEFAULT_USER_PASSWORD
+                # 3) Generated strong password (printed once)
+                password_env_key = f"MCADS_USER_PASSWORD_{username.upper()}"
+                password = os.environ.get(password_env_key, "").strip() or default_password
+                generated = False
+                if not password:
+                    password = secrets.token_urlsafe(18)
+                    generated = True
                 
                 # Check if user already exists
                 if User.objects.filter(username=username).exists():
@@ -122,9 +139,14 @@ class Command(BaseCommand):
                     continue
                 
                 # Create the user
-                user = User.objects.create_user(username=username, **user_data)
-                user.set_password(password)
-                user.save()
+                user = User.objects.create_user(username=username, password=password, **user_data)
+
+                if generated:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'Generated password for {username}: {password} (set {password_env_key} to control this)'
+                        )
+                    )
                 
                 # Create user profile with role and hospital
                 profile, created = UserProfile.objects.get_or_create(

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 import numpy as np
 import torch
 import torchvision
@@ -5,12 +8,14 @@ import skimage
 import cv2
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter threading issues
-from typing import Optional
+from typing import Any, Optional
 import torchxrayvision as xrv
 from .model_loader import load_model
 
+logger = logging.getLogger(__name__)
 
-def disable_inplace_relu(model):
+
+def disable_inplace_relu(model: torch.nn.Module) -> torch.nn.Module:
     """
     Recursively disables in-place ReLU operations in a model.
     Returns the modified model.
@@ -86,12 +91,12 @@ class GradCAM:
                 # Direct ResNet model
                 self.target_layer = actual_model.layer4[-1]
             else:
-                # Print model structure to help with debugging
-                print("Model structure:")
-                for name, module in actual_model.named_modules():
-                    print(f"Module: {name}")
+                # Log model structure to help with debugging (avoid stdout in production).
+                logger.debug("Unable to auto-detect Grad-CAM target layer; model structure follows.")
+                for name, _module in actual_model.named_modules():
+                    logger.debug("Module: %s", name)
                     if 'conv' in name.lower() or 'layer' in name.lower():
-                        print(f"  -> Potential target: {name}")
+                        logger.debug("Potential target: %s", name)
                 raise ValueError("Could not determine the target layer. Please specify explicitly.")
         else:
             self.target_layer = target_layer
@@ -143,7 +148,7 @@ class GradCAM:
             output = self.model(input_tensor)
         except RuntimeError as e:
             if "could not create a primitive" in str(e):
-                print("Warning: PyTorch primitive error in GRAD-CAM. Using CPU fallback.")
+                logger.warning("PyTorch primitive error in Grad-CAM; using CPU fallback.")
                 self.model = self.model.cpu()
                 input_tensor = input_tensor.cpu()
                 output = self.model(input_tensor)
@@ -202,7 +207,7 @@ class GradCAM:
             heatmap = heatmap / np.max(heatmap)
         else:
             # If heatmap is all zeros, create a fallback minimal heatmap
-            print("Warning: GRAD-CAM heatmap is all zeros. Creating fallback.")
+            logger.warning("Grad-CAM heatmap is all zeros; using a minimal fallback.")
             heatmap = np.ones_like(heatmap) * 0.1
         
         return heatmap, output
@@ -280,18 +285,17 @@ class GradCAM:
                 selected_indices.append(i)
         
         if not selected_indices:
-            print(f"No pathologies found above threshold {probability_threshold}")
-            print("Top 3 pathologies:")
+            logger.info("No pathologies above threshold %.3f; using top-1 fallback.", probability_threshold)
             top_indices = np.argsort(probabilities)[-3:][::-1]
             for idx in top_indices:
-                print(f"  {pathology_names[idx]}: {probabilities[idx]:.3f}")
+                logger.debug("Top pathology candidate: %s=%.3f", pathology_names[idx], probabilities[idx])
             # Use the top pathology if none above threshold
             selected_indices = [top_indices[0]]
             selected_pathologies = [(pathology_names[top_indices[0]], probabilities[top_indices[0]])]
         
-        print(f"Selected pathologies above {probability_threshold} threshold:")
+        logger.debug("Selected pathologies above %.3f threshold:", probability_threshold)
         for pathology, prob in selected_pathologies:
-            print(f"  {pathology}: {prob:.3f}")
+            logger.debug("  %s: %.3f", pathology, prob)
         
         # Generate combined heatmap
         combined_heatmap = None
@@ -562,18 +566,17 @@ class PixelLevelInterpretability:
                 selected_indices.append(i)
         
         if not selected_indices:
-            print(f"No pathologies found above threshold {probability_threshold}")
-            print("Top 3 pathologies:")
+            logger.info("No pathologies above threshold %.3f; using top-1 fallback.", probability_threshold)
             top_indices = np.argsort(probabilities)[-3:][::-1]
             for idx in top_indices:
-                print(f"  {pathology_names[idx]}: {probabilities[idx]:.3f}")
+                logger.debug("Top pathology candidate: %s=%.3f", pathology_names[idx], probabilities[idx])
             # Use the top pathology if none above threshold
             selected_indices = [top_indices[0]]
             selected_pathologies = [(pathology_names[top_indices[0]], probabilities[top_indices[0]])]
         
-        print(f"Selected pathologies above {probability_threshold} threshold:")
+        logger.debug("Selected pathologies above %.3f threshold:", probability_threshold)
         for pathology, prob in selected_pathologies:
-            print(f"  {pathology}: {prob:.3f}")
+            logger.debug("  %s: %.3f", pathology, prob)
         
         # Generate combined saliency map
         combined_saliency = None
@@ -603,7 +606,11 @@ class PixelLevelInterpretability:
         return combined_saliency, selected_pathologies, output
 
 
-def apply_gradcam(image_path, model_type='densenet', target_class=None):
+def apply_gradcam(
+    image_path: str,
+    model_type: str = 'densenet',
+    target_class: str | int | None = None,
+) -> dict[str, Any]:
     """
     Apply Grad-CAM to an X-ray image
     
@@ -681,7 +688,7 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
             preds = wrapped_model(img_tensor)
         except RuntimeError as e:
             if "could not create a primitive" in str(e):
-                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                logger.warning("PyTorch primitive error; using CPU fallback.")
                 wrapped_model = wrapped_model.cpu()
                 img_tensor = img_tensor.cpu()
                 preds = wrapped_model(img_tensor)
@@ -700,14 +707,14 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
         # If target_class is a pathology name, validate it exists
         if model_type == 'resnet':
             if target_class not in xrv.datasets.default_pathologies:
-                print(f"Pathology {target_class} not found. Using highest probability class.")
+                logger.warning("Pathology %s not found; using highest probability class.", target_class)
                 pred_idx = int(torch.argmax(preds).item())
                 target_class = xrv.datasets.default_pathologies[pred_idx]
         else:
             try:
                 target_class_idx = wrapped_model.pathologies.index(target_class)
             except ValueError:
-                print(f"Pathology {target_class} not found in model. Using highest probability class.")
+                logger.warning("Pathology %s not found in model; using highest probability class.", target_class)
                 pred_idx = int(torch.argmax(preds).item())
                 target_class = wrapped_model.pathologies[pred_idx]
     
@@ -737,7 +744,11 @@ def apply_gradcam(image_path, model_type='densenet', target_class=None):
     }
 
 
-def apply_combined_gradcam(image_path, model_type='densenet', probability_threshold=0.5):
+def apply_combined_gradcam(
+    image_path: str,
+    model_type: str = 'densenet',
+    probability_threshold: float = 0.5,
+) -> dict[str, Any]:
     """
     Apply combined interpretability to an X-ray image for all pathologies above threshold
     
@@ -833,7 +844,12 @@ def apply_combined_gradcam(image_path, model_type='densenet', probability_thresh
     }
 
 
-def apply_pixel_interpretability(image_path, model_type='densenet', target_class=None, use_smoothgrad=True):
+def apply_pixel_interpretability(
+    image_path: str,
+    model_type: str = 'densenet',
+    target_class: str | int | None = None,
+    use_smoothgrad: bool = True,
+) -> dict[str, Any]:
     """
     Apply Pixel-Level Interpretability to an X-ray image
     
@@ -901,7 +917,7 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
             preds = wrapped_model(img_tensor)
         except RuntimeError as e:
             if "could not create a primitive" in str(e):
-                print("Warning: PyTorch primitive error. Using CPU fallback.")
+                logger.warning("PyTorch primitive error; using CPU fallback.")
                 wrapped_model = wrapped_model.cpu()
                 img_tensor = img_tensor.cpu()
                 preds = wrapped_model(img_tensor)
@@ -920,14 +936,14 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
         # If target_class is a pathology name, validate it exists
         if model_type == 'resnet':
             if target_class not in xrv.datasets.default_pathologies:
-                print(f"Pathology {target_class} not found. Using highest probability class.")
+                logger.warning("Pathology %s not found; using highest probability class.", target_class)
                 pred_idx = int(torch.argmax(preds).item())
                 target_class = xrv.datasets.default_pathologies[pred_idx]
         else:
             try:
                 target_class_idx = wrapped_model.pathologies.index(target_class)
             except ValueError:
-                print(f"Pathology {target_class} not found in model. Using highest probability class.")
+                logger.warning("Pathology %s not found in model; using highest probability class.", target_class)
                 pred_idx = int(torch.argmax(preds).item())
                 target_class = wrapped_model.pathologies[pred_idx]
     
@@ -941,7 +957,7 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
         else:
             saliency_map, _ = pli.generate_saliency(img_tensor, target_class)
     except Exception as e:
-        print(f"Error generating pixel interpretability: {str(e)}")
+        logger.exception("Error generating pixel interpretability")
         # Return empty saliency map in case of error
         saliency_map = np.zeros((img.shape[1], img.shape[2]))
     
@@ -978,7 +994,12 @@ def apply_pixel_interpretability(image_path, model_type='densenet', target_class
     }
 
 
-def apply_combined_pixel_interpretability(image_path, model_type='densenet', probability_threshold=0.5, use_smoothgrad=True):
+def apply_combined_pixel_interpretability(
+    image_path: str,
+    model_type: str = 'densenet',
+    probability_threshold: float = 0.5,
+    use_smoothgrad: bool = True,
+) -> dict[str, Any]:
     """
     Apply combined Pixel-Level Interpretability to an X-ray image for all pathologies above threshold
     

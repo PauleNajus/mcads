@@ -1,11 +1,3 @@
-from django.shortcuts import render, redirect
-import threading
-from pathlib import Path
-from django.conf import settings
-from django.http import JsonResponse, HttpResponse
-from django.utils import timezone, translation
-from django.db.models import Q, Prefetch, Case, When, IntegerField, Avg, F, Value, FloatField
-from django.core.paginator import Paginator
 """Views for MCADS.
 
 This module contains various view functions. Some dynamic attributes on Django
@@ -13,28 +5,104 @@ models (like `.id`) are accessed via `.pk` to satisfy static type checkers.
 User profile access is guarded because `request.user` may not have a related
 `profile` yet at the time of access.
 """
-from dateutil.relativedelta import relativedelta
-from .forms import XRayUploadForm, PredictionHistoryFilterForm, UserInfoForm, UserProfileForm, ChangePasswordForm
-from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SavedRecord
-from .utils import (process_image,
-                   save_interpretability_visualization, save_overlay_visualization, save_saliency_map,
-                   save_heatmap, save_overlay)
-from .tasks import run_inference_task, run_interpretability_task, run_segmentation_task
+
+from __future__ import annotations
+
+import logging
+import threading
+from pathlib import Path
 from typing import Any
-from celery import Task
-from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
+
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
+from django.core.paginator import Paginator
+from django.db.models import Case, F, FloatField, IntegerField, Value, When
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone, translation
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
-import logging
-# import os  # Currently unused
+from django.views.decorators.http import require_POST
 
-# Set up logging
+from .forms import (
+    ChangePasswordForm,
+    PredictionHistoryFilterForm,
+    UserInfoForm,
+    UserProfileForm,
+    XRayUploadForm,
+)
+from .interpretability import (
+    apply_combined_gradcam,
+    apply_combined_pixel_interpretability,
+    apply_gradcam,
+    apply_pixel_interpretability,
+)
+from .models import PredictionHistory, SavedRecord, UserProfile, VisualizationResult, XRayImage
+from .pathology import PATHOLOGY_EXPLANATIONS
+from .tasks import run_inference_task, run_interpretability_task, run_segmentation_task
+from .utils import (
+    process_image,
+    save_heatmap,
+    save_interpretability_visualization,
+    save_overlay,
+    save_overlay_visualization,
+    save_saliency_map,
+)
+
 logger = logging.getLogger(__name__)
 
-def health(request):
+
+def _get_user_hospital(user: Any) -> str | None:
+    """Return the user's hospital (from `UserProfile`) if available."""
+
+    profile = getattr(user, "profile", None)
+    return getattr(profile, "hospital", None)
+
+
+def _apply_history_filters(
+    query: Any,
+    cleaned_data: dict[str, Any],
+    *,
+    xray_prefix: str,
+    pathology_prefix: str,
+) -> Any:
+    """Apply shared filter form logic to a queryset.
+
+    This keeps `prediction_history` and `saved_records` filtering consistent and
+    avoids duplicated, slightly divergent logic.
+    """
+
+    # Gender filter (xray fields)
+    if (gender := cleaned_data.get("gender")):
+        query = query.filter(**{f"{xray_prefix}gender": gender})
+
+    # Age range filters (xray date_of_birth)
+    now_date = timezone.now().date()
+    if (age_min := cleaned_data.get("age_min")) is not None:
+        min_age_date = now_date - relativedelta(years=age_min)
+        query = query.filter(**{f"{xray_prefix}date_of_birth__lte": min_age_date})
+
+    if (age_max := cleaned_data.get("age_max")) is not None:
+        max_age_date = now_date - relativedelta(years=age_max + 1)
+        query = query.filter(**{f"{xray_prefix}date_of_birth__gte": max_age_date})
+
+    # Date range filters (xray date_of_xray)
+    if (date_min := cleaned_data.get("date_min")):
+        query = query.filter(**{f"{xray_prefix}date_of_xray__gte": date_min})
+
+    if (date_max := cleaned_data.get("date_max")):
+        query = query.filter(**{f"{xray_prefix}date_of_xray__lte": date_max})
+
+    # Pathology threshold filter (history fields)
+    if (pathology := cleaned_data.get("pathology")) and (threshold := cleaned_data.get("pathology_threshold")) is not None:
+        query = query.filter(**{f"{pathology_prefix}{pathology}__gte": threshold})
+
+    return query
+
+def health(request: HttpRequest) -> HttpResponse:
     """Health check endpoint (used by Docker / reverse proxies).
 
     Keep this intentionally lightweight: return 200 if the Django process is up.
@@ -42,8 +110,12 @@ def health(request):
     return HttpResponse("ok", content_type="text/plain")
 
 
-def process_image_async(image_path, xray_instance, model_type):
-    """Process the image in a background thread and update the model with progress"""
+def process_image_async(image_path: Path, xray_instance: XRayImage, model_type: str) -> None:
+    """Process the image in a background thread and persist predictions.
+
+    Note: For production workloads prefer Celery. This thread fallback exists
+    for deployments where Celery is disabled/unavailable.
+    """
     try:
         logger.info(f"Starting image processing for {image_path} with model {model_type}")
         
@@ -51,36 +123,18 @@ def process_image_async(image_path, xray_instance, model_type):
         results = process_image(image_path, xray_instance, model_type)
         logger.info(f"Image processing completed successfully")
         
-        # Save predictions to the database - only save what's available in the results
-        xray_instance.atelectasis = results.get('Atelectasis', None)
-        xray_instance.cardiomegaly = results.get('Cardiomegaly', None)
-        xray_instance.consolidation = results.get('Consolidation', None)
-        xray_instance.edema = results.get('Edema', None)
-        xray_instance.effusion = results.get('Effusion', None)
-        xray_instance.emphysema = results.get('Emphysema', None)
-        xray_instance.fibrosis = results.get('Fibrosis', None)
-        xray_instance.hernia = results.get('Hernia', None)
-        xray_instance.infiltration = results.get('Infiltration', None)
-        xray_instance.mass = results.get('Mass', None)
-        xray_instance.nodule = results.get('Nodule', None)
-        xray_instance.pleural_thickening = results.get('Pleural_Thickening', None)
-        xray_instance.pneumonia = results.get('Pneumonia', None)
-        xray_instance.pneumothorax = results.get('Pneumothorax', None)
-        xray_instance.fracture = results.get('Fracture', None)
-        xray_instance.lung_opacity = results.get('Lung Opacity', None)
-        
-        # These fields will only be present in DenseNet results
-        if 'Enlarged Cardiomediastinum' in results:
-            xray_instance.enlarged_cardiomediastinum = results.get('Enlarged Cardiomediastinum', None)
-        if 'Lung Lesion' in results:
-            xray_instance.lung_lesion = results.get('Lung Lesion', None)
-        
-        # Calculate and save severity level
+        # Persist predictions and derived fields in one place.
+        xray_instance.apply_predictions_from_results(results)
         xray_instance.severity_level = xray_instance.calculate_severity_level
         xray_instance.save()
-        
-        # Create prediction history record
-        create_prediction_history(xray_instance, model_type)
+
+        # Create prediction history record (snapshot for audit/history page).
+        PredictionHistory.create_from_xray(xray_instance, model_type)
+
+        # Mark the record as fully completed *after* persisting predictions.
+        xray_instance.progress = 100
+        xray_instance.processing_status = 'completed'
+        xray_instance.save(update_fields=['progress', 'processing_status'])
         
         logger.info(f"Successfully processed and saved results for {image_path}")
         
@@ -89,10 +143,16 @@ def process_image_async(image_path, xray_instance, model_type):
         import traceback
         logger.error(traceback.format_exc())
         xray_instance.processing_status = 'error'
-        xray_instance.save()
+        xray_instance.save(update_fields=['processing_status'])
 
 
-def process_with_interpretability_async(image_path, xray_instance, model_type, interpretation_method, target_class=None):
+def process_with_interpretability_async(
+    image_path: Path,
+    xray_instance: XRayImage,
+    model_type: str,
+    interpretation_method: str,
+    target_class: str | None = None,
+) -> None:
     """Process the image with interpretability visualization in a background thread"""
     try:
         # Set initial progress
@@ -357,42 +417,21 @@ def process_with_interpretability_async(image_path, xray_instance, model_type, i
         xray_instance.save()
 
 
-def create_prediction_history(xray_instance, model_type):
-    """Create a prediction history record for an XRayImage"""
-    history = PredictionHistory(
-        user=xray_instance.user,
-        xray=xray_instance,
-        model_used=model_type,
-        # Copy all pathology values for historical record
-        atelectasis=xray_instance.atelectasis,
-        cardiomegaly=xray_instance.cardiomegaly,
-        consolidation=xray_instance.consolidation,
-        edema=xray_instance.edema,
-        effusion=xray_instance.effusion,
-        emphysema=xray_instance.emphysema,
-        fibrosis=xray_instance.fibrosis,
-        hernia=xray_instance.hernia,
-        infiltration=xray_instance.infiltration,
-        mass=xray_instance.mass,
-        nodule=xray_instance.nodule,
-        pleural_thickening=xray_instance.pleural_thickening,
-        pneumonia=xray_instance.pneumonia,
-        pneumothorax=xray_instance.pneumothorax,
-        fracture=xray_instance.fracture,
-        lung_opacity=xray_instance.lung_opacity,
-        enlarged_cardiomediastinum=xray_instance.enlarged_cardiomediastinum,
-        lung_lesion=xray_instance.lung_lesion,
-        # Copy severity level
-        severity_level=xray_instance.severity_level,
-    )
-    # Only save if we have a user assigned
-    if xray_instance.user:
-        history.save()
-    else:
-        logger.warning("Warning: XRayImage has no user assigned, skipping prediction history creation")
+def create_prediction_history(xray_instance: XRayImage, model_type: str) -> None:
+    """Create a prediction history record for an XRayImage.
+
+    Deprecated wrapper kept for backwards compatibility inside this module.
+    """
+    PredictionHistory.create_from_xray(xray_instance, model_type)
 
 
-def create_visualization_result(xray_instance, visualization_type, target_pathology, results, model_type):
+def create_visualization_result(
+    xray_instance: XRayImage,
+    visualization_type: str,
+    target_pathology: str,
+    results: dict[str, Any],
+    model_type: str,
+) -> VisualizationResult:
     """Create or update a VisualizationResult record for a specific pathology"""
     try:
         # Try to get existing visualization of same type for same pathology
@@ -443,52 +482,16 @@ def create_visualization_result(xray_instance, visualization_type, target_pathol
         raise
 
 
-def update_existing_prediction_history(xray_instance, model_type):
-    """Update existing prediction history record instead of creating a new one"""
-    try:
-        # Find the most recent prediction history record for this XRayImage
-        existing_history = PredictionHistory.objects.filter(xray=xray_instance).order_by('-created_at').first()
-        
-        if existing_history:
-            # Update the existing record with current data
-            existing_history.atelectasis = xray_instance.atelectasis
-            existing_history.cardiomegaly = xray_instance.cardiomegaly
-            existing_history.consolidation = xray_instance.consolidation
-            existing_history.edema = xray_instance.edema
-            existing_history.effusion = xray_instance.effusion
-            existing_history.emphysema = xray_instance.emphysema
-            existing_history.fibrosis = xray_instance.fibrosis
-            existing_history.hernia = xray_instance.hernia
-            existing_history.infiltration = xray_instance.infiltration
-            existing_history.mass = xray_instance.mass
-            existing_history.nodule = xray_instance.nodule
-            existing_history.pleural_thickening = xray_instance.pleural_thickening
-            existing_history.pneumonia = xray_instance.pneumonia
-            existing_history.pneumothorax = xray_instance.pneumothorax
-            existing_history.fracture = xray_instance.fracture
-            existing_history.lung_opacity = xray_instance.lung_opacity
-            existing_history.enlarged_cardiomediastinum = xray_instance.enlarged_cardiomediastinum
-            existing_history.lung_lesion = xray_instance.lung_lesion
-            existing_history.severity_level = xray_instance.severity_level
-            
-            # Update model used if different (in case visualization uses different model)
-            if existing_history.model_used != model_type:
-                existing_history.model_used = f"{existing_history.model_used}+{model_type}"
-            
-            existing_history.save()
-            logger.info(f"Updated existing prediction history record #{existing_history.pk} with visualization data")
-        else:
-            # If no existing record found, create a new one as fallback
-            logger.warning(f"No existing prediction history found for XRayImage #{xray_instance.id}, creating new record")
-            create_prediction_history(xray_instance, model_type)
-    except Exception as e:
-        logger.error(f"Error updating prediction history: {str(e)}")
-        # Fallback to creating new record if update fails
-        create_prediction_history(xray_instance, model_type)
+def update_existing_prediction_history(xray_instance: XRayImage, model_type: str) -> None:
+    """Update existing prediction history record instead of creating a new one.
+
+    Deprecated wrapper kept for backwards compatibility inside this module.
+    """
+    PredictionHistory.update_latest_for_xray(xray_instance, model_type)
 
 
 @login_required
-def home(request):
+def home(request: HttpRequest) -> HttpResponse:
     """
     Home page with image upload form.
     
@@ -528,28 +531,8 @@ def home(request):
             xray_instance.user = request.user
             # Set the requires_expert_review field (default to False)
             xray_instance.requires_expert_review = False
-            
-            # Set default values for fields that cannot be NULL in database
-            if not xray_instance.first_name:
-                xray_instance.first_name = ''
-            if not xray_instance.last_name:
-                xray_instance.last_name = ''
-            if not xray_instance.patient_id:
-                xray_instance.patient_id = ''
-            if not xray_instance.gender:
-                xray_instance.gender = ''
-            if not xray_instance.additional_info:
-                xray_instance.additional_info = ''
-            if not xray_instance.technologist_first_name:
-                xray_instance.technologist_first_name = ''
-            if not xray_instance.technologist_last_name:
-                xray_instance.technologist_last_name = ''
-            if not xray_instance.image_format:
-                xray_instance.image_format = ''
-            if not xray_instance.image_size:
-                xray_instance.image_size = ''
-            if not xray_instance.image_resolution:
-                xray_instance.image_resolution = ''
+            # NOTE: CharField/TextField defaults are empty strings; no need to
+            # manually backfill blanks here.
             
             # Set model_used field
             model_type = request.POST.get('model_type', 'densenet')
@@ -584,8 +567,7 @@ def home(request):
             started = False
             if use_celery:
                 try:
-                    task: Any = run_inference_task
-                    task.delay(xray_instance.pk, model_type)
+                    run_inference_task.delay(xray_instance.pk, model_type)
                     started = True
                 except Exception as e:
                     logger.warning(f"Celery unavailable; falling back to thread: {e}")
@@ -636,15 +618,15 @@ def home(request):
 
 
 @login_required
-def xray_results(request, pk):
+def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
     """View the results of the X-ray analysis"""
     # Get user's hospital from profile
-    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
         return redirect('home')
     
     # Allow access to any X-ray from the same hospital
-    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    xray_instance = XRayImage.objects.for_hospital(user_hospital).with_user_profile().get(pk=pk)
     
     # Build predictions dictionary based on model fields
     predictions = {
@@ -678,44 +660,8 @@ def xray_results(request, pk):
     # Sort predictions by value (highest to lowest)
     predictions = dict(sorted(predictions.items(), key=lambda item: item[1], reverse=True))
     
-    # Pathology explanations for educational purposes
-    pathology_explanations = {
-        'Atelectasis': _('Atelectasis refers to the collapse or incomplete expansion of lung tissue, resulting in reduced gas exchange. It can be caused by airway obstruction (resorption atelectasis), external compression of the lung (compressive atelectasis), or insufficient surfactant production. Common causes include mucus plugging, foreign bodies, tumors, pneumothorax, pleural effusion, and post-surgical complications. On chest X-rays, atelectasis appears as areas of increased opacity with volume loss, often accompanied by compensatory changes such as mediastinal shift, elevated hemidiaphragm, or rib crowding.'),
-        
-        'Cardiomegaly': _('Cardiomegaly refers to enlargement of the heart, typically identified on chest X-rays when the cardiothoracic ratio exceeds 0.50 on a posteroanterior (PA) view. It can result from various conditions including hypertension, heart failure, cardiomyopathy, valvular disease, or congenital heart defects. The enlarged cardiac silhouette may appear globular or have specific chamber enlargement patterns depending on the underlying cause. Cardiomegaly often indicates underlying cardiovascular disease and may require further evaluation with echocardiography or other cardiac imaging.'),
-        
-        'Consolidation': _('Consolidation represents the filling of alveolar spaces with fluid, pus, blood, or other material, replacing normal air-filled lung tissue. It appears as homogeneous opacity on chest X-rays, often with air bronchograms visible within the consolidated area. Common causes include pneumonia (bacterial, viral, or fungal), pulmonary edema, hemorrhage, or aspiration. The opacity typically has well-defined borders and may be lobar, segmental, or patchy in distribution. Clinical correlation is essential for determining the underlying cause and appropriate treatment.'),
-        
-        'Edema': _('Pulmonary edema is the accumulation of excess fluid in the lung tissue and alveolar spaces, resulting in impaired gas exchange. It can be cardiogenic (due to heart failure, valve disease, or fluid overload) or non-cardiogenic (due to acute lung injury, infection, or capillary leak). On chest X-rays, pulmonary edema appears as bilateral, symmetrical opacities that may have a "bat wing" or perihilar distribution. Additional findings may include cardiomegaly, pleural effusions, and prominent pulmonary vasculature. Early recognition is crucial as it can be life-threatening.'),
-        
-        'Effusion': _('Pleural effusion is the abnormal accumulation of fluid in the pleural space between the lung and chest wall. It can be transudative (due to heart failure, liver disease, or kidney disease) or exudative (due to infection, malignancy, or inflammatory conditions). On chest X-rays, pleural effusion appears as a homogeneous opacity that obscures the diaphragm and costophrenic angle, with a meniscus sign at the fluid-air interface. Large effusions can cause mediastinal shift away from the affected side and require drainage for both diagnostic and therapeutic purposes.'),
-        
-        'Emphysema': _('Emphysema is a chronic obstructive pulmonary disease characterized by permanent enlargement and destruction of alveolar spaces distal to terminal bronchioles. It is most commonly caused by smoking but can also result from alpha-1 antitrypsin deficiency or occupational exposures. On chest X-rays, emphysema appears as hyperinflation with flattened hemidiaphragms, increased anteroposterior diameter, and decreased lung markings. Advanced cases may show bullae formation and signs of pulmonary hypertension. High-resolution CT is more sensitive for detecting early emphysematous changes.'),
-        
-        'Fibrosis': _('Pulmonary fibrosis involves the thickening and scarring of lung tissue, leading to progressive loss of lung function. It can be idiopathic or secondary to various causes including occupational exposures (asbestosis, silicosis), medications, radiation therapy, or connective tissue diseases. On chest X-rays, fibrosis appears as reticular or reticulonodular opacities, often with a lower lobe predominance. Advanced cases may show honeycombing, traction bronchiectasis, and loss of lung volume. Early detection and treatment are important to slow disease progression.'),
-        
-        'Hernia': _('Hiatal hernia occurs when part of the stomach protrudes through the diaphragmatic opening into the thoracic cavity. It can be sliding (most common) or paraesophageal (less common but more serious). On chest X-rays, hiatal hernia may appear as a retrocardiac mass or air-fluid level behind the heart. Large hernias can compress adjacent structures and may be associated with complications such as gastric volvulus, obstruction, or strangulation. Barium studies or CT imaging may be needed for detailed evaluation.'),
-        
-        'Infiltration': _('Pulmonary infiltration refers to the abnormal accumulation of substances in lung tissue, including inflammatory cells, fluid, or other materials. It appears as areas of increased opacity on chest X-rays and can be caused by various conditions such as pneumonia, pulmonary edema, hemorrhage, or interstitial lung disease. The pattern and distribution of infiltrates can help narrow the differential diagnosis. Infiltrates may be patchy, diffuse, or have specific patterns like ground-glass opacity or crazy-paving pattern on high-resolution imaging.'),
-        
-        'Mass': _('A pulmonary mass is a focal opacity greater than 3 cm in diameter that appears on chest imaging. Masses can be benign (such as hamartomas or granulomas) or malignant (primary lung cancer or metastases). On chest X-rays, masses appear as well-defined or spiculated opacities that may be accompanied by additional findings such as pleural effusion, lymphadenopathy, or bone lesions. Further evaluation with CT imaging, PET scanning, and tissue sampling is typically required to determine the nature and extent of the mass.'),
-        
-        'Nodule': _('A pulmonary nodule is a focal opacity less than or equal to 3 cm in diameter surrounded by normal lung tissue. Nodules can be solitary or multiple and may be benign (granulomas, hamartomas) or malignant (primary or metastatic cancer). On chest X-rays, nodules appear as rounded opacities that may be calcified or non-calcified. The size, morphology, and growth rate of nodules help determine the need for further evaluation. CT imaging is often required for detailed characterization and follow-up.'),
-        
-        'Pleural Thickening': _('Pleural thickening involves the abnormal thickening of the pleural membranes surrounding the lungs, which can be focal or diffuse. It may result from previous infection (empyema, tuberculosis), asbestos exposure, trauma, or malignancy. On chest X-rays, pleural thickening appears as increased opacity along the pleural surfaces, often with blunting of the costophrenic angles. Extensive pleural thickening can restrict lung expansion and cause respiratory symptoms. High-resolution CT is more sensitive for detecting subtle pleural abnormalities and assessing disease extent.'),
-        
-        'Pneumonia': _('Pneumonia is an inflammatory condition of the lung tissue, usually caused by bacterial, viral, or fungal infections. It can also result from aspiration or chemical irritants. On chest X-rays, pneumonia appears as areas of consolidation or infiltration that may be lobar, segmental, or patchy in distribution. Air bronchograms are often visible within the consolidated areas. Clinical symptoms include fever, cough, shortness of breath, and chest pain. Prompt diagnosis and appropriate antibiotic therapy are essential for optimal outcomes.'),
-        
-        'Pneumothorax': _('Pneumothorax is the presence of air in the pleural space, causing partial or complete lung collapse. It can be spontaneous (primary in healthy individuals or secondary in those with lung disease) or traumatic (due to injury or medical procedures). On chest X-rays, pneumothorax appears as a lucent area without lung markings, with a visible pleural line separating the collapsed lung from the chest wall. Large pneumothoraces may cause mediastinal shift and require immediate decompression. Small pneumothoraces may resolve spontaneously with observation.'),
-        
-        'Fracture': _('Rib fractures are breaks in one or more of the bones that form the ribcage, commonly resulting from trauma, falls, or repetitive stress. On chest X-rays, fractures may appear as lucent lines, discontinuity of the cortex, or displacement of bone fragments. Multiple rib fractures can be associated with serious complications including pneumothorax, hemothorax, or injury to underlying organs. Pathological fractures may occur in patients with bone metastases or metabolic bone disease. Pain management and monitoring for complications are important aspects of treatment.'),
-        
-        'Lung Opacity': _('Lung opacity refers to any area of increased density on chest imaging that obscures normal lung anatomy. It is a general term that encompasses various pathological processes including consolidation, ground-glass opacity, or mass lesions. The pattern, distribution, and associated findings help narrow the differential diagnosis. Common causes include pneumonia, pulmonary edema, interstitial lung disease, or malignancy. Further evaluation with high-resolution CT imaging and clinical correlation is often needed to determine the specific underlying pathology.'),
-        
-        'Enlarged Cardiomediastinum': _('Enlarged cardiomediastinum refers to an increase in the combined width of the cardiac silhouette and mediastinal contours. On a standard posteroanterior (PA) view, it is commonly identified when the cardiothoracic ratio (maximum horizontal cardiac diameter divided by maximal thoracic diameter) exceeds 0.50. On an anteroposterior (AP) projection—often performed in supine or portable studies—a mediastinal width greater than approximately 6–8 cm at the level of the aortic knob likewise suggests enlargement. Common causes include: Cardiomegaly (e.g., dilated cardiomyopathy, left ventricular hypertrophy), Pericardial effusion, which produces a globular ("water‐bottle") silhouette, Aortic pathology (aneurysm or dissection) leading to mediastinal widening, Mediastinal masses or lymphadenopathy. Recognition of an enlarged cardiomediastinum is pivotal, as it often prompts further evaluation—such as echocardiography for cardiac enlargement or contrast-enhanced CT to assess aortic and mediastinal pathology.'),
-        
-        'Lung Lesion': _('A lung lesion is any abnormal area or growth in lung tissue that differs from normal lung anatomy. Lesions can be benign or malignant and may include nodules, masses, cysts, or areas of inflammation. On chest X-rays, lesions appear as focal opacities that may vary in size, shape, and density. The characteristics of the lesion, including its borders, calcification pattern, and growth rate, help determine the likelihood of malignancy. Further evaluation with CT imaging, PET scanning, and possibly tissue sampling is often required to establish a definitive diagnosis and guide appropriate treatment.')
-    }
+    # Pathology explanations for educational purposes (centralized for reuse).
+    pathology_explanations = PATHOLOGY_EXPLANATIONS
     
     # Calculate patient age if date_of_birth is provided
     patient_age = None
@@ -819,53 +765,27 @@ def xray_results(request, pk):
 
 
 @login_required
-def prediction_history(request):
+def prediction_history(request: HttpRequest) -> HttpResponse:
     """View prediction history with advanced filtering and pagination"""
     form = PredictionHistoryFilterForm(request.GET)
     
     # Get user's hospital from profile
-    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
         return redirect('home')
     
-    # Initialize query with optimized select_related to avoid N+1 queries
-    # Filter by users from the same hospital instead of just current user
-    query = PredictionHistory.objects.filter(user__profile__hospital=user_hospital)\
-                                    .select_related('xray', 'user', 'user__profile')\
-                                    .prefetch_related('xray__user')
+    # Filter by users from the same hospital and pre-join common relations to
+    # avoid N+1 queries in templates/admin.
+    query = PredictionHistory.objects.for_hospital(user_hospital).with_related()
     
     # Apply filters if the form is valid
     if form.is_valid():
-        # Gender filter
-        if form.cleaned_data.get('gender'):
-            query = query.filter(xray__gender=form.cleaned_data['gender'])
-        
-        # Age range filter
-        if form.cleaned_data.get('age_min') is not None:
-            # Calculate date based on minimum age
-            min_age_date = timezone.now().date() - relativedelta(years=form.cleaned_data['age_min'])
-            query = query.filter(xray__date_of_birth__lte=min_age_date)
-            
-        if form.cleaned_data.get('age_max') is not None:
-            # Calculate date based on maximum age
-            max_age_date = timezone.now().date() - relativedelta(years=form.cleaned_data['age_max'] + 1)
-            query = query.filter(xray__date_of_birth__gte=max_age_date)
-        
-        # Date range filter
-        if form.cleaned_data.get('date_min'):
-            query = query.filter(xray__date_of_xray__gte=form.cleaned_data['date_min'])
-            
-        if form.cleaned_data.get('date_max'):
-            query = query.filter(xray__date_of_xray__lte=form.cleaned_data['date_max'])
-        
-        # Pathology filter
-        if form.cleaned_data.get('pathology') and form.cleaned_data.get('pathology_threshold') is not None:
-            threshold = form.cleaned_data['pathology_threshold']
-            field_name = form.cleaned_data['pathology']
-            
-            # Dynamic field filtering
-            filter_kwargs = {f"{field_name}__gte": threshold}
-            query = query.filter(**filter_kwargs)
+        query = _apply_history_filters(
+            query,
+            form.cleaned_data,
+            xray_prefix="xray__",
+            pathology_prefix="",
+        )
         
         # Apply sorting
         sort_by = form.cleaned_data.get('sort_by', '')
@@ -951,16 +871,16 @@ def prediction_history(request):
 
 
 @login_required
-def delete_prediction_history(request, pk):
+def delete_prediction_history(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        user_hospital = _get_user_hospital(request.user)
         if user_hospital is None:
             return redirect('prediction_history')
         
         # Allow deletion of any record from the same hospital
-        history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
+        history_item = PredictionHistory.objects.for_hospital(user_hospital).get(pk=pk)
         history_item.delete()
         messages.success(request, _('Prediction history record has been deleted.'))
     except PredictionHistory.DoesNotExist:
@@ -970,19 +890,19 @@ def delete_prediction_history(request, pk):
 
 
 @login_required
-def delete_all_prediction_history(request):
+def delete_all_prediction_history(request: HttpRequest) -> HttpResponse:
     """Delete all prediction history records"""
     if request.method == 'POST':
         # Get user's hospital from profile
-        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        user_hospital = _get_user_hospital(request.user)
         if user_hospital is None:
             return redirect('prediction_history')
         
         # Count records before deletion for current hospital
-        count = PredictionHistory.objects.filter(user__profile__hospital=user_hospital).count()
+        count = PredictionHistory.objects.for_hospital(user_hospital).count()
         
         # Delete all records for current hospital
-        PredictionHistory.objects.filter(user__profile__hospital=user_hospital).delete()
+        PredictionHistory.objects.for_hospital(user_hospital).delete()
         
         if count > 0:
             messages.success(request, _('All %(count)d prediction history records have been deleted.') % {'count': count})
@@ -994,14 +914,14 @@ def delete_all_prediction_history(request):
 
 @login_required
 @require_POST
-def delete_visualization(request, pk):
+def delete_visualization(request: HttpRequest, pk: int) -> JsonResponse:
     """Delete a visualization result"""
     try:
         # Get the visualization
-        visualization = VisualizationResult.objects.get(pk=pk)
+        visualization = VisualizationResult.objects.with_xray_user_profile().get(pk=pk)
         
         # Check if user has permission to delete (must be from same hospital)
-        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        user_hospital = _get_user_hospital(request.user)
         if user_hospital is None:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         owner_profile = getattr(visualization.xray.user, 'profile', None)
@@ -1010,18 +930,12 @@ def delete_visualization(request, pk):
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Delete associated files
-        from pathlib import Path
-        import logging
-        from django.conf import settings
-        
         file_paths = [
             visualization.visualization_path,
             visualization.heatmap_path,
             visualization.overlay_path,
             visualization.saliency_path,
         ]
-        
-        logger = logging.getLogger(__name__)
         for file_path in file_paths:
             if file_path:
                 try:
@@ -1043,16 +957,16 @@ def delete_visualization(request, pk):
 
 
 @login_required
-def edit_prediction_history(request, pk):
+def edit_prediction_history(request: HttpRequest, pk: int) -> HttpResponse:
     """Edit a prediction history record"""
     try:
         # Get user's hospital from profile
-        user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+        user_hospital = _get_user_hospital(request.user)
         if user_hospital is None:
             return redirect('prediction_history')
         
         # Allow editing of any record from the same hospital
-        history_item = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
+        history_item = PredictionHistory.objects.for_hospital(user_hospital).get(pk=pk)
         
         if request.method == 'POST':
             # Handle form submission
@@ -1075,15 +989,15 @@ def edit_prediction_history(request, pk):
 
 
 @login_required
-def generate_interpretability(request, pk):
+def generate_interpretability(request: HttpRequest, pk: int) -> HttpResponse:
     """Generate interpretability visualization for an X-ray image"""
     # Get user's hospital from profile
-    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
         return redirect('home')
     
     # Allow access to any X-ray from the same hospital
-    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    xray_instance = XRayImage.objects.for_hospital(user_hospital).with_user_profile().get(pk=pk)
     
     # Get parameters from request
     interpretation_method = request.GET.get('method', 'gradcam')  # Default to Grad-CAM
@@ -1103,8 +1017,7 @@ def generate_interpretability(request, pk):
     started = False
     if use_celery:
         try:
-            task2: Any = run_interpretability_task
-            task2.delay(xray_instance.pk, model_type, interpretation_method, target_class)
+            run_interpretability_task.delay(xray_instance.pk, model_type, interpretation_method, target_class)
             started = True
         except Exception as e:
             logger.warning(f"Celery unavailable; falling back to thread: {e}")
@@ -1130,15 +1043,15 @@ def generate_interpretability(request, pk):
 
 
 @login_required
-def generate_segmentation(request, pk):
+def generate_segmentation(request: HttpRequest, pk: int) -> HttpResponse:
     """Generate anatomical segmentation for an X-ray image"""
     # Get user's hospital from profile
-    user_hospital = getattr(getattr(request.user, 'profile', None), 'hospital', None)
+    user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
         return redirect('home')
     
     # Allow access to any X-ray from the same hospital
-    xray_instance = XRayImage.objects.get(pk=pk, user__profile__hospital=user_hospital)
+    xray_instance = XRayImage.objects.for_hospital(user_hospital).with_user_profile().get(pk=pk)
     
     # Reset progress to 0 and set status to processing
     xray_instance.progress = 0
@@ -1150,8 +1063,7 @@ def generate_segmentation(request, pk):
     started = False
     if use_celery:
         try:
-            task: Task = run_segmentation_task  # type: ignore
-            task.delay(xray_instance.pk)
+            run_segmentation_task.delay(xray_instance.pk)
             started = True
         except Exception as e:
             logger.warning(f"Celery unavailable; falling back to thread: {e}")
@@ -1174,7 +1086,7 @@ def generate_segmentation(request, pk):
     return redirect('xray_results', pk=pk)
 
 
-def check_progress(request, pk):
+def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
     """AJAX endpoint to check processing progress - lightweight version for memory-constrained systems"""
     
     # Import here to avoid loading heavy dependencies
@@ -1300,7 +1212,7 @@ def check_progress(request, pk):
 
 
 @login_required
-def account_settings(request):
+def account_settings(request: HttpRequest) -> HttpResponse:
     """View for managing user account settings"""
     # Ensure user has a profile
     profile, created = UserProfile.objects.get_or_create(user=request.user)
@@ -1362,13 +1274,13 @@ def account_settings(request):
     return render(request, 'xrayapp/account_settings.html', context)
 
 
-def logout_confirmation(request):
+def logout_confirmation(request: HttpRequest) -> HttpResponse:
     """Display a confirmation page before logging out the user."""
     return render(request, 'registration/logout.html')
 
 
 @require_POST
-def set_language(request):
+def set_language(request: HttpRequest) -> HttpResponse:
     """Custom language switching view that integrates with user profile"""
     language = request.POST.get('language')
     
@@ -1377,7 +1289,13 @@ def set_language(request):
         translation.activate(language)
         
         # Get the redirect URL before creating the response
-        redirect_url = request.META.get('HTTP_REFERER', '/')
+        redirect_url = request.META.get('HTTP_REFERER') or '/'
+        if not url_has_allowed_host_and_scheme(
+            url=redirect_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            redirect_url = '/'
         response = redirect(redirect_url)
         
         # Set language in session using Django's standard session key
@@ -1408,14 +1326,14 @@ def set_language(request):
 
 @login_required
 @require_POST
-def toggle_save_record(request, pk):
+def toggle_save_record(request: HttpRequest, pk: int) -> JsonResponse:
     """Toggle save/unsave a prediction history record via AJAX"""
     try:
         # Get user's hospital from profile
         user_hospital = request.user.profile.hospital
         
         # Get the prediction history record (must be from same hospital)
-        prediction_record = PredictionHistory.objects.get(pk=pk, user__profile__hospital=user_hospital)
+        prediction_record = PredictionHistory.objects.for_hospital(user_hospital).get(pk=pk)
         
         # Check if record is already saved by this user
         saved_record, created = SavedRecord.objects.get_or_create(
@@ -1452,48 +1370,21 @@ def toggle_save_record(request, pk):
 
 
 @login_required
-def saved_records(request):
+def saved_records(request: HttpRequest) -> HttpResponse:
     """View saved prediction history records with advanced filtering"""
     form = PredictionHistoryFilterForm(request.GET)
     
-    # Get user's saved records with optimized queries
-    saved_records_query = SavedRecord.objects.filter(user=request.user)\
-                                           .select_related('prediction_history__xray', 'prediction_history__user')\
-                                           .prefetch_related('prediction_history__xray__user')\
-                                           .order_by('-saved_at')
+    # Get user's saved records with optimized queries (avoid N+1 in templates).
+    saved_records_query = SavedRecord.objects.for_user(request.user).with_related().order_by('-saved_at')
     
     # Apply filters if the form is valid
     if form.is_valid():
-        # Gender filter
-        if form.cleaned_data.get('gender'):
-            saved_records_query = saved_records_query.filter(prediction_history__xray__gender=form.cleaned_data['gender'])
-        
-        # Age range filter
-        if form.cleaned_data.get('age_min') is not None:
-            # Calculate date based on minimum age
-            min_age_date = timezone.now().date() - relativedelta(years=form.cleaned_data['age_min'])
-            saved_records_query = saved_records_query.filter(prediction_history__xray__date_of_birth__lte=min_age_date)
-            
-        if form.cleaned_data.get('age_max') is not None:
-            # Calculate date based on maximum age
-            max_age_date = timezone.now().date() - relativedelta(years=form.cleaned_data['age_max'] + 1)
-            saved_records_query = saved_records_query.filter(prediction_history__xray__date_of_birth__gte=max_age_date)
-        
-        # Date range filter
-        if form.cleaned_data.get('date_min'):
-            saved_records_query = saved_records_query.filter(prediction_history__xray__date_of_xray__gte=form.cleaned_data['date_min'])
-            
-        if form.cleaned_data.get('date_max'):
-            saved_records_query = saved_records_query.filter(prediction_history__xray__date_of_xray__lte=form.cleaned_data['date_max'])
-        
-        # Pathology filter
-        if form.cleaned_data.get('pathology') and form.cleaned_data.get('pathology_threshold') is not None:
-            threshold = form.cleaned_data['pathology_threshold']
-            field_name = f"prediction_history__{form.cleaned_data['pathology']}"
-            
-            # Dynamic field filtering
-            filter_kwargs = {f"{field_name}__gte": threshold}
-            saved_records_query = saved_records_query.filter(**filter_kwargs)
+        saved_records_query = _apply_history_filters(
+            saved_records_query,
+            form.cleaned_data,
+            xray_prefix="prediction_history__xray__",
+            pathology_prefix="prediction_history__",
+        )
     
     # Add pagination for better performance
     records_per_page = 25  # Default value
@@ -1517,45 +1408,45 @@ def saved_records(request):
 
 
 # Error handler views
-def handler400(request, exception=None):
+def handler400(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """400 Bad Request handler."""
     return render(request, 'errors/400.html', status=400)
 
-def handler401(request, exception=None):
+def handler401(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """401 Unauthorized handler."""
     return render(request, 'errors/401.html', status=401)
 
-def handler403(request, exception=None):
+def handler403(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """403 Forbidden handler."""
     return render(request, 'errors/403.html', status=403)
 
-def handler404(request, exception=None):
+def handler404(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """404 Not Found handler."""
     return render(request, 'errors/404.html', status=404)
 
-def handler408(request, exception=None):
+def handler408(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """408 Request Timeout handler."""
     return render(request, 'errors/408.html', status=408)
 
-def handler429(request, exception=None):
+def handler429(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
     """429 Too Many Requests handler."""
     return render(request, 'errors/429.html', status=429)
 
-def handler500(request):
+def handler500(request: HttpRequest) -> HttpResponse:
     """500 Internal Server Error handler."""
     return render(request, 'errors/500.html', status=500)
 
-def handler502(request):
+def handler502(request: HttpRequest) -> HttpResponse:
     """502 Bad Gateway handler."""
     return render(request, 'errors/502.html', status=502)
 
-def handler503(request):
+def handler503(request: HttpRequest) -> HttpResponse:
     """503 Service Unavailable handler."""
     return render(request, 'errors/503.html', status=503)
 
-def handler504(request):
+def handler504(request: HttpRequest) -> HttpResponse:
     """504 Gateway Timeout handler."""
     return render(request, 'errors/504.html', status=504)
 
-def terms_of_service(request):
+def terms_of_service(request: HttpRequest) -> HttpResponse:
     return render(request, 'xrayapp/terms_of_service.html')

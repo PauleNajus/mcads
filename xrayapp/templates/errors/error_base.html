@@ -3,57 +3,14 @@
 
 {% block title %}{% block error_title %}Error{% endblock %} - MCADS{% endblock %}
 
-{% block extra_css %}
-<style>
-    .error-container {
-        text-align: center;
-        padding: 4rem 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-    
-    .error-code {
-        font-size: 6rem;
-        font-weight: 900;
-        margin-bottom: 1rem;
-        color: #572437;
-        opacity: 0.8;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .error-divider {
-        width: 80px;
-        height: 4px;
-        background-color: var(--bs-secondary);
-        margin: 0 auto 2rem;
-        border-radius: 2px;
-        opacity: 0.5;
-    }
-    
-    .error-message {
-        font-size: 2rem;
-        margin-bottom: 1rem;
-        font-weight: 600;
-    }
-    
-    .error-description {
-        font-size: 1.1rem;
-        margin-bottom: 3rem;
-        max-width: 600px;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-10 col-lg-8">
-        <div class="error-container">
-            <h1 class="error-code">{% block error_code %}{% endblock %}</h1>
-            <div class="error-divider"></div>
-            <h2 class="error-message">{% block error_message %}{% endblock %}</h2>
-            <p class="error-description text-muted">{% block error_description %}{% endblock %}</p>
+        <div class="text-center py-5">
+            <h1 class="display-1 fw-bold text-primary opacity-75 mb-3">{% block error_code %}{% endblock %}</h1>
+            <hr class="border-secondary opacity-50 w-25 mx-auto mb-4">
+            <h2 class="h3 fw-semibold mb-3">{% block error_message %}{% endblock %}</h2>
+            <p class="lead text-body-secondary mx-auto w-75 mb-4">{% block error_description %}{% endblock %}</p>
             <a href="{% url 'home' %}" class="btn btn-primary btn-lg">
                 <i class="bi bi-house-door me-2"></i>{% trans "Go to Homepage" %}
             </a>

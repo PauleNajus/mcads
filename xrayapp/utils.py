@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
 import torch
 import torchxrayvision as xrv
 import skimage.io
@@ -10,10 +15,9 @@ from pathlib import Path
 import os
 from PIL import Image
 from PIL.ExifTags import TAGS
-from datetime import datetime
-from .interpretability import apply_gradcam, apply_pixel_interpretability, apply_combined_gradcam, apply_combined_pixel_interpretability
 from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder, load_segmentation_model
 from typing import Any, cast
+from .models import XRayImage
 
 # CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
 import logging
@@ -38,27 +42,47 @@ if hasattr(torch.backends, 'cudnn'):
 logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
 
 
-_model_cache = {}
-_ae_cache_key = "autoencoder"
+_model_cache: dict[str, Any] = {}
 _calibration_cache_key = "calibration"
 
-def load_model(model_type='densenet'):
+
+@dataclass(frozen=True, slots=True)
+class ImageMetadata:
+    """Small internal DTO for extracted image metadata."""
+
+    name: str
+    format: str
+    size: str
+    resolution: str
+    date_created: datetime | None
+
+    def as_dict(self) -> dict[str, Any]:
+        # Keep backward compatible structure for legacy code paths that expect dict-like access.
+        return {
+            "name": self.name,
+            "format": self.format,
+            "size": self.size,
+            "resolution": self.resolution,
+            "date_created": self.date_created,
+        }
+
+def load_model(model_type: str = 'densenet') -> tuple[torch.nn.Module, int]:
     """Compatibility wrapper: use shared cached loader."""
     return cached_load_model(model_type)
 
 
-def clear_model_cache():
+def clear_model_cache() -> None:
     """Deprecated; kept for backwards compatibility."""
     from .model_loader import clear_model_cache as _clear
     _clear()
 
 
-def load_autoencoder():
+def load_autoencoder() -> tuple[torch.nn.Module, int]:
     """Compatibility wrapper: use shared cached loader."""
     return cached_load_autoencoder()
 
 
-def compute_ood_score(img_np: np.ndarray) -> dict:
+def compute_ood_score(img_np: np.ndarray) -> dict[str, float | bool]:
     """Compute an OOD score via reconstruction error from the autoencoder.
 
     Args:
@@ -113,7 +137,7 @@ def _logit(p: float, eps: float = 1e-6) -> float:
     return float(np.log(p / (1.0 - p)))
 
 
-def load_calibration() -> dict:
+def load_calibration() -> dict[str, dict[str, float]]:
     """Load per-pathology temperature calibration and thresholds.
 
     Sources (in priority order):
@@ -167,7 +191,7 @@ def load_calibration() -> dict:
     return cfg
 
 
-def apply_calibration_and_thresholds(results: dict) -> tuple[dict, dict]:
+def apply_calibration_and_thresholds(results: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Apply temperature scaling (per label) and generate binary labels.
 
     Returns updated results and a metadata dictionary.
@@ -201,7 +225,7 @@ def apply_calibration_and_thresholds(results: dict) -> tuple[dict, dict]:
     return updated, meta
 
 
-def get_memory_info():
+def get_memory_info() -> dict[str, float | int]:
     """Get current memory usage information"""
     import psutil
     process = psutil.Process()
@@ -215,7 +239,7 @@ def get_memory_info():
     }
 
 
-def extract_image_metadata(image_path):
+def extract_image_metadata(image_path: str | Path) -> ImageMetadata:
     """
     Extract metadata from an image file
     
@@ -223,7 +247,7 @@ def extract_image_metadata(image_path):
         image_path: Path to the image file
         
     Returns:
-        dict: Dictionary with metadata (format, size, resolution, date_created)
+        ImageMetadata: strongly-typed metadata DTO
     """
     try:
         # Ensure image_path is a Path object for cross-platform compatibility
@@ -270,29 +294,33 @@ def extract_image_metadata(image_path):
                 try:
                     # ctime is creation time on Windows, change time on Unix
                     date_created = datetime.fromtimestamp(stats.st_ctime)
-                except:
+                except (OSError, ValueError):
                     # If there's an error, use modification time
                     date_created = datetime.fromtimestamp(stats.st_mtime)
             
-            return {
-                'name': Path(image_path).name,
-                'format': image_format,
-                'size': size,
-                'resolution': resolution,
-                'date_created': date_created
-            }
-    except Exception as e:
-        print(f"Error extracting metadata: {e}")
-        return {
-            'name': 'Unknown',
-            'format': 'Unknown',
-            'size': 'Unknown',
-            'resolution': 'Unknown',
-            'date_created': None
-        }
+            return ImageMetadata(
+                name=img_path.name,
+                format=str(image_format or "Unknown"),
+                size=str(size),
+                resolution=str(resolution),
+                date_created=date_created,
+            )
+    except Exception:
+        logger.exception("Error extracting metadata for %s", image_path)
+        return ImageMetadata(
+            name="Unknown",
+            format="Unknown",
+            size="Unknown",
+            resolution="Unknown",
+            date_created=None,
+        )
 
 
-def process_image(image_path, xray_instance=None, model_type='densenet'):
+def process_image(
+    image_path: str | Path,
+    xray_instance: XRayImage | None = None,
+    model_type: str = 'densenet',
+) -> dict[str, Any]:
     """
     Process an X-ray image and return predictions
     If xray_instance is provided, will update progress
@@ -306,22 +334,22 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     if xray_instance:
         xray_instance.processing_status = 'processing'
         xray_instance.progress = 5
-        xray_instance.save()
+        xray_instance.save(update_fields=['processing_status', 'progress'])
     
     # Extract and save image metadata
     if xray_instance:
         metadata = extract_image_metadata(image_path)
-        xray_instance.image_format = metadata['format']
-        xray_instance.image_size = metadata['size']
-        xray_instance.image_resolution = metadata['resolution']
-        xray_instance.image_date_created = metadata['date_created']
-        xray_instance.save()
+        xray_instance.image_format = metadata.format
+        xray_instance.image_size = metadata.size
+        xray_instance.image_resolution = metadata.resolution
+        xray_instance.image_date_created = metadata.date_created
+        xray_instance.save(update_fields=['image_format', 'image_size', 'image_resolution', 'image_date_created'])
     
     # Load and preprocess the image
     # Update progress to 10%
     if xray_instance:
         xray_instance.progress = 10
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     # Ensure image_path is a Path object, then convert to string for skimage
     image_path = Path(image_path)
@@ -334,7 +362,7 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     # Update progress to 20%
     if xray_instance:
         xray_instance.progress = 20
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     img = xrv.datasets.normalize(img, 255)
     
@@ -352,13 +380,13 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     if xray_instance:
         # Flag for review if likely OOD
         xray_instance.requires_expert_review = bool(ood.get('is_ood', False))
-        xray_instance.save()
+        xray_instance.save(update_fields=['requires_expert_review'])
     
     # Load model and get resize dimension
     # Update progress to 40%
     if xray_instance:
         xray_instance.progress = 40
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     model, resize_dim = load_model(model_type)
     model = cast(torch.nn.Module, model)
@@ -394,13 +422,13 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     # Update progress to 60%
     if xray_instance:
         xray_instance.progress = 60
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     # Get predictions
     # Update progress to 75%
     if xray_instance:
         xray_instance.progress = 75
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     with torch.inference_mode():
         # Use the model's forward method for both model types
@@ -425,22 +453,14 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     # Apply calibration and thresholds
     results, calib_meta = apply_calibration_and_thresholds(results)
 
-    # If we have an XRay instance, update its severity level
+    # If we have an XRay instance, report "almost done".
+    #
+    # NOTE: We deliberately do NOT set `processing_status='completed'` here,
+    # because prediction fields are persisted by the caller after this function
+    # returns. Marking "completed" early can briefly expose an inconsistent row.
     if xray_instance:
-        # Calculate severity level
-        xray_instance.severity_level = xray_instance.calculate_severity_level
-        
-        # Update progress to 90%
         xray_instance.progress = 90
-        xray_instance.save()
-        
-        # Add a small delay to ensure progress is displayed
-        time.sleep(0.5)
-        
-        # Update status to completed and progress to 100%
-        xray_instance.progress = 100
-        xray_instance.processing_status = 'completed'
-        xray_instance.save()
+        xray_instance.save(update_fields=['progress'])
     
     # Attach OOD + calibration metadata (not persisted to DB fields)
     results["OOD_Score"] = ood.get('ood_score')
@@ -455,114 +475,11 @@ def process_image(image_path, xray_instance=None, model_type='densenet'):
     return results 
 
 
-def process_image_with_interpretability(image_path, xray_instance=None, model_type='densenet', interpretation_method=None, target_class=None):
-    """
-    Process an X-ray image with interpretability visualization
-    
-    Args:
-        image_path: Path to the image
-        xray_instance: Database instance for progress tracking
-        model_type: 'densenet' or 'resnet'
-        interpretation_method: 'gradcam' or 'pli' or None
-        target_class: Target class for interpretability visualization
-        
-    Returns:
-        Dictionary with predictions and interpretability results
-    """
-    # Update status to processing if xray_instance is provided
-    if xray_instance:
-        xray_instance.processing_status = 'processing'
-        xray_instance.progress = 5
-        xray_instance.save()
-    
-    # Convert Path to string
-    if isinstance(image_path, Path):
-        image_path = str(image_path)
-    
-    # Extract image metadata
-    metadata = extract_image_metadata(image_path)
-    
-    # Run standard image processing to get predictions
-    if xray_instance:
-        xray_instance.progress = 50
-        xray_instance.save()
-        
-    results = process_image(image_path, None, model_type)  # Don't update xray_instance here
-    
-    # Apply interpretability method if requested
-    interpretation_results = {}
-    if interpretation_method:
-        if xray_instance:
-            xray_instance.progress = 75
-            xray_instance.save()
-            
-        if interpretation_method == 'gradcam':
-            # Apply Grad-CAM
-            cam_results = apply_gradcam(image_path, model_type, target_class)
-            interpretation_results = {
-                'method': 'gradcam',
-                'original': cam_results['original'],
-                'heatmap': cam_results['heatmap'],
-                'overlay': cam_results['overlay'],
-                'target_class': cam_results['target_class'],
-                'metadata': metadata  # Include metadata
-            }
-        elif interpretation_method == 'pli':
-            # Apply Pixel-Level Interpretability
-            pli_results = apply_pixel_interpretability(image_path, model_type, target_class)
-            interpretation_results = {
-                'method': 'pli',
-                'original': pli_results['original'],
-                'saliency_map': pli_results['saliency_map'],
-                'saliency_colored': pli_results['saliency_colored'],
-                'target_class': pli_results['target_class'],
-                'metadata': metadata  # Include metadata
-            }
-        elif interpretation_method == 'combined_gradcam':
-            # Apply Combined interpretability for pathologies above 0.5 threshold
-            combined_results = apply_combined_gradcam(image_path, model_type)
-            interpretation_results = {
-                'method': 'combined_gradcam',
-                'original': combined_results['original'],
-                'heatmap': combined_results['heatmap'],
-                'overlay': combined_results['overlay'],
-                'selected_pathologies': combined_results['selected_pathologies'],
-                'pathology_summary': combined_results['pathology_summary'],
-                'threshold': combined_results['threshold'],
-                'metadata': metadata  # Include metadata
-            }
-        elif interpretation_method == 'combined_pli':
-            # Apply Combined Pixel-Level Interpretability for pathologies above 0.5 threshold
-            combined_pli_results = apply_combined_pixel_interpretability(image_path, model_type)
-            interpretation_results = {
-                'method': 'combined_pli',
-                'original': combined_pli_results['original'],
-                'saliency_map': combined_pli_results['saliency_map'],
-                'saliency_colored': combined_pli_results['saliency_colored'],
-                'overlay': combined_pli_results['overlay'],
-                'selected_pathologies': combined_pli_results['selected_pathologies'],
-                'pathology_summary': combined_pli_results['pathology_summary'],
-                'threshold': combined_pli_results['threshold'],
-                'metadata': metadata  # Include metadata
-            }
-    
-    # Update status to completed if xray_instance is provided
-    if xray_instance:
-        # Add a small delay to ensure progress is displayed
-        time.sleep(0.5)
-        xray_instance.progress = 100
-        xray_instance.processing_status = 'completed'
-        xray_instance.save()
-    
-    # Include metadata in the final results
-    final_results = {**results, **interpretation_results}
-    if 'metadata' not in final_results:
-        final_results['metadata'] = metadata
-    
-    return final_results
-
-
-def save_interpretability_visualization(interpretation_results, output_path, format='png'):
+def save_interpretability_visualization(
+    interpretation_results: dict[str, Any],
+    output_path: Path,
+    format: str = 'png',
+) -> Path:
     """
     Save interpretability visualization to a file
     
@@ -651,7 +568,11 @@ def save_interpretability_visualization(interpretation_results, output_path, for
     return output_path
 
 
-def save_overlay_visualization(interpretation_results, output_path, format='png'):
+def save_overlay_visualization(
+    interpretation_results: dict[str, Any],
+    output_path: Path,
+    format: str = 'png',
+) -> Path:
     """
     Save only the overlay visualization to a file for pixel-level interpretability without white spaces
     
@@ -674,7 +595,11 @@ def save_overlay_visualization(interpretation_results, output_path, format='png'
     return output_path
 
 
-def save_saliency_map(interpretation_results, output_path, format='png'):
+def save_saliency_map(
+    interpretation_results: dict[str, Any],
+    output_path: Path,
+    format: str = 'png',
+) -> Path:
     """
     Save only the saliency map to a file for pixel-level interpretability without white spaces
     
@@ -703,7 +628,11 @@ def save_saliency_map(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_heatmap(interpretation_results, output_path, format='png'):
+def save_heatmap(
+    interpretation_results: dict[str, Any],
+    output_path: Path,
+    format: str = 'png',
+) -> Path:
     """
     Save only the heatmap to a file without white spaces
     
@@ -736,7 +665,11 @@ def save_heatmap(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def save_overlay(interpretation_results, output_path, format='png'):
+def save_overlay(
+    interpretation_results: dict[str, Any],
+    output_path: Path,
+    format: str = 'png',
+) -> Path:
     """
     Save only the overlay to a file without white spaces
     
@@ -762,7 +695,7 @@ def save_overlay(interpretation_results, output_path, format='png'):
     return output_path
 
 
-def apply_segmentation(image_path):
+def apply_segmentation(image_path: str) -> dict[str, Any]:
     """
     Apply anatomical segmentation to a chest X-ray image using PSPNet
     
@@ -842,7 +775,11 @@ def apply_segmentation(image_path):
     return results
 
 
-def save_segmentation_visualization(segmentation_results, output_path, structures_to_show=None):
+def save_segmentation_visualization(
+    segmentation_results: dict[str, Any],
+    output_path: Path,
+    structures_to_show: list[int] | None = None,
+) -> Path:
     """
     Save segmentation visualization with colored overlays for each anatomical structure
     
@@ -915,7 +852,10 @@ def save_segmentation_visualization(segmentation_results, output_path, structure
     return output_path
 
 
-def save_individual_segmentation_masks(segmentation_results, output_dir):
+def save_individual_segmentation_masks(
+    segmentation_results: dict[str, Any],
+    output_dir: str | Path,
+) -> dict[str, str]:
     """
     Save individual binary masks for each anatomical structure
     

@@ -1,8 +1,15 @@
+from __future__ import annotations
+
+import logging
+
+from datetime import date
+
 from django import forms
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.utils.translation import gettext_lazy as _
+from django.core.files.uploadedfile import UploadedFile
 try:
     import magic
     MAGIC_AVAILABLE = True
@@ -10,6 +17,8 @@ except ImportError:
     MAGIC_AVAILABLE = False
 from .models import XRayImage, UserProfile
 from django.contrib.auth.models import User
+
+logger = logging.getLogger(__name__)
 
 class XRayUploadForm(forms.ModelForm):
     class Meta:
@@ -24,7 +33,7 @@ class XRayUploadForm(forms.ModelForm):
             'additional_info': forms.Textarea(attrs={'rows': 3, 'maxlength': 1000}),
         }
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
@@ -47,7 +56,7 @@ class XRayUploadForm(forms.ModelForm):
         self.fields['technologist_first_name'].widget.attrs.update({'maxlength': 100})
         self.fields['technologist_last_name'].widget.attrs.update({'maxlength': 100})
     
-    def clean_image(self):
+    def clean_image(self) -> UploadedFile | None:
         """Validate uploaded image file"""
         image = self.cleaned_data.get('image')
         if not image:
@@ -59,45 +68,48 @@ class XRayUploadForm(forms.ModelForm):
         
         # Check MIME type for security if magic is available
         if MAGIC_AVAILABLE:
+            file_mime = None
             try:
-                file_mime = magic.from_buffer(image.read(), mime=True)
-                image.seek(0)  # Reset file pointer
+                buf = image.read()
+                file_mime = magic.from_buffer(buf, mime=True)
+            except Exception as exc:
+                # If magic fails, rely on Django's validation (do not block uploads).
+                logger.warning("python-magic MIME detection failed: %s", exc)
+            finally:
+                image.seek(0)  # Always reset file pointer after read
                 
                 allowed_mimes = [
                     'image/jpeg', 'image/jpg', 'image/png', 
                     'image/bmp', 'image/tiff', 'image/x-ms-bmp'
                 ]
                 
-                if file_mime not in allowed_mimes:
+                if file_mime and file_mime not in allowed_mimes:
                     raise ValidationError(_('Invalid file type. Only image files are allowed.'))
-            except Exception:
-                # If magic fails, rely on Django's validation
-                pass
             
         return image
     
-    def clean_first_name(self):
+    def clean_first_name(self) -> str:
         """Sanitize first name input"""
         first_name = self.cleaned_data.get('first_name', '').strip()
         if first_name and not first_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
             raise ValidationError(_('First name should only contain letters, spaces, hyphens, and apostrophes.'))
         return first_name
     
-    def clean_last_name(self):
+    def clean_last_name(self) -> str:
         """Sanitize last name input"""
         last_name = self.cleaned_data.get('last_name', '').strip()
         if last_name and not last_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
             raise ValidationError(_('Last name should only contain letters, spaces, hyphens, and apostrophes.'))
         return last_name
     
-    def clean_patient_id(self):
+    def clean_patient_id(self) -> str:
         """Validate patient ID format"""
         patient_id = self.cleaned_data.get('patient_id', '').strip()
         if patient_id and not patient_id.replace('-', '').replace('_', '').isalnum():
             raise ValidationError(_('Patient ID should only contain letters, numbers, hyphens, and underscores.'))
         return patient_id
     
-    def clean_date_of_birth(self):
+    def clean_date_of_birth(self) -> date | None:
         """Validate date of birth"""
         dob = self.cleaned_data.get('date_of_birth')
         if dob and dob > timezone.now().date():
@@ -106,21 +118,21 @@ class XRayUploadForm(forms.ModelForm):
             raise ValidationError(_('Date of birth seems too old.'))
         return dob
     
-    def clean_date_of_xray(self):
+    def clean_date_of_xray(self) -> date | None:
         """Validate X-ray date"""
         xray_date = self.cleaned_data.get('date_of_xray')
         if xray_date and xray_date > timezone.now().date():
             raise ValidationError(_('X-ray date cannot be in the future.'))
         return xray_date
     
-    def clean_technologist_first_name(self):
+    def clean_technologist_first_name(self) -> str:
         """Sanitize technologist first name input"""
         technologist_first_name = self.cleaned_data.get('technologist_first_name', '').strip()
         if technologist_first_name and not technologist_first_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
             raise ValidationError(_('Technologist first name should only contain letters, spaces, hyphens, and apostrophes.'))
         return technologist_first_name
     
-    def clean_technologist_last_name(self):
+    def clean_technologist_last_name(self) -> str:
         """Sanitize technologist last name input"""
         technologist_last_name = self.cleaned_data.get('technologist_last_name', '').strip()
         if technologist_last_name and not technologist_last_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
@@ -190,7 +202,7 @@ class PredictionHistoryFilterForm(forms.Form):
         label=_("Sort order")
     )
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         # Populate pathology choices dynamically
         pathology_choices = [
@@ -216,7 +228,7 @@ class PredictionHistoryFilterForm(forms.Form):
         ]
         self.fields['pathology'].choices = pathology_choices
     
-    def clean(self):
+    def clean(self) -> dict:
         """Cross-field validation"""
         cleaned_data = super().clean()
         age_min = cleaned_data.get('age_min')
@@ -269,7 +281,7 @@ class UserInfoForm(forms.ModelForm):
             'email': _('Email Address'),
         }
     
-    def clean_email(self):
+    def clean_email(self) -> str | None:
         """Validate email uniqueness"""
         email = self.cleaned_data.get('email')
         if email and User.objects.filter(email=email).exclude(id=self.instance.id).exists():
@@ -292,18 +304,18 @@ class ChangePasswordForm(forms.Form):
         label=_("Confirm New Password")
     )
     
-    def __init__(self, user, *args, **kwargs):
-        self.user = user
+    def __init__(self, user: User, *args: object, **kwargs: object) -> None:
+        self.user: User = user
         super().__init__(*args, **kwargs)
     
-    def clean_current_password(self):
+    def clean_current_password(self) -> str:
         """Validate current password"""
         current_password = self.cleaned_data.get('current_password')
         if not self.user.check_password(current_password):
             raise ValidationError(_('Current password is incorrect.'))
         return current_password
     
-    def clean_new_password(self):
+    def clean_new_password(self) -> str:
         """Validate new password strength"""
         new_password = self.cleaned_data.get('new_password') or ""
         
@@ -325,7 +337,7 @@ class ChangePasswordForm(forms.Form):
             
         return new_password
     
-    def clean(self):
+    def clean(self) -> dict:
         """Cross-field validation"""
         cleaned_data = super().clean()
         new_password = cleaned_data.get('new_password')

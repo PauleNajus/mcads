@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const themeToggle = document.querySelector('.theme-toggle');
+  // The template uses a stable id (`theme-toggle`). Keep a class fallback for older markup.
+  const themeToggle = document.getElementById('theme-toggle') || document.querySelector('.theme-toggle');
   const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
   
   // Function to set the theme

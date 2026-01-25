@@ -1,13 +1,173 @@
+from __future__ import annotations
+
+import logging
+from typing import Any, Iterable, Mapping
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-# User Roles Choices
-USER_ROLES = [
-    ('Administrator', _('Administrator')),
-    ('Radiographer', _('Radiographer')),
-    ('Technologist', _('Technologist')),
-    ('Radiologist', _('Radiologist')),
-]
+logger = logging.getLogger(__name__)
+
+# --- Domain constants ---------------------------------------------------------
+#
+# Keep shared domain lists/logic in one place. This reduces duplication across
+# models, admin, views and template tags without changing business behavior.
+
+
+class UserRole(models.TextChoices):
+    """Supported user roles for RBAC checks."""
+
+    ADMINISTRATOR = "Administrator", _("Administrator")
+    RADIOGRAPHER = "Radiographer", _("Radiographer")
+    TECHNOLOGIST = "Technologist", _("Technologist")
+    RADIOLOGIST = "Radiologist", _("Radiologist")
+
+
+# Normalized pathology field names used by both `XRayImage` and `PredictionHistory`.
+# NOTE: These are the DB field names (snake_case), not the model output labels.
+PATHOLOGY_FIELDS: tuple[str, ...] = (
+    "atelectasis",
+    "cardiomegaly",
+    "consolidation",
+    "edema",
+    "effusion",
+    "emphysema",
+    "fibrosis",
+    "hernia",
+    "infiltration",
+    "mass",
+    "nodule",
+    "pleural_thickening",
+    "pneumonia",
+    "pneumothorax",
+    "fracture",
+    "lung_opacity",
+    # DenseNet-only outputs (may be NULL depending on model)
+    "enlarged_cardiomediastinum",
+    "lung_lesion",
+)
+
+
+# Mapping from model output keys to our model field names.
+# TorchXRayVision has historically used both spaces and underscores in labels;
+# we support both to remain backwards compatible.
+RESULT_KEY_TO_FIELD: dict[str, str] = {
+    "Atelectasis": "atelectasis",
+    "Cardiomegaly": "cardiomegaly",
+    "Consolidation": "consolidation",
+    "Edema": "edema",
+    "Effusion": "effusion",
+    "Emphysema": "emphysema",
+    "Fibrosis": "fibrosis",
+    "Hernia": "hernia",
+    "Infiltration": "infiltration",
+    "Mass": "mass",
+    "Nodule": "nodule",
+    "Pleural Thickening": "pleural_thickening",
+    "Pleural_Thickening": "pleural_thickening",
+    "Pneumonia": "pneumonia",
+    "Pneumothorax": "pneumothorax",
+    "Fracture": "fracture",
+    "Lung Opacity": "lung_opacity",
+    "Enlarged Cardiomediastinum": "enlarged_cardiomediastinum",
+    "Lung Lesion": "lung_lesion",
+}
+
+
+def _iter_present_pathology_values(obj: object) -> list[float]:
+    """Return all non-null pathology values from a model instance.
+
+    This is intentionally Python-side. The DB-side equivalent is implemented
+    where it matters (list views / sorting) using `annotate()`.
+    """
+
+    values: list[float] = []
+    for field in PATHOLOGY_FIELDS:
+        raw = getattr(obj, field, None)
+        if raw is not None:
+            try:
+                values.append(float(raw))
+            except (TypeError, ValueError):
+                # Defensive: the DB field is FloatField; unexpected types should be logged.
+                logger.warning("Unexpected pathology value type for %s=%r", field, raw)
+    return values
+
+
+def _severity_from_values(values: Iterable[float]) -> int | None:
+    """Compute severity level from pathology probability values."""
+
+    values_list = list(values)
+    if not values_list:
+        return None
+    avg_probability = sum(values_list) / len(values_list)
+    if avg_probability <= 0.19:  # 0-19%
+        return 1
+    if avg_probability <= 0.30:  # 20-30%
+        return 2
+    return 3  # 31-100%
+
+
+# --- QuerySets / Managers -----------------------------------------------------
+#
+# These keep the ORM usage centralized and consistent (select_related/prefetch,
+# hospital scoping, etc.). Views should call these helpers instead of repeating
+# filters in many places.
+
+
+class XRayImageQuerySet(models.QuerySet):
+    def for_hospital(self, hospital: str) -> "XRayImageQuerySet":
+        return self.filter(user__profile__hospital=hospital)
+
+    def with_user_profile(self) -> "XRayImageQuerySet":
+        return self.select_related("user", "user__profile")
+
+
+XRayImageManager = models.Manager.from_queryset(XRayImageQuerySet)
+
+
+class PredictionHistoryQuerySet(models.QuerySet):
+    def for_hospital(self, hospital: str) -> "PredictionHistoryQuerySet":
+        return self.filter(user__profile__hospital=hospital)
+
+    def with_related(self) -> "PredictionHistoryQuerySet":
+        # Join everything templates/admin typically touch to avoid N+1 queries.
+        return self.select_related(
+            "xray",
+            "user",
+            "user__profile",
+            "xray__user",
+            "xray__user__profile",
+        )
+
+
+PredictionHistoryManager = models.Manager.from_queryset(PredictionHistoryQuerySet)
+
+
+class VisualizationResultQuerySet(models.QuerySet):
+    def with_xray_user_profile(self) -> "VisualizationResultQuerySet":
+        return self.select_related("xray", "xray__user", "xray__user__profile")
+
+
+VisualizationResultManager = models.Manager.from_queryset(VisualizationResultQuerySet)
+
+
+class SavedRecordQuerySet(models.QuerySet):
+    def for_user(self, user: Any) -> "SavedRecordQuerySet":
+        # Accept Any to support custom User models without importing auth types.
+        return self.filter(user=user)
+
+    def with_related(self) -> "SavedRecordQuerySet":
+        return self.select_related(
+            "prediction_history",
+            "prediction_history__user",
+            "prediction_history__user__profile",
+            "prediction_history__xray",
+            "prediction_history__xray__user",
+            "prediction_history__xray__user__profile",
+        )
+
+
+SavedRecordManager = models.Manager.from_queryset(SavedRecordQuerySet)
 
 # Create your models here.
 
@@ -82,6 +242,9 @@ class XRayImage(models.Model):
     
     # Model used for analysis
     model_used = models.CharField(max_length=50, default='densenet', db_index=True)
+
+    # Centralized queryset helpers (hospital scoping, select_related, etc.)
+    objects = XRayImageManager()
     
     class Meta:
         # Add composite indexes for commonly queried combinations
@@ -96,52 +259,16 @@ class XRayImage(models.Model):
         ordering = ['-uploaded_at']
     
     @property
-    def calculate_severity_level(self):
+    def calculate_severity_level(self) -> int | None:
         """Calculate severity level based on average of pathology probabilities
         1: Insignificant findings (0-19%)
         2: Moderate findings (20-30%)
         3: Significant findings (31-100%)
         """
-        pathology_fields = {
-            'atelectasis': self.atelectasis,
-            'cardiomegaly': self.cardiomegaly,
-            'consolidation': self.consolidation,
-            'edema': self.edema,
-            'effusion': self.effusion,
-            'emphysema': self.emphysema,
-            'fibrosis': self.fibrosis,
-            'hernia': self.hernia,
-            'infiltration': self.infiltration,
-            'mass': self.mass,
-            'nodule': self.nodule,
-            'pleural_thickening': self.pleural_thickening,
-            'pneumonia': self.pneumonia,
-            'pneumothorax': self.pneumothorax,
-            'fracture': self.fracture,
-            'lung_opacity': self.lung_opacity,
-            'enlarged_cardiomediastinum': self.enlarged_cardiomediastinum,
-            'lung_lesion': self.lung_lesion,
-        }
-        
-        # Filter out None values
-        valid_values = [v for v in pathology_fields.values() if v is not None]
-        
-        if not valid_values:
-            return None
-        
-        # Calculate average probability
-        avg_probability = sum(valid_values) / len(valid_values)
-        
-        # Determine severity level
-        if avg_probability <= 0.19:  # 0-19%
-            return 1
-        elif avg_probability <= 0.30:  # 20-30%
-            return 2
-        else:  # 31-100%
-            return 3
+        return _severity_from_values(_iter_present_pathology_values(self))
     
     @property
-    def severity_label(self):
+    def severity_label(self) -> str:
         """Get severity level label"""
         severity_mapping = {
             1: _("Insignificant findings"),
@@ -156,16 +283,29 @@ class XRayImage(models.Model):
             return severity_mapping.get(calculated, _("Unknown"))
         return severity_mapping.get(level, _("Unknown"))
     
-    def __str__(self):
+    def __str__(self) -> str:
         if self.patient_id and (self.first_name or self.last_name):
             return f"{self.first_name} {self.last_name} (ID: {self.patient_id}) - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
         return f"X-ray #{self.pk} - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
         
-    def get_patient_display(self):
+    def get_patient_display(self) -> str:
         """Return formatted patient information"""
         if self.first_name or self.last_name:
             return f"{self.first_name} {self.last_name}".strip()
         return _("Unknown patient")
+
+    def apply_predictions_from_results(self, results: Mapping[str, Any]) -> None:
+        """Update pathology fields from an inference results mapping.
+
+        The inference pipeline returns a dict-like structure keyed by pathology
+        names. We normalize that to our DB field names using `RESULT_KEY_TO_FIELD`.
+        """
+
+        for key, field_name in RESULT_KEY_TO_FIELD.items():
+            if key not in results:
+                continue
+            value = results.get(key)
+            setattr(self, field_name, None if value is None else float(value))
 
 
 class PredictionHistory(models.Model):
@@ -206,6 +346,8 @@ class PredictionHistory(models.Model):
     
     # Severity level
     severity_level = models.IntegerField(null=True, blank=True, db_index=True)
+
+    objects = PredictionHistoryManager()
     
     class Meta:
         # Add composite indexes for commonly queried combinations
@@ -220,52 +362,16 @@ class PredictionHistory(models.Model):
         ordering = ['-created_at']
     
     @property
-    def calculate_severity_level(self):
+    def calculate_severity_level(self) -> int | None:
         """Calculate severity level based on average of pathology probabilities
         1: Insignificant findings (0-19%)
         2: Moderate findings (20-30%)
         3: Significant findings (31-100%)
         """
-        pathology_fields = {
-            'atelectasis': self.atelectasis,
-            'cardiomegaly': self.cardiomegaly,
-            'consolidation': self.consolidation,
-            'edema': self.edema,
-            'effusion': self.effusion,
-            'emphysema': self.emphysema,
-            'fibrosis': self.fibrosis,
-            'hernia': self.hernia,
-            'infiltration': self.infiltration,
-            'mass': self.mass,
-            'nodule': self.nodule,
-            'pleural_thickening': self.pleural_thickening,
-            'pneumonia': self.pneumonia,
-            'pneumothorax': self.pneumothorax,
-            'fracture': self.fracture,
-            'lung_opacity': self.lung_opacity,
-            'enlarged_cardiomediastinum': self.enlarged_cardiomediastinum,
-            'lung_lesion': self.lung_lesion,
-        }
-        
-        # Filter out None values
-        valid_values = [v for v in pathology_fields.values() if v is not None]
-        
-        if not valid_values:
-            return None
-        
-        # Calculate average probability
-        avg_probability = sum(valid_values) / len(valid_values)
-        
-        # Determine severity level
-        if avg_probability <= 0.19:  # 0-19%
-            return 1
-        elif avg_probability <= 0.30:  # 20-30%
-            return 2
-        else:  # 31-100%
-            return 3
+        return _severity_from_values(_iter_present_pathology_values(self))
     
     @property
-    def severity_label(self):
+    def severity_label(self) -> str:
         """Get severity level label"""
         severity_mapping = {
             1: _("Insignificant findings"),
@@ -280,8 +386,56 @@ class PredictionHistory(models.Model):
             return severity_mapping.get(calculated, _("Unknown"))
         return severity_mapping.get(level, _("Unknown"))
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Prediction #{self.pk} for {self.xray} using {self.model_used}"
+
+    @classmethod
+    def create_from_xray(cls, xray: XRayImage, model_used: str) -> "PredictionHistory | None":
+        """Create a `PredictionHistory` snapshot from an `XRayImage`.
+
+        This centralizes a historically duplicated mapping across views/tasks.
+        """
+
+        if xray.user is None:
+            logger.warning("XRayImage %s has no user; skipping history creation", xray.pk)
+            return None
+
+        return cls.objects.create(
+            user=xray.user,
+            xray=xray,
+            model_used=model_used,
+            severity_level=xray.severity_level,
+            **{field: getattr(xray, field) for field in PATHOLOGY_FIELDS},
+        )
+
+    def sync_from_xray(self, xray: XRayImage, model_used: str | None = None) -> None:
+        """Update this record from an `XRayImage` (keeps history in sync).
+
+        Note: This does not change the `xray` relation, only the copied fields.
+        """
+
+        for field in PATHOLOGY_FIELDS:
+            setattr(self, field, getattr(xray, field))
+        self.severity_level = xray.severity_level
+
+        if model_used and self.model_used != model_used:
+            self.model_used = f"{self.model_used}+{model_used}"
+
+        self.save(update_fields=[*PATHOLOGY_FIELDS, "severity_level", "model_used"])
+
+    @classmethod
+    def update_latest_for_xray(cls, xray: XRayImage, model_used: str) -> "PredictionHistory | None":
+        """Update the most recent history record for an XRayImage.
+
+        Used when interpretability/segmentation runs after inference and should
+        attach results to the existing entry shown in "History Records".
+        """
+
+        latest = cls.objects.filter(xray=xray).order_by("-created_at").first()
+        if latest:
+            latest.sync_from_xray(xray, model_used=model_used)
+            return latest
+        return cls.create_from_xray(xray, model_used=model_used)
 
 
 class VisualizationResult(models.Model):
@@ -316,6 +470,8 @@ class VisualizationResult(models.Model):
     threshold = models.FloatField(null=True, blank=True)     # Threshold used (for PLI)
     confidence_score = models.FloatField(null=True, blank=True)  # Confidence score for segmentation
     metadata = models.JSONField(null=True, blank=True)  # Additional metadata as JSON
+
+    objects = VisualizationResultManager()
     
     class Meta:
         # Unique constraint: prevent duplicate visualization type + pathology combinations
@@ -336,7 +492,7 @@ class VisualizationResult(models.Model):
         # Order by creation time (newest first)
         ordering = ['-created_at']
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.visualization_type_display} - {self.target_pathology} for X-ray #{self.xray.pk}"
 
     @property
@@ -346,7 +502,7 @@ class VisualizationResult(models.Model):
         return str(choices_map.get(self.visualization_type, self.visualization_type))
     
     @property
-    def visualization_url(self):
+    def visualization_url(self) -> str | None:
         """Get the main visualization URL"""
         if self.visualization_path:
             from django.conf import settings
@@ -354,7 +510,7 @@ class VisualizationResult(models.Model):
         return None
     
     @property
-    def heatmap_url(self):
+    def heatmap_url(self) -> str | None:
         """Get the heatmap URL"""
         if self.heatmap_path:
             from django.conf import settings
@@ -362,7 +518,7 @@ class VisualizationResult(models.Model):
         return None
     
     @property
-    def overlay_url(self):
+    def overlay_url(self) -> str | None:
         """Get the overlay URL"""
         if self.overlay_path:
             from django.conf import settings
@@ -370,7 +526,7 @@ class VisualizationResult(models.Model):
         return None
     
     @property
-    def saliency_url(self):
+    def saliency_url(self) -> str | None:
         """Get the saliency map URL"""
         if self.saliency_path:
             from django.conf import settings
@@ -385,8 +541,8 @@ class UserProfile(models.Model):
     # Role-based access control
     role = models.CharField(
         max_length=20,
-        choices=USER_ROLES,
-        default='Radiographer',
+        choices=UserRole.choices,
+        default=UserRole.RADIOGRAPHER,
         db_index=True
     )
     
@@ -421,43 +577,43 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     # Role-based permission methods
-    def can_access_admin(self):
+    def can_access_admin(self) -> bool:
         """Check if user can access admin panel"""
-        return self.role == 'Administrator'
+        return self.role == UserRole.ADMINISTRATOR
     
-    def can_upload_xrays(self):
+    def can_upload_xrays(self) -> bool:
         """Check if user can upload X-ray images"""
-        return self.role in ['Administrator', 'Radiographer', 'Technologist']
+        return self.role in {UserRole.ADMINISTRATOR, UserRole.RADIOGRAPHER, UserRole.TECHNOLOGIST}
     
-    def can_view_all_patients(self):
+    def can_view_all_patients(self) -> bool:
         """Check if user can view all patients' data"""
-        return self.role in ['Administrator', 'Radiographer', 'Radiologist']
+        return self.role in {UserRole.ADMINISTRATOR, UserRole.RADIOGRAPHER, UserRole.RADIOLOGIST}
     
-    def can_edit_predictions(self):
+    def can_edit_predictions(self) -> bool:
         """Check if user can edit prediction results"""
-        return self.role in ['Administrator', 'Radiographer', 'Radiologist']
+        return self.role in {UserRole.ADMINISTRATOR, UserRole.RADIOGRAPHER, UserRole.RADIOLOGIST}
     
-    def can_delete_data(self):
+    def can_delete_data(self) -> bool:
         """Check if user can delete X-ray data"""
-        return self.role in ['Administrator', 'Radiographer']
+        return self.role in {UserRole.ADMINISTRATOR, UserRole.RADIOGRAPHER}
     
-    def can_generate_interpretability(self):
+    def can_generate_interpretability(self) -> bool:
         """Check if user can generate interpretability visualizations"""
-        return self.role in ['Administrator', 'Radiographer', 'Radiologist']
+        return self.role in {UserRole.ADMINISTRATOR, UserRole.RADIOGRAPHER, UserRole.RADIOLOGIST}
     
-    def can_manage_users(self):
+    def can_manage_users(self) -> bool:
         """Check if user can manage other users"""
-        return self.role == 'Administrator'
+        return self.role == UserRole.ADMINISTRATOR
     
-    def can_view_prediction_history(self):
+    def can_view_prediction_history(self) -> bool:
         """Check if user can view prediction history"""
         return True  # All users can view their own history
     
-    def can_change_settings(self):
+    def can_change_settings(self) -> bool:
         """Check if user can change account settings"""
         return True  # All users can change their own settings
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.user.username} - {self.role}"
 
 
@@ -466,6 +622,8 @@ class SavedRecord(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='saved_records', db_index=True)
     prediction_history = models.ForeignKey(PredictionHistory, on_delete=models.CASCADE, related_name='saved_by_users', db_index=True)
     saved_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    objects = SavedRecordManager()
     
     class Meta:
         # Ensure a user can only save a record once
@@ -477,5 +635,5 @@ class SavedRecord(models.Model):
             models.Index(fields=['prediction_history', 'saved_at']),
         ]
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.user.username} saved #{self.prediction_history.pk}"

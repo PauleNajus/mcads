@@ -1,35 +1,12 @@
-from django.shortcuts import redirect
-from django.urls import reverse
+from __future__ import annotations
+
+import logging
+
 from django.core.cache import cache
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
 import hashlib
-
-class AuthenticationMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        # Public paths that don't require authentication
-        public_paths = [
-            '/accounts/login/',
-            '/accounts/logout/',
-            '/secure-admin-mcads-2024/login/',  # Updated admin path
-            '/set-language/',  # Allow language switching for unauthenticated users
-            '/favicon.ico',
-            '/static/',
-            '/media/',
-        ]
-        
-        # Check if the path is public or if user is already authenticated
-        is_public = any(request.path.startswith(path) for path in public_paths)
-        
-        # If the path is not public and the user is not authenticated, redirect to login
-        if not is_public and not request.user.is_authenticated:
-            return redirect(f"{reverse('login')}?next={request.path}")
-            
-        response = self.get_response(request)
-        return response
+logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware:
@@ -40,7 +17,7 @@ class RateLimitMiddleware:
         self.max_attempts = 5
         self.lockout_duration = 300  # 5 minutes in seconds
         
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         # Only apply rate limiting to login attempts
         if request.path == '/accounts/login/' and request.method == 'POST':
             if not self._check_rate_limit(request):
@@ -62,25 +39,25 @@ class RateLimitMiddleware:
             
         return response
     
-    def _get_cache_key(self, request):
+    def _get_cache_key(self, request: HttpRequest) -> str:
         """Generate cache key based on IP address"""
         ip = self._get_client_ip(request)
         return f"login_attempts:{hashlib.sha256(ip.encode()).hexdigest()}"
     
-    def _get_client_ip(self, request):
+    def _get_client_ip(self, request: HttpRequest) -> str:
         """Get client IP address"""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             return x_forwarded_for.split(',')[0]
         return request.META.get('REMOTE_ADDR', '0.0.0.0')
     
-    def _check_rate_limit(self, request):
+    def _check_rate_limit(self, request: HttpRequest) -> bool:
         """Check if request is within rate limit"""
         cache_key = self._get_cache_key(request)
         attempts = cache.get(cache_key, 0)
         return attempts < self.max_attempts
     
-    def _record_failed_attempt(self, request):
+    def _record_failed_attempt(self, request: HttpRequest) -> None:
         """Record a failed login attempt"""
         cache_key = self._get_cache_key(request)
         attempts = cache.get(cache_key, 0)
@@ -100,7 +77,7 @@ class RoleBasedAccessMiddleware:
             '/interpretability/': 'can_generate_interpretability',
         }
         
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         # Skip check for public paths
         public_paths = [
             '/accounts/login/',
@@ -123,7 +100,7 @@ class RoleBasedAccessMiddleware:
         response = self.get_response(request)
         return response
     
-    def _check_access(self, request):
+    def _check_access(self, request: HttpRequest) -> bool:
         """Check if user has access to the requested resource"""
         try:
             # Get user profile
@@ -140,5 +117,6 @@ class RoleBasedAccessMiddleware:
             return True
             
         except Exception:
-            # If there's any error, deny access
+            # If there's any error, deny access and log for audit/debugging.
+            logger.exception("RoleBasedAccessMiddleware error for path=%s", request.path)
             return False 

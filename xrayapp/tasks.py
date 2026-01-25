@@ -5,9 +5,8 @@ from typing import Optional
 
 from celery import shared_task
 from django.conf import settings
-# from django.utils import timezone  # Currently unused
 
-from .models import XRayImage, PredictionHistory, VisualizationResult
+from .models import PATHOLOGY_FIELDS, XRayImage, PredictionHistory, VisualizationResult
 from .utils import (
     process_image,
     save_interpretability_visualization,
@@ -41,65 +40,20 @@ def run_inference_task(self, xray_id: int, model_type: str = 'densenet') -> Opti
     image_path = Path(settings.MEDIA_ROOT) / xray.image.name
     results = process_image(image_path, xray, model_type)
 
-    # Persist predictions
-    xray.atelectasis = results.get('Atelectasis')
-    xray.cardiomegaly = results.get('Cardiomegaly')
-    xray.consolidation = results.get('Consolidation')
-    xray.edema = results.get('Edema')
-    xray.effusion = results.get('Effusion')
-    xray.emphysema = results.get('Emphysema')
-    xray.fibrosis = results.get('Fibrosis')
-    xray.hernia = results.get('Hernia')
-    xray.infiltration = results.get('Infiltration')
-    xray.mass = results.get('Mass')
-    xray.nodule = results.get('Nodule')
-    xray.pleural_thickening = results.get('Pleural_Thickening')
-    xray.pneumonia = results.get('Pneumonia')
-    xray.pneumothorax = results.get('Pneumothorax')
-    xray.fracture = results.get('Fracture')
-    xray.lung_opacity = results.get('Lung Opacity')
-
-    if 'Enlarged Cardiomediastinum' in results:
-        xray.enlarged_cardiomediastinum = results.get('Enlarged Cardiomediastinum')
-    if 'Lung Lesion' in results:
-        xray.lung_lesion = results.get('Lung Lesion')
-
+    # Persist predictions (single normalization point).
+    xray.apply_predictions_from_results(results)
+    xray.severity_level = xray.calculate_severity_level
     xray.processing_status = 'completed'
     xray.progress = 100
     xray.save(update_fields=[
-        'atelectasis', 'cardiomegaly', 'consolidation', 'edema', 'effusion',
-        'emphysema', 'fibrosis', 'hernia', 'infiltration', 'mass', 'nodule',
-        'pleural_thickening', 'pneumonia', 'pneumothorax', 'fracture', 'lung_opacity',
-        'enlarged_cardiomediastinum', 'lung_lesion', 'processing_status', 'progress'
+        *PATHOLOGY_FIELDS,
+        'severity_level',
+        'processing_status',
+        'progress',
     ])
 
-    # Create/update prediction history
-    history = PredictionHistory(
-        user=xray.user,
-        xray=xray,
-        model_used=model_type,
-        atelectasis=xray.atelectasis,
-        cardiomegaly=xray.cardiomegaly,
-        consolidation=xray.consolidation,
-        edema=xray.edema,
-        effusion=xray.effusion,
-        emphysema=xray.emphysema,
-        fibrosis=xray.fibrosis,
-        hernia=xray.hernia,
-        infiltration=xray.infiltration,
-        mass=xray.mass,
-        nodule=xray.nodule,
-        pleural_thickening=xray.pleural_thickening,
-        pneumonia=xray.pneumonia,
-        pneumothorax=xray.pneumothorax,
-        fracture=xray.fracture,
-        lung_opacity=xray.lung_opacity,
-        enlarged_cardiomediastinum=xray.enlarged_cardiomediastinum,
-        lung_lesion=xray.lung_lesion,
-        severity_level=xray.severity_level,
-    )
-    if xray.user:
-        history.save()
+    # Create prediction history snapshot (if user exists).
+    PredictionHistory.create_from_xray(xray, model_type)
     return xray.pk
 
 
@@ -256,29 +210,8 @@ def run_interpretability_task(self, xray_id: int, model_type: str = 'densenet', 
     xray.processing_status = 'completed'
     xray.save(update_fields=['progress', 'processing_status'])
 
-    # Update most recent prediction history to keep in sync
-    hist = PredictionHistory.objects.filter(xray=xray).order_by('-created_at').first()
-    if hist:
-        hist.atelectasis = xray.atelectasis
-        hist.cardiomegaly = xray.cardiomegaly
-        hist.consolidation = xray.consolidation
-        hist.edema = xray.edema
-        hist.effusion = xray.effusion
-        hist.emphysema = xray.emphysema
-        hist.fibrosis = xray.fibrosis
-        hist.hernia = xray.hernia
-        hist.infiltration = xray.infiltration
-        hist.mass = xray.mass
-        hist.nodule = xray.nodule
-        hist.pleural_thickening = xray.pleural_thickening
-        hist.pneumonia = xray.pneumonia
-        hist.pneumothorax = xray.pneumothorax
-        hist.fracture = xray.fracture
-        hist.lung_opacity = xray.lung_opacity
-        hist.enlarged_cardiomediastinum = xray.enlarged_cardiomediastinum
-        hist.lung_lesion = xray.lung_lesion
-        hist.severity_level = xray.severity_level
-        hist.save()
+    # Keep the most recent history entry in sync with any updated model_used.
+    PredictionHistory.update_latest_for_xray(xray, model_used=model_type)
 
     return xray.pk
 

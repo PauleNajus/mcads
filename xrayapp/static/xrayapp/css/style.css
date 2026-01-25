@@ -1,44 +1,69 @@
 /* ==========================================
-   CSS CUSTOM PROPERTIES & VARIABLES
+   BRAND + BOOTSTRAP VARIABLE OVERRIDES
    ========================================== */
-:root {
-  /* Color palette */
-  --primary: #7b3349;
-  --primary-rgb: 123, 51, 73;
-  --primary-hover: #8e3b55;
-  --primary-dark: #572437;
-  --secondary: #6c757d;
-  --danger: #dc3545;
-  --warning: #ffc107;
-  --success: #198754;
-  --info: #0dcaf0;
-  --info-rgb: 13, 202, 240;
-  --light: #f8f9fa;
-  --dark: #212529;
-  --white: #fff;
-  
-  /* Background colors */
+/* Bootstrap 5 (5.3+) supports theming via CSS variables.
+   We override the brand color here and rely on Bootstrap components/utilities. */
+:root,
+[data-bs-theme="light"] {
+  /* Brand */
+  /* Replace Bootstrap default primary with MCADS brand primary. */
+  --bs-primary: #572437;
+  --bs-primary-rgb: 87, 36, 55;
+
+  /* Brand accents (hover/active). Keep the previous palette feel. */
+  --mcads-primary-hover: #7b3349;
+  --mcads-primary-hover-rgb: 123, 51, 73;
+  --mcads-primary-dark: #3e1926;
+
+  /* Legacy aliases (kept for backwards compatibility inside this stylesheet). */
+  --primary: var(--bs-primary);
+  --primary-rgb: var(--bs-primary-rgb);
+  --primary-hover: var(--mcads-primary-hover);
+  --primary-dark: var(--mcads-primary-dark);
+
+  /* Make links follow brand primary (Bootstrap defaults are blue). */
+  --bs-link-color: var(--bs-primary);
+  --bs-link-color-rgb: var(--bs-primary-rgb);
+  --bs-link-hover-color: var(--mcads-primary-hover);
+  --bs-link-hover-color-rgb: var(--mcads-primary-hover-rgb);
+
+  /* Keep the "blue" token aligned with our primary as well. */
+  --bs-blue: var(--bs-primary);
+
+  /* Focus ring should match brand (avoid default blue focus flash). */
+  --bs-focus-ring-color: rgba(var(--bs-primary-rgb), 0.25);
+
+  /* Bootstrap palette aliases used throughout this stylesheet. */
+  --secondary: var(--bs-secondary);
+  --danger: var(--bs-danger);
+  --warning: var(--bs-warning);
+  --success: var(--bs-success);
+  --info: var(--bs-info);
+  --info-rgb: var(--bs-info-rgb);
+  --light: var(--bs-light);
+  --dark: var(--bs-dark);
+  --white: var(--bs-white);
+
+  /* Background helpers (used by a few custom components). */
   --light-bg: #f8f9fa;
   --dark-bg: #212529;
-  --bs-body-bg: var(--light-bg);
-  --bs-body-color: var(--dark);
-  
-  /* Border and UI elements */
-  --light-border: #dee2e6;
-  --border-radius: 0.375rem;
-  --border-radius-lg: 0.5rem;
-  --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-  --box-shadow-lg: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
-  
-  /* Spacing */
+
+  /* Local layout helpers */
+  --light-border: var(--bs-border-color);
+  --border-radius: var(--bs-border-radius);
+  --border-radius-lg: var(--bs-border-radius-lg);
+  --box-shadow: var(--bs-box-shadow);
+  --box-shadow-lg: var(--bs-box-shadow-lg);
+
+  /* Spacing (legacy, used widely across templates). */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 0.75rem;
   --spacing-lg: 1rem;
   --spacing-xl: 1.25rem;
   --spacing-xxl: 1.5rem;
-  
-  /* Typography */
+
+  /* Typography (legacy) */
   --font-size-xs: 0.6rem;
   --font-size-sm: 0.75rem;
   --font-size-md: 0.875rem;
@@ -46,29 +71,52 @@
   --font-weight-normal: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  
-  /* Animation properties */
+
+  /* Motion (legacy) */
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.3s ease;
-  --animation-duration-fast: 0.16s;
-  --animation-duration-normal: 0.4s;
-  --animation-duration-slow: 0.8s;
-  
+
   /* Component specific */
   --card-padding: var(--spacing-xl);
-  --btn-padding-y: var(--spacing-sm);
-  --btn-padding-x: var(--spacing-lg);
-  --btn-padding-sm-y: var(--spacing-xs);
-  --btn-padding-sm-x: var(--spacing-sm);
-  
-  /* Progress bar animations */
-  --progress-stripe-size: 32px;
-  --progress-stripe-width: 8px;
-  --progress-glow-opacity: 0.3;
-  
+
   /* Star/save button styles */
-  --star-color-empty: #ffc107;
-  --star-color-filled: #dc3545;
+  --star-color-empty: var(--bs-warning);
+  --star-color-filled: var(--bs-danger);
+}
+
+/* Dropdown interaction colors (avoid default Bootstrap blue on active/focus). */
+.dropdown-menu {
+  --bs-dropdown-link-hover-bg: rgba(var(--bs-primary-rgb), 0.08);
+  --bs-dropdown-link-active-bg: rgba(var(--bs-primary-rgb), 0.16);
+  --bs-dropdown-link-active-color: var(--bs-body-color);
+}
+
+/* Mobile tap highlight can briefly flash blue in some browsers. Keep it on-brand. */
+a,
+button,
+.dropdown-item {
+  -webkit-tap-highlight-color: rgba(var(--bs-primary-rgb), 0.2);
+}
+
+/* Ensure Bootstrap's primary buttons use our brand primary (not the default blue). */
+.btn-primary {
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-bg: var(--mcads-primary-hover);
+  --bs-btn-hover-border-color: var(--mcads-primary-hover);
+  --bs-btn-active-bg: var(--mcads-primary-dark);
+  --bs-btn-active-border-color: var(--mcads-primary-dark);
+  --bs-btn-focus-shadow-rgb: var(--bs-primary-rgb);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-bg: var(--bs-primary);
+  --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-active-bg: var(--mcads-primary-dark);
+  --bs-btn-active-border-color: var(--mcads-primary-dark);
+  --bs-btn-focus-shadow-rgb: var(--bs-primary-rgb);
 }
 
 /* Star/save button styling */
@@ -109,144 +157,37 @@
 }
 
 [data-bs-theme="dark"] {
-  --primary: #7b3349;
-  --primary-hover: #8e3b55;
-  --primary-dark: #572437;
-  --bs-body-bg: var(--dark-bg);
-  --bs-body-color: var(--light);
-  --light-border: #495057;
-  --box-shadow: 0 0.125rem 0.25rem rgba(255, 255, 255, 0.075);
-  --box-shadow-lg: 0 0.25rem 0.5rem rgba(255, 255, 255, 0.1);
+  /* Keep brand consistent across color modes. */
+  --bs-primary: #572437;
+  --bs-primary-rgb: 87, 36, 55;
+  --mcads-primary-hover: #7b3349;
+  --mcads-primary-hover-rgb: 123, 51, 73;
+  --mcads-primary-dark: #3e1926;
+
+  /* Legacy aliases */
+  --primary: var(--bs-primary);
+  --primary-rgb: var(--bs-primary-rgb);
+  --primary-hover: var(--mcads-primary-hover);
+  --primary-dark: var(--mcads-primary-dark);
+
+  --bs-link-color: var(--bs-primary);
+  --bs-link-color-rgb: var(--bs-primary-rgb);
+  --bs-link-hover-color: var(--mcads-primary-hover);
+  --bs-link-hover-color-rgb: var(--mcads-primary-hover-rgb);
+  --bs-blue: var(--bs-primary);
+
+  --bs-focus-ring-color: rgba(var(--bs-primary-rgb), 0.25);
+
+  --light-border: var(--bs-border-color);
 }
 
 /* ==========================================
-   RESET & BASE STYLES
+   SMALL GLOBAL HELPERS (KEEP MINIMAL)
    ========================================== */
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  overflow-x: hidden;
-  box-sizing: border-box;
-  overscroll-behavior: none;
-}
+/* Bootstrap already ships resets/utilities; avoid overriding core classes here. */
 
-html {
-  -webkit-overflow-scrolling: touch;
-  min-height: 100vh;
-}
-
-body {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.d-flex.flex-column.min-vh-100 {
-  height: 100vh !important;
-  min-height: 100vh !important;
-}
-
-.container-fluid {
-  padding-bottom: 0 !important;
-}
-
-footer {
-  flex-shrink: 0;
-  margin-top: auto !important;
-}
-
-/* ==========================================
-   UTILITY CLASSES
-   ========================================== */
-.bg-primary { background-color: var(--primary) !important; }
-.text-primary { color: var(--primary) !important; }
-.border-primary { border-color: var(--primary) !important; }
-.text-danger { color: var(--danger) !important; }
-.text-warning { color: var(--warning) !important; }
-.text-success { color: var(--success) !important; }
-.text-info { color: var(--info) !important; }
-.border-danger { border-color: var(--danger) !important; }
-
-/* ==========================================
-   BUTTON STYLES - CONSOLIDATED
-   ========================================== */
-.btn-primary,
-.btn-warning,
-.btn-success,
-.btn-info,
-.btn-outline-primary,
-.btn-outline-warning,
-.btn-outline-success,
-.btn-outline-info {
-  background-color: transparent !important;
-  border: 1px solid var(--secondary) !important;
-  color: var(--secondary) !important;
-  padding: var(--btn-padding-y) var(--btn-padding-x);
-  font-weight: var(--font-weight-normal);
-  border-radius: var(--border-radius);
-  transition: all var(--transition-normal);
-}
-
-.btn-danger,
-.btn-outline-danger {
-  background-color: transparent !important;
-  border: 1px solid var(--danger) !important;
-  color: var(--danger) !important;
-  padding: var(--btn-padding-y) var(--btn-padding-x);
-  font-weight: var(--font-weight-normal);
-  border-radius: var(--border-radius);
-  transition: all var(--transition-normal);
-}
-
-/* Button hover/focus/active states */
-.btn-primary:hover, .btn-primary:focus, .btn-primary:active, .btn-primary.active,
-.btn-warning:hover, .btn-warning:focus, .btn-warning:active, .btn-warning.active,
-.btn-success:hover, .btn-success:focus, .btn-success:active, .btn-success.active,
-.btn-info:hover, .btn-info:focus, .btn-info:active, .btn-info.active,
-.btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary:active, .btn-outline-primary.active,
-.btn-outline-warning:hover, .btn-outline-warning:focus, .btn-outline-warning:active, .btn-outline-warning.active,
-.btn-outline-success:hover, .btn-outline-success:focus, .btn-outline-success:active, .btn-outline-success.active,
-.btn-outline-info:hover, .btn-outline-info:focus, .btn-outline-info:active, .btn-outline-info.active {
-  background-color: var(--secondary) !important;
-  border-color: var(--secondary) !important;
-  color: white !important;
-}
-
-.btn-danger:hover, .btn-danger:focus, .btn-danger:active, .btn-danger.active,
-.btn-outline-danger:hover, .btn-outline-danger:focus, .btn-outline-danger:active, .btn-outline-danger.active {
-  background-color: var(--danger) !important;
-  border-color: var(--danger) !important;
-  color: white !important;
-}
-
-/* Small button variations */
-.btn-sm.btn-primary, .btn-sm.btn-warning, .btn-sm.btn-success, .btn-sm.btn-info {
-  padding: var(--btn-padding-sm-y) var(--btn-padding-sm-x);
-  font-size: var(--font-size-md);
-}
-
-.btn-sm.btn-danger {
-  padding: var(--btn-padding-sm-y) var(--btn-padding-sm-x);
-  font-size: var(--font-size-md);
-}
-
-/* Print dropdown specific styles */
-.btn-outline-primary.dropdown-toggle:not(.btn-outline-secondary):not(.btn-outline-danger):not(.btn-outline-warning):not(.btn-outline-success):not(.btn-outline-info) {
-  color: var(--primary) !important;
-  border-color: var(--primary) !important;
-  background-color: transparent !important;
-}
-
-.btn-outline-primary.dropdown-toggle:not(.btn-outline-secondary):not(.btn-outline-danger):not(.btn-outline-warning):not(.btn-outline-success):not(.btn-outline-info):hover,
-.btn-outline-primary.dropdown-toggle:not(.btn-outline-secondary):not(.btn-outline-danger):not(.btn-outline-warning):not(.btn-outline-success):not(.btn-outline-info):focus,
-.btn-outline-primary.dropdown-toggle:not(.btn-outline-secondary):not(.btn-outline-danger):not(.btn-outline-warning):not(.btn-outline-success):not(.btn-outline-info):active,
-.btn-outline-primary.dropdown-toggle:not(.btn-outline-secondary):not(.btn-outline-danger):not(.btn-outline-warning):not(.btn-outline-success):not(.btn-outline-info).show {
-  background-color: var(--primary) !important;
-  border-color: var(--primary) !important;
-  color: white !important;
-  box-shadow: none !important;
-}
+/* Bootstrap button variants already cover primary/warning/success/etc.
+   Avoid globally overriding `.btn-*` classes to keep Bootstrap predictable. */
 
 /* ==========================================
    FORM STYLES - INPUT GROUPS
@@ -431,182 +372,36 @@ footer {
 }
 
 /* ==========================================
-   THEME TOGGLE
+   SMALL UI HELPERS
    ========================================== */
-.theme-toggle {
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-normal);
-  background-color: transparent;
-  border: none;
-}
-
-.theme-toggle:hover {
-  background-color: rgba(var(--primary-rgb), 0.1);
-}
-
-/* Theme toggle icon visibility control */
-.theme-toggle i {
-  font-size: 1.1rem;
-  color: var(--bs-body-color);
-  transition: all var(--transition-fast);
-}
-
-/* ==========================================
-   LANGUAGE SWITCH
-   ========================================== */
-.dropdown .dropdown-item-form {
-  padding: 0;
-  margin: 0;
-}
-
-.dropdown .dropdown-item-form .dropdown-item {
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.flag-icon {
-  font-size: 1.1em;
-  margin-right: var(--spacing-xs);
-  display: inline-block;
-  vertical-align: middle;
-  line-height: 1;
-}
-
+/* Flag images in the language dropdown. */
 .flag-img {
   width: 1.33em;
   height: 1em;
-  margin-right: var(--spacing-xs);
   vertical-align: middle;
   display: inline-block;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: 0.2rem;
 }
 
-/* Language dropdown button styling */
-#languageDropdown {
-  min-width: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-xs);
+/* Hover affordance for clickable X-ray images (kept small and scoped). */
+.xray-image {
+  cursor: pointer;
+  max-height: 800px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-#languageDropdown .flag-icon {
-  margin-right: 0;
+.xray-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
 }
 
-/* When using local SVG flags (<img class="flag-img">), rely on flex gap for spacing. */
-#languageDropdown .flag-img,
-.dropdown .dropdown-item-form .dropdown-item .flag-img {
-  margin-right: 0;
+.position-relative .bi-zoom-in {
+  transition: transform 0.3s ease;
 }
 
-/* ==========================================
-   NAVBAR STYLES
-   ========================================== */
-.navbar-brand {
-  color: var(--primary) !important;
-  font-weight: var(--font-weight-bold);
-}
-
-/* Desktop navbar layout - ensure all elements stay in same row */
-@media (min-width: 769px) {
-  .navbar .container-fluid {
-    flex-wrap: nowrap !important;
-  }
-  
-  .navbar .container {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-  }
-  
-  .navbar-brand {
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-  }
-  
-  .navbar-toggler {
-    display: none !important; /* Hidden on desktop */
-  }
-  
-  .navbar-collapse {
-    display: flex !important;
-    flex-basis: auto !important;
-    flex-grow: 1 !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-  }
-  
-  .navbar-nav {
-    display: flex !important;
-    flex-direction: row !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .nav-item {
-    margin-right: var(--spacing-lg) !important;
-  }
-  
-  .nav-item:last-child {
-    margin-right: 0 !important;
-  }
-  
-  .navbar .ms-auto {
-    display: flex !important;
-    align-items: center !important;
-    gap: var(--spacing-lg) !important;
-    margin-left: auto !important;
-    margin-top: 0 !important;
-    width: auto !important;
-    flex-shrink: 0 !important;
-  }
-  
-  /* Ensure dropdown and theme toggle stay inline */
-  .navbar .ms-auto .dropdown,
-  .navbar .ms-auto .btn,
-  .navbar .ms-auto .theme-toggle {
-    margin: 0 !important;
-    flex-shrink: 0 !important;
-  }
-  
-  /* Prevent text wrapping in nav links */
-  .nav-link {
-    white-space: nowrap !important;
-  }
-  
-  /* Ensure user dropdown text doesn't wrap */
-  .dropdown-toggle {
-    white-space: nowrap !important;
-  }
-}
-
-.navbar .dropdown-menu .dropdown-item {
-  color: var(--secondary) !important;
-  transition: all var(--transition-fast);
-}
-
-.navbar .dropdown-menu .dropdown-item:hover,
-.navbar .dropdown-menu .dropdown-item:focus {
-  background-color: var(--secondary) !important;
-  color: white !important;
+.position-relative:hover .bi-zoom-in {
+  transform: scale(1.2);
 }
 
 /* ==========================================
@@ -614,39 +409,6 @@ footer {
    ========================================== */
 .table {
   --bs-table-hover-bg: rgba(var(--primary-rgb), 0.05);
-}
-
-.table-container {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.table-container .table {
-  table-layout: fixed;
-  width: 100%;
-  min-width: 600px; /* Minimum width before horizontal scroll */
-}
-
-.table-container .table td {
-  vertical-align: middle;
-  padding: var(--spacing-md) var(--spacing-sm);
-}
-
-.table-container .table td:first-child { width: 35%; }
-.table-container .table td:nth-child(2) { width: 45%; }
-.table-container .table td:last-child { width: 20%; }
-
-/* Mobile-specific table styles */
-@media (max-width: 768px) {
-  .table-container .table {
-    min-width: 100%;
-    table-layout: auto;
-  }
-  
-  .table-container {
-    overflow-x: visible;
-  }
 }
 
 /* ==========================================
@@ -975,19 +737,6 @@ footer {
 .btn.loading:focus {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-}
-
-/* Screen reader announcements */
-.sr-only {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
 }
 
 /* Loading skeleton animation for slow connections */
@@ -1467,6 +1216,7 @@ footer {
 
 .mobile-progress-bar {
   -webkit-tap-highlight-color: transparent;
+  height: 18px;
 }
 
 .mobile-risk-badge {
@@ -1598,64 +1348,9 @@ footer {
   }
 }
 
+/* Mobile touch optimizations */
 .mobile-severity-label {
   touch-action: manipulation;
-}
-
-/* Mobile table improvements */
-@media (max-width: 768px) {
-  .table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 1rem;
-  }
-  
-  .table-container .table {
-    min-width: 100%;
-    table-layout: auto;
-    white-space: nowrap;
-  }
-  
-  .table-container .table td {
-    padding: 0.5rem 0.25rem;
-    vertical-align: middle;
-  }
-  
-  /* Visualization buttons mobile optimization */
-  .table-container .table td:last-child .btn {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.4rem;
-    margin: 0.1rem;
-    display: block;
-    width: 100%;
-    min-width: auto;
-  }
-  
-  /* Pathology name column mobile optimization */
-  .table-container .table td:first-child {
-    font-size: 0.85rem;
-    font-weight: 600;
-    max-width: 120px;
-    word-wrap: break-word;
-    white-space: normal;
-  }
-}
-
-/* Ultra-mobile table layout */
-@media (max-width: 480px) {
-  .table-container .table {
-    font-size: 0.8rem;
-  }
-  
-  .table-container .table td:first-child {
-    max-width: 100px;
-    font-size: 0.8rem;
-  }
-  
-  .table-container .table td:last-child .btn {
-    font-size: 0.65rem;
-    padding: 0.2rem 0.3rem;
-  }
 }
 
 /* Performance optimizations for mobile */
@@ -1765,22 +1460,6 @@ footer {
 /* ==========================================
    ALERT & BADGE STYLES
    ========================================== */
-.badge.bg-primary, .badge.bg-warning, .badge.bg-success, .badge.bg-info {
-  background-color: var(--secondary) !important;
-  color: white !important;
-}
-
-.badge.bg-danger {
-  background-color: var(--danger) !important;
-  color: white !important;
-}
-
-.alert-primary, .alert-warning, .alert-success, .alert-info {
-  background-color: rgba(108, 117, 125, 0.1) !important;
-  border-color: rgba(108, 117, 125, 0.3) !important;
-  color: var(--secondary) !important;
-}
-
 .medical-warning, .no-records-info {
   background-color: rgba(var(--primary-rgb), 0.1) !important;
   border-color: rgba(var(--primary-rgb), 0.3) !important;
@@ -1802,15 +1481,6 @@ footer {
   top: 50%;
   transform: translateY(-50%);
   color: var(--primary);
-}
-
-/* Loading/processing messages */
-.alert-danger:has(strong:contains("Please wait")),
-.alert.alert-danger[id*="progress"],
-.alert.alert-danger[id*="interpretation"] {
-  background-color: rgba(var(--primary-rgb), 0.1) !important;
-  border-color: var(--primary) !important;
-  color: var(--primary) !important;
 }
 
 /* ==========================================
@@ -1857,7 +1527,7 @@ footer {
   max-width: 100%;
   height: auto;
   object-fit: contain;
-  max-height: 700px !important;
+  max-height: 600px;
   margin: 0 auto;
   display: block;
   border: 1px solid var(--light-border);
@@ -1878,7 +1548,7 @@ footer {
   width: 100%;
   height: 400px;
   object-fit: contain;
-  max-height: 400px !important;
+  max-height: 400px;
 }
 
 /* ==========================================
@@ -1911,23 +1581,6 @@ footer {
 /* ==========================================
    INTERPRETATION STYLES
    ========================================== */
-.interpretation-btn {
-  font-size: var(--font-size-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  margin-right: var(--spacing-xs);
-  text-decoration: none;
-  border: 1px solid var(--secondary);
-  color: var(--secondary);
-  background: none;
-  border-radius: var(--spacing-xs);
-  transition: all 0.2s ease;
-}
-
-.interpretation-btn:hover {
-  background-color: var(--secondary);
-  color: white;
-}
-
 .btn-info-pathology {
   background: none;
   border: none;
@@ -1974,25 +1627,6 @@ footer {
 /* ==========================================
    DARK MODE ADJUSTMENTS
    ========================================== */
-[data-bs-theme="dark"] .btn-primary, [data-bs-theme="dark"] .btn-warning, [data-bs-theme="dark"] .btn-success, [data-bs-theme="dark"] .btn-info,
-[data-bs-theme="dark"] .btn-outline-primary, [data-bs-theme="dark"] .btn-outline-warning, [data-bs-theme="dark"] .btn-outline-success, [data-bs-theme="dark"] .btn-outline-info {
-  background-color: transparent !important;
-  border-color: var(--secondary) !important;
-  color: var(--secondary) !important;
-}
-
-[data-bs-theme="dark"] .btn-danger, [data-bs-theme="dark"] .btn-outline-danger {
-  background-color: transparent !important;
-  border-color: var(--danger) !important;
-  color: var(--danger) !important;
-}
-
-[data-bs-theme="dark"] .alert-primary, [data-bs-theme="dark"] .alert-warning, [data-bs-theme="dark"] .alert-success, [data-bs-theme="dark"] .alert-info {
-  background-color: rgba(108, 117, 125, 0.2) !important;
-  border-color: rgba(108, 117, 125, 0.4) !important;
-  color: var(--secondary) !important;
-}
-
 [data-bs-theme="dark"] .medical-warning, [data-bs-theme="dark"] .no-records-info {
   background-color: rgba(var(--primary-rgb), 0.2) !important;
   border-color: rgba(var(--primary-rgb), 0.4) !important;
@@ -2005,17 +1639,6 @@ footer {
 
 [data-bs-theme="dark"] .progress-text {
   text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
-}
-
-[data-bs-theme="dark"] .table-light {
-  background-color: var(--dark-bg) !important;
-  color: var(--light) !important;
-}
-
-[data-bs-theme="dark"] .table thead.table-light th {
-  background-color: var(--dark-bg) !important;
-  color: var(--light) !important;
-  border-color: var(--light-border) !important;
 }
 
 [data-bs-theme="dark"] .btn-info-pathology { color: #adb5bd; }
@@ -2100,116 +1723,6 @@ footer {
     margin-bottom: var(--spacing-md) !important;
   }
   
-  /* Mobile navigation - explicit mobile-only rules */
-  .navbar .container-fluid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--spacing-sm);
-  }
-  
-  .navbar .container {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    flex-wrap: wrap !important;
-    width: 100% !important;
-  }
-  
-  .navbar-brand {
-    flex-shrink: 0 !important;
-    margin-bottom: 0 !important;
-    margin-right: 0 !important;
-    order: 1 !important;
-  }
-  
-  .navbar-toggler {
-    flex-shrink: 0 !important;
-    margin-left: auto !important;
-    margin-top: 0 !important;
-    margin-right: 0 !important;
-    order: 2 !important;
-    border: 1px solid var(--light-border) !important;
-  }
-  
-  .navbar-collapse {
-    width: 100% !important;
-    margin-top: var(--spacing-sm) !important;
-    order: 3 !important;
-    flex-basis: 100% !important;
-  }
-  
-  /* Force Bootstrap's navbar-toggler to the right */
-  .navbar-expand-lg .navbar-toggler {
-    display: block !important;
-    margin-left: auto !important;
-  }
-  
-  /* Mobile navigation items layout */
-  .navbar-nav {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-    gap: var(--spacing-sm) !important;
-    margin-bottom: var(--spacing-sm) !important;
-    width: 100% !important;
-  }
-  
-  .navbar-nav .nav-item {
-    flex-shrink: 0 !important;
-  }
-  
-  .navbar-nav .nav-link {
-    padding: var(--spacing-xs) var(--spacing-sm) !important;
-    white-space: nowrap !important;
-    font-size: 0.9rem !important;
-  }
-  
-  /* Mobile user controls layout */
-  .navbar .ms-auto {
-    margin-top: 0 !important;
-    margin-left: 0 !important;
-    width: 100% !important;
-    justify-content: center !important;
-    flex-direction: row !important;
-    gap: var(--spacing-sm) !important;
-    flex-wrap: wrap !important;
-  }
-  
-  .navbar .ms-auto .dropdown,
-  .navbar .ms-auto .btn {
-    margin-bottom: 0 !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .navbar .ms-auto .theme-toggle {
-    margin-left: 0 !important;
-  }
-  
-  /* Mobile responsive button sizing */
-  .navbar .ms-auto .btn {
-    font-size: 0.875rem !important;
-    padding: var(--spacing-xs) var(--spacing-sm) !important;
-  }
-  
-  .navbar .ms-auto .dropdown-toggle {
-    font-size: 0.875rem !important;
-    padding: var(--spacing-xs) var(--spacing-sm) !important;
-  }
-  
-  /* Language switch mobile adjustments */
-  #languageDropdown {
-    min-width: 60px !important;
-    font-size: 0.875rem !important;
-  }
-  
-  #languageDropdown .flag-icon {
-    font-size: 1em !important;
-  }
-  
   /* Account settings mobile spacing - ensure proper spacing between Save profile button and Account information */
   button[name="update_profile"] {
     margin-bottom: var(--spacing-lg) !important;
@@ -2223,35 +1736,6 @@ footer {
 
 /* Extra mobile adjustments for very small screens */
 @media (max-width: 480px) {
-  .navbar-nav .nav-link {
-    font-size: 0.8rem !important;
-    padding: calc(var(--spacing-xs) * 0.75) calc(var(--spacing-sm) * 0.75) !important;
-  }
-  
-  .navbar .ms-auto .btn,
-  .navbar .ms-auto .dropdown-toggle {
-    font-size: 0.8rem !important;
-    padding: calc(var(--spacing-xs) * 0.75) calc(var(--spacing-sm) * 0.75) !important;
-  }
-  
-  .navbar .ms-auto {
-    gap: calc(var(--spacing-sm) * 0.75) !important;
-  }
-  
-  .navbar-nav {
-    gap: calc(var(--spacing-sm) * 0.75) !important;
-  }
-  
-  /* Language switch very small mobile adjustments */
-  #languageDropdown {
-    min-width: 55px !important;
-    font-size: 0.8rem !important;
-  }
-  
-  #languageDropdown .flag-icon {
-    font-size: 0.9em !important;
-  }
-  
   /* Account settings tabs */
   #settingsTabs {
     display: flex;
@@ -2332,60 +1816,6 @@ footer {
     margin-right: var(--spacing-sm) !important;
     font-weight: var(--font-weight-semibold) !important;
     color: var(--primary) !important;
-  }
-  
-  /* Prediction results table mobile optimization */
-  .table-container .table,
-  .table-hover {
-    font-size: var(--font-size-sm) !important;
-    margin-bottom: 0 !important;
-  }
-  
-  .table-container .table th, .table-container .table td,
-  .table-hover th, .table-hover td {
-    padding: var(--border-radius) var(--spacing-xs) !important;
-    vertical-align: middle !important;
-  }
-  
-  .table-container .table th, .table-hover th {
-    font-size: 0.7rem !important;
-    font-weight: var(--font-weight-semibold) !important;
-    line-height: 1.1 !important;
-  }
-  
-  /* Mobile column widths */
-  .table-container .table td:first-child, .table-hover td:first-child { width: 30% !important; word-break: break-word !important; hyphens: auto !important; }
-  .table-container .table td:nth-child(2), .table-hover td:nth-child(2) { width: 45% !important; }
-  .table-container .table td:last-child, .table-hover td:last-child { width: 25% !important; text-align: left !important; }
-  
-  /* Compact progress bars and buttons */
-  .table-container .progress, .table-hover .progress {
-    height: 16px !important;
-    min-width: 120px !important;
-    margin: 0 !important;
-  }
-  
-  .table-container .progress-text, .table-hover .progress-text {
-    font-size: 0.65rem !important;
-    font-weight: var(--font-weight-normal) !important;
-    line-height: 1 !important;
-  }
-  
-  .table-container .interpretation-btn, .table-hover .interpretation-btn {
-    font-size: 0.65rem !important;
-    padding: 0.2rem 0.35rem !important;
-    margin-right: 0.15rem !important;
-    margin-bottom: 0.1rem !important;
-    border-radius: 0.2rem !important;
-    line-height: 1.1 !important;
-  }
-  
-  .table-container .btn-info-pathology, .table-hover .btn-info-pathology {
-    font-size: var(--font-size-xs) !important;
-    padding: 0.1rem var(--spacing-xs) !important;
-    margin-left: var(--spacing-xs) !important;
-    border-radius: 0.15rem !important;
-    line-height: 1 !important;
   }
   
   /* Interpretability page optimizations */

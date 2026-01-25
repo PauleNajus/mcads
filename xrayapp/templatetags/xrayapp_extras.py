@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 from django import template
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 import pytz
-from datetime import datetime
+from typing import Any
 
 register = template.Library()
 
 @register.filter
-def multiply(value, arg):
+def multiply(value: Any, arg: Any) -> float | str:
     """Multiply the value by the argument"""
     try:
         return float(value) * float(arg)
@@ -15,7 +17,7 @@ def multiply(value, arg):
         return ''
 
 @register.filter
-def percentage(value):
+def percentage(value: Any) -> str:
     """Convert a decimal to percentage format for CSS"""
     try:
         return f"{float(value) * 100:.1f}"
@@ -23,7 +25,7 @@ def percentage(value):
         return '0'
 
 @register.filter
-def get_top_pathology(prediction_history):
+def get_top_pathology(prediction_history: Any) -> tuple[str, float]:
     """Get the top pathology (highest probability) from a prediction history item
     Returns a tuple (pathology_name, probability)"""
     pathology_fields = {
@@ -62,12 +64,12 @@ def get_top_pathology(prediction_history):
     return top_pathology
 
 @register.filter
-def add_class(field, css_class):
+def add_class(field: Any, css_class: str) -> Any:
     """Add a CSS class to a form field"""
     return field.as_widget(attrs={"class": css_class}) 
 
 @register.filter
-def get_severity_level(obj):
+def get_severity_level(obj: Any) -> int | None:
     """Get the severity level (0-3) from a model instance (XRayImage or PredictionHistory)"""
     if hasattr(obj, 'severity_level') and obj.severity_level is not None:
         return obj.severity_level
@@ -76,7 +78,7 @@ def get_severity_level(obj):
     return None
 
 @register.filter
-def get_severity_label(obj):
+def get_severity_label(obj: Any) -> str:
     """Get the severity label from a model instance (XRayImage or PredictionHistory)"""
     if hasattr(obj, 'severity_label'):
         return obj.severity_label
@@ -97,7 +99,7 @@ def get_severity_label(obj):
     return severity_mapping.get(level, _("Unknown"))
 
 @register.filter
-def get_severity_color(level):
+def get_severity_color(level: int | None) -> str:
     """Get appropriate color class based on severity level"""
     if level == 1:
         return "text-success"  # green for insignificant findings
@@ -108,7 +110,7 @@ def get_severity_color(level):
     return "" 
 
 @register.simple_tag
-def current_eest_time():
+def current_eest_time() -> str:
     """Get current server time in EEST timezone with seconds precision"""
     eest = pytz.timezone('Europe/Tallinn')  # EEST (UTC+3)
     current_time = timezone.now().astimezone(eest)
