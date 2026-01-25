@@ -84,13 +84,58 @@ log_message "Stopping services..."
 systemctl stop mcads 2>/dev/null || true
 systemctl stop nginx 2>/dev/null || true
 
-# Restore SQLite database
-if [ -f "$BACKUP_CONTENT_DIR/db.sqlite3" ]; then
-    log_message "Restoring SQLite database..."
-    cp "$BACKUP_CONTENT_DIR/db.sqlite3" ./db.sqlite3
+# Load environment variables (Postgres credentials) if present.
+if [ -f "./.env" ]; then
+    # Export vars from .env for child processes like psql.
+    set -a
+    # shellcheck disable=SC1091
+    . "./.env"
+    set +a
+fi
+
+# Restore PostgreSQL database
+DB_HOST="${DB_HOST:-${POSTGRES_HOST:-localhost}}"
+DB_PORT="${DB_PORT:-${POSTGRES_PORT:-5432}}"
+DB_NAME="${DB_NAME:-${POSTGRES_DB:-mcads_db}}"
+DB_USER="${DB_USER:-${POSTGRES_USER:-mcads_user}}"
+DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+
+if [ -f "$BACKUP_CONTENT_DIR/database.sql" ]; then
+    log_message "Restoring PostgreSQL database..."
+    if ! command -v psql >/dev/null 2>&1; then
+        log_message "ERROR: psql not found. Install PostgreSQL client tools and re-run."
+        exit 1
+    fi
+
+    # Drop and recreate the database for a clean restore.
+    PGPASSWORD="$DB_PASSWORD" psql \
+        --host "$DB_HOST" \
+        --port "$DB_PORT" \
+        --username "$DB_USER" \
+        --dbname postgres \
+        -v ON_ERROR_STOP=1 \
+        -c "DROP DATABASE IF EXISTS \"${DB_NAME}\";"
+
+    PGPASSWORD="$DB_PASSWORD" psql \
+        --host "$DB_HOST" \
+        --port "$DB_PORT" \
+        --username "$DB_USER" \
+        --dbname postgres \
+        -v ON_ERROR_STOP=1 \
+        -c "CREATE DATABASE \"${DB_NAME}\";"
+
+    # Restore data.
+    PGPASSWORD="$DB_PASSWORD" psql \
+        --host "$DB_HOST" \
+        --port "$DB_PORT" \
+        --username "$DB_USER" \
+        --dbname "$DB_NAME" \
+        -v ON_ERROR_STOP=1 \
+        -f "$BACKUP_CONTENT_DIR/database.sql"
+
     log_message "Database restored"
 else
-    log_message "No database backup found"
+    log_message "No database backup found (database.sql)"
 fi
 
 # Restore media files
@@ -195,7 +240,7 @@ Restored From: ${BACKUP_NAME}
 Restore Location: ${BACKUP_FILE}
 
 System Status:
-- Database: $(if [ -f "db.sqlite3" ]; then echo "✅ Restored"; else echo "❌ Not found"; fi)
+- Database: $(if command -v psql >/dev/null 2>&1; then echo "✅ PostgreSQL client found"; else echo "❌ psql not found"; fi)
 - Media Files: $(if [ -d "media" ]; then echo "✅ Restored"; else echo "❌ Not found"; fi)
 - Static Files: $(if [ -d "staticfiles" ]; then echo "✅ Restored"; else echo "❌ Not found"; fi)
 - Configuration: $(if [ -f "docker-compose.yml" ]; then echo "✅ Restored"; else echo "❌ Not found"; fi)

@@ -1,6 +1,5 @@
 # Core Django and Web Framework
 Django==5.2.4
-django-bootstrap5==25.1
 django-environ==0.12.0
 
 # Security and validation packages

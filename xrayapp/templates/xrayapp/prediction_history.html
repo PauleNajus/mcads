@@ -27,8 +27,13 @@
     
     /* Responsive adjustments */
     @media (max-width: 768px) {
+        /* Make vertical gaps between sorting buttons smaller on mobile */
+        .sorting-section .row.g-3 {
+            --bs-gutter-y: 0.25rem;
+        }
+
         .sorting-section .btn {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
         }
     }
 </style>

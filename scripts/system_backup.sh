@@ -20,14 +20,41 @@ log_message() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Backup SQLite database (if exists)
-if [ -f "db.sqlite3" ]; then
-    log_message "Backing up SQLite database..."
-    cp db.sqlite3 "${BACKUP_DIR}/${BACKUP_NAME}/db.sqlite3"
-    log_message "Database backup completed"
-else
-    log_message "No SQLite database found"
+# Load environment variables (Postgres credentials) if present.
+# This keeps the script usable for both local installs and Docker-based setups.
+if [ -f "./.env" ]; then
+    # Export vars from .env for child processes like pg_dump.
+    set -a
+    # shellcheck disable=SC1091
+    . "./.env"
+    set +a
 fi
+
+# Backup PostgreSQL database (required)
+DB_HOST="${DB_HOST:-${POSTGRES_HOST:-localhost}}"
+DB_PORT="${DB_PORT:-${POSTGRES_PORT:-5432}}"
+DB_NAME="${DB_NAME:-${POSTGRES_DB:-mcads_db}}"
+DB_USER="${DB_USER:-${POSTGRES_USER:-mcads_user}}"
+DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+
+log_message "Backing up PostgreSQL database..."
+if ! command -v pg_dump >/dev/null 2>&1; then
+    log_message "ERROR: pg_dump not found. Install PostgreSQL client tools and re-run."
+    exit 1
+fi
+
+DB_DUMP_FILE="${BACKUP_DIR}/${BACKUP_NAME}/database.sql"
+PGPASSWORD="$DB_PASSWORD" pg_dump \
+    --host "$DB_HOST" \
+    --port "$DB_PORT" \
+    --username "$DB_USER" \
+    --dbname "$DB_NAME" \
+    --format=plain \
+    --no-owner \
+    --no-privileges \
+    > "$DB_DUMP_FILE"
+
+log_message "Database backup completed: ${DB_DUMP_FILE}"
 
 # Backup media files
 log_message "Backing up media files..."
@@ -143,7 +170,7 @@ Disk Usage: $(df -h . | tail -1)
 Memory Usage: $(free -h | grep Mem)
 
 Components Backed Up:
-- SQLite Database: db.sqlite3
+- PostgreSQL Database: database.sql
 - Media Files: media.tar.gz
 - Static Files: staticfiles.tar.gz
 - Static Directory: static.tar.gz

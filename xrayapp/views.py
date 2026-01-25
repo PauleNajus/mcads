@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 import threading
 from pathlib import Path
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils import timezone, translation
 from django.db.models import Q, Prefetch, Case, When, IntegerField, Avg, F, Value, FloatField
 from django.core.paginator import Paginator
@@ -33,6 +33,13 @@ import logging
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+def health(request):
+    """Health check endpoint (used by Docker / reverse proxies).
+
+    Keep this intentionally lightweight: return 200 if the Django process is up.
+    """
+    return HttpResponse("ok", content_type="text/plain")
 
 
 def process_image_async(image_path, xray_instance, model_type):

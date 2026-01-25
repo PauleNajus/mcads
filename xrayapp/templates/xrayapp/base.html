@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load i18n %}
+{% load static %}
 <html lang="{% get_current_language as LANGUAGE_CODE %}{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="UTF-8">
@@ -9,14 +10,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#7b3349">
     <title>{% block title %}MCADS{% endblock %}</title>
-    {% load django_bootstrap5 %}
-    {% bootstrap_css %}
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <!-- Font Awesome (served via jsDelivr to satisfy CSP) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-    <!-- Custom CSS -->
-    {% load static %}
+    <!--
+      Vendor CSS (local only).
+      Keeping this local improves performance (no CDN latency) and makes CSP stricter/simpler.
+    -->
+    <link rel="stylesheet" href="{% static 'xrayapp/vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'xrayapp/vendor/bootstrap-icons/font/bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'xrayapp/vendor/fontawesome/css/all.min.css' %}">
+    <!-- App CSS -->
     <link rel="stylesheet" href="{% static 'xrayapp/css/style.css' %}">
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{% static 'images/favicon.ico' %}">
@@ -129,9 +130,9 @@
                             <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                 {% get_current_language as LANGUAGE_CODE %}
                                 {% if LANGUAGE_CODE == 'lt' %}
-                                    <span class="flag-icon">🇱🇹</span> {% trans "LT" %}
+                                    <img class="flag-img" src="{% static 'xrayapp/images/flags/lt.svg' %}" alt="{% trans 'LT' %}"> {% trans "LT" %}
                                 {% else %}
-                                    <span class="flag-icon">🇺🇸</span> {% trans "EN" %}
+                                    <img class="flag-img" src="{% static 'xrayapp/images/flags/us.svg' %}" alt="{% trans 'EN' %}"> {% trans "EN" %}
                                 {% endif %}
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
@@ -141,7 +142,7 @@
                                         <input name="next" type="hidden" value="{{ request.get_full_path|iriencode }}" />
                                         <input name="language" type="hidden" value="en" />
                                         <button type="submit" class="dropdown-item">
-                                            <span class="flag-icon">🇺🇸</span> English
+                                            <img class="flag-img" src="{% static 'xrayapp/images/flags/us.svg' %}" alt="EN"> English
                                         </button>
                                     </form>
                                 </li>
@@ -151,7 +152,7 @@
                                         <input name="next" type="hidden" value="{{ request.get_full_path|iriencode }}" />
                                         <input name="language" type="hidden" value="lt" />
                                         <button type="submit" class="dropdown-item">
-                                            <span class="flag-icon">🇱🇹</span> Lietuvių
+                                            <img class="flag-img" src="{% static 'xrayapp/images/flags/lt.svg' %}" alt="LT"> Lietuvių
                                         </button>
                                     </form>
                                 </li>
@@ -211,7 +212,8 @@
         </div>
     </footer>
     
-    {% bootstrap_javascript %}
+    <!-- Bootstrap JS (local only) -->
+    <script src="{% static 'xrayapp/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <!-- Custom JS -->
     <script>
         // Pass user preferences to JavaScript

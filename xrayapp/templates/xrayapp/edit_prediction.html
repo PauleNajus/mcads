@@ -9,13 +9,13 @@
     <div class="col-md-8 offset-md-2">
         <div class="card">
             <div class="card-header">
-                <h3 class="mb-0">{% trans "Edit prediction for" %} {{ xray_image.patient_first_name }} {{ xray_image.patient_last_name }}</h3>
+                <h3 class="mb-0">{% trans "Edit prediction for" %} {{ history_item.xray.first_name }} {{ history_item.xray.last_name }}</h3>
             </div>
             <div class="card-body">
                 <p class="text-muted">
-                    {% trans "X-ray taken on:" %} {{ xray_image.date_of_xray|date:"Y-m-d" }}<br>
-                    {% trans "Uploaded on:" %} {{ xray_image.uploaded_at|date:"Y-m-d H:i" }}<br>
-                    {% trans "Model used:" %} {{ xray_image.model_type|title }}
+                    {% trans "X-ray taken on:" %} {{ history_item.xray.date_of_xray|date:"Y-m-d" }}<br>
+                    {% trans "Uploaded on:" %} {{ history_item.xray.uploaded_at|date:"Y-m-d H:i" }}<br>
+                    {% trans "Model used:" %} {{ history_item.model_used|title }}
                 </p>
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}

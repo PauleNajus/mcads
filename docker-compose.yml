@@ -1,210 +1,155 @@
+x-mcads-app: &mcads_app
+  build:
+    context: .
+  init: true
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  environment: &mcads_env
+    # Django
+    DEBUG: ${DEBUG:-1}
+    SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+
+    # Postgres (required)
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_NAME: ${POSTGRES_DB:-mcads_db}
+    DB_USER: ${POSTGRES_USER:-mcads_user}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+    # Celery / Redis
+    USE_CELERY: "1"
+    REDIS_URL: redis://redis:6379/0
+    REDIS_CACHE_URL: redis://redis:6379/1
+
+    # Model + plotting caches (persisted via named volumes)
+    TORCHXRAYVISION_CACHE_DIR: /app/.torchxrayvision
+    XRV_DATA_DIR: /app/.torchxrayvision
+    TORCH_HOME: /app/.torchxrayvision
+    MPLCONFIGDIR: /app/.matplotlib
+
+    # Entry-point behaviour
+    MCADS_WAIT_TIMEOUT_SECONDS: "60"
+
+    # Optional model configuration (defaults match current code)
+    XRV_DENSENET_WEIGHTS: ${XRV_DENSENET_WEIGHTS:-densenet121-res224-all}
+    XRV_RESNET_WEIGHTS: ${XRV_RESNET_WEIGHTS:-resnet50-res512-all}
+    XRV_AE_WEIGHTS: ${XRV_AE_WEIGHTS:-101-elastic}
+    XRV_AE_INPUT_SIZE: ${XRV_AE_INPUT_SIZE:-224}
+    XRV_AE_OOD_THRESHOLD: ${XRV_AE_OOD_THRESHOLD:-0.015}
+    XRV_CALIBRATION_FILE: /app/config/calibration.json
+  volumes: &mcads_volumes
+    - mcads_media:/app/media
+    - mcads_staticfiles:/app/staticfiles
+    - mcads_logs:/app/logs
+    - mcads_data_exports:/app/data_exports
+    - mcads_backups:/app/backups
+    - mcads_model_cache:/app/.torchxrayvision
+    - mcads_matplotlib_cache:/app/.matplotlib
+    - ./config:/app/config:ro
+
 services:
-  # PostgreSQL Database
   db:
-    image: postgres:15-alpine
-    container_name: mcads_db
+    image: postgres:15
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: mcads_db
-      POSTGRES_USER: mcads_user
-      POSTGRES_PASSWORD: mcads_secure_password_2024
+      POSTGRES_DB: ${POSTGRES_DB:-mcads_db}
+      POSTGRES_USER: ${POSTGRES_USER:-mcads_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcads_user -d mcads_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # Redis for Celery and caching
   redis:
-    image: redis:7-alpine
-    container_name: mcads_redis
+    image: redis:7
+    restart: unless-stopped
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # Django Web Application
   web:
-    build: .
-    container_name: mcads_web
-    entrypoint: []
-    command: bash -c "
-      echo 'Starting MCADS Docker initialization...' &&
-      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
-      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
-      python manage.py migrate --noinput &&
-      python manage.py collectstatic --noinput &&
-      mkdir -p /app/logs /app/media /app/data_exports /app/backups &&
-      echo 'MCADS initialization completed!' &&
-      gunicorn --config gunicorn_config.py mcads_project.asgi:application"
+    <<: *mcads_app
+    environment:
+      <<: *mcads_env
+      MCADS_ROLE: web
+      MCADS_RUN_MIGRATIONS: "1"
+      MCADS_COLLECTSTATIC: "1"
+    healthcheck:
+      # In production, Django enforces HTTPS redirects (SECURE_SSL_REDIRECT).
+      # We mark the request as "secure" via X-Forwarded-Proto to avoid 301->https,
+      # and we hit a lightweight health endpoint (no DB work, no streaming warnings).
+      test: ["CMD", "python", "-c", "import urllib.request; req=urllib.request.Request('http://localhost:8000/health/', headers={'X-Forwarded-Proto':'https'}); urllib.request.urlopen(req, timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery-worker:
+    <<: *mcads_app
     depends_on:
+      web:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=True
-      - DB_NAME=mcads_db
-      - DB_USER=mcads_user
-      - DB_PASSWORD=mcads_secure_password_2024
-      - DB_HOST=db
-      - DB_PORT=5432
-      - USE_CELERY=1
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_CACHE_URL=redis://redis:6379/1
-      - ALLOWED_HOSTS=localhost,127.0.0.1,mcads.casa,www.mcads.casa,203.161.58.22,server1.mcads.casa
-      - TORCH_HOME=/app/.torch
-      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
-      - XRV_DATA_DIR=/app/.torchxrayvision
-      - MPLCONFIGDIR=/app/.matplotlib
-      # Model configuration
-      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
-      - XRV_RESNET_WEIGHTS=resnet50-res512-all
-      # OOD autoencoder configuration
-      - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=224
-      - XRV_AE_OOD_THRESHOLD=0.015
-      # Optional calibration file (provide ./config/calibration.json on host)
-      - XRV_CALIBRATION_FILE=/app/config/calibration.json
-    volumes:
-      - ./media:/app/media
-      - ./staticfiles:/app/staticfiles
-      - ./logs:/app/logs
-      - ./data_exports:/app/data_exports
-      - ./backups:/app/backups
-      - ./config:/app/config:ro
-      - models_data:/home/mcads/.torchxrayvision/models_data
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "-L", "http://localhost:8000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      <<: *mcads_env
+      MCADS_ROLE: worker
+      MCADS_RUN_MIGRATIONS: "0"
+      MCADS_COLLECTSTATIC: "0"
+    command: ["celery", "-A", "mcads_project", "worker", "-l", "info", "--concurrency=1"]
 
-  # Celery Worker for async tasks
-  celery:
-    build: .
-    container_name: mcads_celery
-    entrypoint: []
-    command: bash -c "
-      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
-      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
-      celery -A mcads_project worker -l info --concurrency=1"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=True
-      - DB_NAME=mcads_db
-      - DB_USER=mcads_user
-      - DB_PASSWORD=mcads_secure_password_2024
-      - DB_HOST=db
-      - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_CACHE_URL=redis://redis:6379/1
-      - TORCH_HOME=/app/.torch
-      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
-      - XRV_DATA_DIR=/app/.torchxrayvision
-      - MPLCONFIGDIR=/app/.matplotlib
-      # Keep environment consistent for tasks
-      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
-      - XRV_RESNET_WEIGHTS=resnet50-res512-all
-      - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=224
-      - XRV_AE_OOD_THRESHOLD=0.015
-      - XRV_CALIBRATION_FILE=/app/config/calibration.json
-    volumes:
-      - ./media:/app/media
-      - ./logs:/app/logs
-      - ./data_exports:/app/data_exports
-      - ./config:/app/config:ro
-      - models_data:/home/mcads/.torchxrayvision/models_data
-    healthcheck:
-      test: ["CMD-SHELL", "echo ok"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # Celery Beat for scheduled tasks
   celery-beat:
-    build: .
-    container_name: mcads_celery_beat
-    entrypoint: []
-    command: bash -c "
-      while ! pg_isready -h db -p 5432 -U mcads_user; do sleep 2; done &&
-      while ! redis-cli -h redis ping > /dev/null 2>&1; do sleep 2; done &&
-      celery -A mcads_project beat -l info"
+    <<: *mcads_app
     depends_on:
+      web:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      - SECRET_KEY=mcads-production-key-2024-xray-deployment-server-secure-key-hashes
-      - DEBUG=True
-      - DB_NAME=mcads_db
-      - DB_USER=mcads_user
-      - DB_PASSWORD=mcads_secure_password_2024
-      - DB_HOST=db
-      - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_CACHE_URL=redis://redis:6379/1
-      - TORCH_HOME=/app/.torch
-      - TORCHXRAYVISION_CACHE_DIR=/app/.torchxrayvision
-      - XRV_DATA_DIR=/app/.torchxrayvision
-      - MPLCONFIGDIR=/app/.matplotlib
-      - XRV_DENSENET_WEIGHTS=densenet121-res224-all
-      - XRV_RESNET_WEIGHTS=resnet50-res512-all
-      - XRV_AE_WEIGHTS=101-elastic
-      - XRV_AE_INPUT_SIZE=224
-      - XRV_AE_OOD_THRESHOLD=0.015
-      - XRV_CALIBRATION_FILE=/app/config/calibration.json
-    volumes:
-      - ./logs:/app/logs
-      - ./config:/app/config:ro
-    healthcheck:
-      test: ["CMD-SHELL", "echo ok"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      <<: *mcads_env
+      MCADS_ROLE: beat
+      MCADS_RUN_MIGRATIONS: "0"
+      MCADS_COLLECTSTATIC: "0"
+    command: ["celery", "-A", "mcads_project", "beat", "-l", "info"]
 
-  # Nginx Reverse Proxy
   nginx:
-    image: nginx:alpine
-    container_name: mcads_nginx
+    image: nginx:1.27-alpine
+    # Avoid the default nginx image entrypoint scripts trying to mutate our read-only config.
+    entrypoint: ["nginx", "-g", "daemon off;"]
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/mcads.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./staticfiles:/app/staticfiles:ro
-      - ./media:/app/media:ro
-      - ./ssl:/etc/nginx/ssl:ro
+      - mcads_staticfiles:/app/staticfiles:ro
+      - mcads_media:/app/media:ro
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
-  models_data:
+  mcads_media:
+  mcads_staticfiles:
+  mcads_logs:
+  mcads_data_exports:
+  mcads_backups:
+  mcads_model_cache:
+  mcads_matplotlib_cache:

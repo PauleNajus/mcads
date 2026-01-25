@@ -270,7 +270,7 @@ show_system_status() {
     
     echo "Application Status:"
     echo "=================="
-    echo "Database: $(if [ -f "db.sqlite3" ]; then echo "✅ Found"; else echo "❌ Not found"; fi)"
+    echo "Database: $(if command -v psql >/dev/null 2>&1; then echo "✅ PostgreSQL client found"; else echo "❌ psql not found"; fi)"
     echo "Media Files: $(if [ -d "media" ]; then echo "✅ Found"; else echo "❌ Not found"; fi)"
     echo "Static Files: $(if [ -d "staticfiles" ]; then echo "✅ Found"; else echo "❌ Not found"; fi)"
     echo "Application Code: $(if [ -d "xrayapp" ]; then echo "✅ Found"; else echo "❌ Not found"; fi)"
