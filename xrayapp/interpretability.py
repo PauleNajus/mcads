@@ -15,6 +15,34 @@ from .model_loader import load_model
 logger = logging.getLogger(__name__)
 
 
+def _model_device(model: torch.nn.Module) -> torch.device:
+    """Best-effort device detection for a (possibly wrapped) torch module."""
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device("cpu")
+
+
+def _pathology_names_for_output(model: torch.nn.Module, n_outputs: int) -> list[str]:
+    """Return a pathology name list that matches the model output dimension.
+
+    TorchXRayVision models *usually* expose `model.pathologies`. When it doesn't
+    match the output dimension, we fall back to `xrv.datasets.default_pathologies`.
+    """
+    model_names = list(getattr(model, "pathologies", []) or [])
+    if model_names and len(model_names) == n_outputs:
+        return model_names
+
+    default_names = list(xrv.datasets.default_pathologies)
+    if len(default_names) == n_outputs:
+        return default_names
+
+    # Final fallback: keep things consistent length-wise.
+    if model_names:
+        return model_names[:n_outputs]
+    return default_names[:n_outputs]
+
+
 def disable_inplace_relu(model: torch.nn.Module) -> torch.nn.Module:
     """
     Recursively disables in-place ReLU operations in a model.
@@ -125,10 +153,60 @@ class GradCAM:
         self.hook_backward = self.target_layer.register_full_backward_hook(backward_hook)
     
     def _release_hooks(self):
-        if hasattr(self, 'hook_forward'):
-            self.hook_forward.remove()
-        if hasattr(self, 'hook_backward'):
-            self.hook_backward.remove()
+        # Make hook cleanup idempotent (important in long-running web workers).
+        hook_forward = getattr(self, "hook_forward", None)
+        if hook_forward is not None:
+            hook_forward.remove()
+            self.hook_forward = None
+        hook_backward = getattr(self, "hook_backward", None)
+        if hook_backward is not None:
+            hook_backward.remove()
+            self.hook_backward = None
+
+    def close(self) -> None:
+        """Explicitly remove hooks to avoid server-side memory leaks."""
+        self._release_hooks()
+
+    def __enter__(self) -> "GradCAM":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
+
+    def _safe_forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        """Forward pass with a narrow CPU fallback for known PyTorch CPU issues."""
+        try:
+            return self.model(input_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                logger.warning("PyTorch primitive error in Grad-CAM; using CPU fallback.")
+                self.model = self.model.cpu()
+                return self.model(input_tensor.cpu())
+            raise
+
+    def _resolve_target_index(
+        self,
+        output: torch.Tensor,
+        target_class: str | int | None,
+    ) -> int:
+        """Resolve a target class (name or index) to an output index."""
+        n_outputs = int(output.shape[-1])
+
+        if target_class is None:
+            return int(torch.argmax(output).item())
+
+        if isinstance(target_class, str):
+            names = _pathology_names_for_output(self.model, n_outputs)
+            try:
+                return int(names.index(target_class))
+            except ValueError as e:
+                raise ValueError(f"Pathology {target_class} not found in model outputs.") from e
+
+        idx = int(target_class)
+        if not (0 <= idx < n_outputs):
+            raise ValueError(f"Target class index {idx} is out of range for {n_outputs} outputs.")
+        return idx
     
     def get_heatmap(self, input_tensor, target_class=None):
         """
@@ -144,37 +222,11 @@ class GradCAM:
         """
         # Forward pass
         self.model.zero_grad()
-        try:
-            output = self.model(input_tensor)
-        except RuntimeError as e:
-            if "could not create a primitive" in str(e):
-                logger.warning("PyTorch primitive error in Grad-CAM; using CPU fallback.")
-                self.model = self.model.cpu()
-                input_tensor = input_tensor.cpu()
-                output = self.model(input_tensor)
-            else:
-                raise e
-        
-        # If target_class is None, get class with highest score
-        if target_class is None:
-            target_class = torch.argmax(output).item()
-        elif isinstance(target_class, str):
-            # If target_class is a string (pathology name), get its index
-            # For ResNet model, use default_pathologies for correct mapping
-            if hasattr(self.model, 'pathologies') and 'Lung Opacity' in self.model.pathologies:
-                # This is ResNet model, use default_pathologies for indexing
-                if target_class in xrv.datasets.default_pathologies:
-                    target_class = xrv.datasets.default_pathologies.index(target_class)
-                else:
-                    raise ValueError(f"Pathology {target_class} not found in default pathologies.")
-            elif target_class in self.model.pathologies:
-                target_class = self.model.pathologies.index(target_class)
-            else:
-                raise ValueError(f"Pathology {target_class} not found in model.")
+        output = self._safe_forward(input_tensor)
+        target_idx = self._resolve_target_index(output, target_class)
         
         # Backward pass (calculate gradients)
         one_hot = torch.zeros_like(output)
-        target_idx: int = int(target_class)
         one_hot[0, target_idx] = 1
         output.backward(gradient=one_hot)
         
@@ -186,18 +238,15 @@ class GradCAM:
         
         # Calculate weights based on global average pooling of gradients
         pooled_gradients = torch.mean(self.gradients, dim=(0, 2, 3))
-        
-        # Create a copy of activations to avoid in-place modifications
-        # of tensors that are part of the computation graph
-        activations = self.activations.clone()
-        
-        # Weight activation maps with gradients (without in-place operations)
-        weighted_activations = torch.zeros_like(activations)
-        for i in range(pooled_gradients.shape[0]):
-            weighted_activations[:, i, :, :] = activations[:, i, :, :] * pooled_gradients[i]
-        
-        # Global average pooling of weighted activation maps
-        heatmap = torch.mean(weighted_activations, dim=1).squeeze().cpu().detach().numpy()
+
+        # Weight activation maps with gradients (vectorized; faster than Python loops)
+        activations = self.activations
+        assert activations is not None
+        heatmap_t = torch.mean(
+            activations * pooled_gradients[None, :, None, None],
+            dim=1,
+        ).squeeze()
+        heatmap = heatmap_t.cpu().detach().numpy()
         
         # ReLU on heatmap
         heatmap = np.maximum(heatmap, 0)
@@ -210,7 +259,7 @@ class GradCAM:
             logger.warning("Grad-CAM heatmap is all zeros; using a minimal fallback.")
             heatmap = np.ones_like(heatmap) * 0.1
         
-        return heatmap, output
+        return heatmap, output.detach()
     
     def overlay_heatmap(self, img, heatmap, alpha=0.4, colormap=cv2.COLORMAP_JET):
         """
@@ -243,9 +292,11 @@ class GradCAM:
         return overlaid_img
     
     def __del__(self):
-        # Release hooks when object is deleted
-        if hasattr(self, 'hook_forward') and hasattr(self, 'hook_backward'):
-            self._release_hooks()
+        # Best-effort cleanup; prefer explicit `close()` via context manager.
+        try:
+            self.close()
+        except Exception:
+            pass
     
     def get_combined_heatmap(self, input_tensor, probability_threshold=0.5):
         """
@@ -260,20 +311,15 @@ class GradCAM:
             selected_pathologies: List of pathology names and their probabilities above threshold
             output: Model output logits
         """
-        # Forward pass to get predictions
+        # Single forward pass (we reuse `output` for all backprops below).
         self.model.zero_grad()
-        output = self.model(input_tensor)
-        
-        # Convert output to probabilities using sigmoid (for multi-label classification)
-        probabilities = torch.sigmoid(output).squeeze().cpu().detach().numpy()
-        
-        # Determine pathology names based on model type
-        if hasattr(self.model, 'pathologies') and 'Lung Opacity' in self.model.pathologies:
-            # This is ResNet model, use default_pathologies for correct mapping
-            pathology_names = xrv.datasets.default_pathologies
-        else:
-            # This is DenseNet or other model
-            pathology_names = self.model.pathologies
+        output = self._safe_forward(input_tensor)
+
+        # Convert output to probabilities using sigmoid (multi-label); no graph needed here.
+        with torch.no_grad():
+            probabilities = torch.sigmoid(output).squeeze().cpu().numpy()
+
+        pathology_names = _pathology_names_for_output(self.model, int(probabilities.shape[0]))
         
         # Find pathologies above threshold
         selected_pathologies = []
@@ -298,38 +344,29 @@ class GradCAM:
             logger.debug("  %s: %.3f", pathology, prob)
         
         # Generate combined heatmap
-        combined_heatmap = None
-        
+        combined_heatmap: np.ndarray | None = None
+
         for i, target_class in enumerate(selected_indices):
             # Reset gradients for each pathology
             self.model.zero_grad()
-            
-            # Forward pass (reuse the same output for efficiency)
-            if i == 0:
-                current_output = self.model(input_tensor)
-            else:
-                current_output = self.model(input_tensor)
-            
-            # Backward pass for this specific pathology
-            one_hot = torch.zeros_like(current_output)
+
+            # Backward pass for this specific pathology (reuse the same `output` graph)
+            one_hot = torch.zeros_like(output)
             one_hot[0, int(target_class)] = 1
-            current_output.backward(gradient=one_hot, retain_graph=(i < len(selected_indices) - 1))
+            output.backward(gradient=one_hot, retain_graph=(i < len(selected_indices) - 1))
             
             # Calculate weights based on global average pooling of gradients
             if self.gradients is None or self.activations is None:
                 raise RuntimeError("Gradients/activations not captured. Ensure backward hooks ran.")
             pooled_gradients = torch.mean(self.gradients, dim=(0, 2, 3))
-            
-            # Create a copy of activations to avoid in-place modifications
-            activations = self.activations.clone()
-            
-            # Weight activation maps with gradients
-            weighted_activations = torch.zeros_like(activations)
-            for j in range(pooled_gradients.shape[0]):
-                weighted_activations[:, j, :, :] = activations[:, j, :, :] * pooled_gradients[j]
-            
-            # Global average pooling of weighted activation maps
-            heatmap = torch.mean(weighted_activations, dim=1).squeeze().cpu().detach().numpy()
+
+            activations = self.activations
+            assert activations is not None
+            heatmap_t = torch.mean(
+                activations * pooled_gradients[None, :, None, None],
+                dim=1,
+            ).squeeze()
+            heatmap = heatmap_t.cpu().detach().numpy()
             
             # ReLU on heatmap
             heatmap = np.maximum(heatmap, 0)
@@ -353,7 +390,7 @@ class GradCAM:
         if np.max(combined_heatmap) > 0:
             combined_heatmap = combined_heatmap / np.max(combined_heatmap)
         
-        return combined_heatmap, selected_pathologies, output
+        return combined_heatmap, selected_pathologies, output.detach()
 
 
 class PixelLevelInterpretability:
@@ -637,8 +674,6 @@ def apply_gradcam(
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Let GradCAM auto-detect the appropriate target layer
-    
     # Load and preprocess the image
     img = skimage.io.imread(image_path)
     img = xrv.datasets.normalize(img, 255)
@@ -655,74 +690,32 @@ def apply_gradcam(
     # Add channel dimension
     img = img[None, :, :]
     
-    # Set up transformation pipeline
-    if model_type == 'densenet':
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(224)
-        ])
-        resize_dim = 224
-    else:  # resnet
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayResizer(512),
-            xrv.datasets.XRayCenterCrop()
-        ])
-        resize_dim = 512
+    # IMPORTANT: Keep preprocessing consistent with inference (`xrayapp/utils.py`).
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(resize_dim),
+    ])
     
     # Apply transforms
     img = transform(img)
     
-    # Convert to tensor
-    img_tensor = torch.from_numpy(img)
-    
-    # Add batch dimension
-    if len(img_tensor.shape) < 3:
-        img_tensor = img_tensor.unsqueeze(0).unsqueeze(0)
-    elif len(img_tensor.shape) == 3:
-        img_tensor = img_tensor.unsqueeze(0)
-    
-    # Get model predictions to determine target class if not provided
-    wrapped_model.eval()
-    with torch.no_grad():
-        try:
-            preds = wrapped_model(img_tensor)
-        except RuntimeError as e:
-            if "could not create a primitive" in str(e):
-                logger.warning("PyTorch primitive error; using CPU fallback.")
-                wrapped_model = wrapped_model.cpu()
-                img_tensor = img_tensor.cpu()
-                preds = wrapped_model(img_tensor)
-            else:
-                raise e
-    
-    # If target_class is not provided, use the class with the highest probability
+    # To tensor on the same device as the cached model (prevents CPU/GPU mismatch).
+    img_tensor = torch.from_numpy(img).unsqueeze(0).float().to(_model_device(wrapped_model))
+
+    # Initialize Grad-CAM (auto-detect target layer) and generate heatmap.
+    with GradCAM(wrapped_model) as gradcam:
+        heatmap, output = gradcam.get_heatmap(img_tensor, target_class)
+
+    # Return a stable, user-facing pathology name (even if caller passed an index).
+    names = _pathology_names_for_output(wrapped_model, int(output.shape[-1]))
     if target_class is None:
-        pred_idx = int(torch.argmax(preds).item())
-        # For ResNet, we need to get the pathology name from default_pathologies
-        if model_type == 'resnet':
-            target_class = xrv.datasets.default_pathologies[pred_idx]
-        else:
-            target_class = wrapped_model.pathologies[pred_idx]
+        target_idx = int(torch.argmax(output, dim=-1).item())
+        target_name: str | int = names[target_idx] if 0 <= target_idx < len(names) else target_idx
     elif isinstance(target_class, str):
-        # If target_class is a pathology name, validate it exists
-        if model_type == 'resnet':
-            if target_class not in xrv.datasets.default_pathologies:
-                logger.warning("Pathology %s not found; using highest probability class.", target_class)
-                pred_idx = int(torch.argmax(preds).item())
-                target_class = xrv.datasets.default_pathologies[pred_idx]
-        else:
-            try:
-                target_class_idx = wrapped_model.pathologies.index(target_class)
-            except ValueError:
-                logger.warning("Pathology %s not found in model; using highest probability class.", target_class)
-                pred_idx = int(torch.argmax(preds).item())
-                target_class = wrapped_model.pathologies[pred_idx]
-    
-    # Initialize Grad-CAM (auto-detect target layer)
-    gradcam = GradCAM(wrapped_model)
-    
-    # Get heatmap
-    heatmap, _ = gradcam.get_heatmap(img_tensor, target_class)
+        target_name = target_class
+    else:
+        idx = int(target_class)
+        target_name = names[idx] if 0 <= idx < len(names) else idx
     
     # Convert original image to a suitable format for visualization
     original_vis = original_img
@@ -740,7 +733,7 @@ def apply_gradcam(
         'original': original_vis,
         'heatmap': heatmap,
         'overlay': overlaid_img,
-        'target_class': target_class
+        'target_class': target_name
     }
 
 
@@ -766,8 +759,6 @@ def apply_combined_gradcam(
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Let GradCAM auto-detect the appropriate target layer
-    
     # Load and preprocess the image
     img = skimage.io.imread(image_path)
     img = xrv.datasets.normalize(img, 255)
@@ -784,39 +775,23 @@ def apply_combined_gradcam(
     # Add channel dimension
     img = img[None, :, :]
     
-    # Set up transformation pipeline
-    if model_type == 'densenet':
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(224)
-        ])
-        resize_dim = 224
-    else:  # resnet
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayResizer(512),
-            xrv.datasets.XRayCenterCrop()
-        ])
-        resize_dim = 512
+    # IMPORTANT: Keep preprocessing consistent with inference (`xrayapp/utils.py`).
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(resize_dim),
+    ])
     
     # Apply transforms
     img = transform(img)
     
-    # Convert to tensor
-    img_tensor = torch.from_numpy(img)
-    
-    # Add batch dimension
-    if len(img_tensor.shape) < 3:
-        img_tensor = img_tensor.unsqueeze(0).unsqueeze(0)
-    elif len(img_tensor.shape) == 3:
-        img_tensor = img_tensor.unsqueeze(0)
-    
-    # Initialize Grad-CAM (auto-detect target layer)
-    gradcam = GradCAM(wrapped_model)
-    
-    # Get combined heatmap for pathologies above threshold
-    combined_heatmap, selected_pathologies, predictions = gradcam.get_combined_heatmap(
-        img_tensor, probability_threshold=probability_threshold
-    )
+    # To tensor on the same device as the cached model (prevents CPU/GPU mismatch).
+    img_tensor = torch.from_numpy(img).unsqueeze(0).float().to(_model_device(wrapped_model))
+
+    # Initialize Grad-CAM (auto-detect target layer) and generate heatmap.
+    with GradCAM(wrapped_model) as gradcam:
+        combined_heatmap, selected_pathologies, _predictions = gradcam.get_combined_heatmap(
+            img_tensor, probability_threshold=probability_threshold
+        )
     
     # Convert original image to a suitable format for visualization
     original_vis = original_img
