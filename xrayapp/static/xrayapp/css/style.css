@@ -1253,6 +1253,33 @@ button,
   }
 }
 
+/* Desktop: give "Probability" column more room so bars are longer */
+@media (min-width: 992px) {
+  /* Fix column widths for consistent desktop layout */
+  .prediction-results-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  /* Desktop: keep pathology names on one line (incl. help icon). */
+  .prediction-results-table th:nth-child(1),
+  .prediction-results-table td:nth-child(1) {
+    width: 35%;
+    white-space: nowrap;
+  }
+
+  /* Keep action buttons readable without dominating the table */
+  .prediction-results-table th:nth-child(3),
+  .prediction-results-table td:nth-child(3) {
+    width: 220px;
+  }
+
+  /* Ensure the progress UI expands to the full cell width */
+  .prediction-results-table .mobile-pathology-progress {
+    width: 100%;
+  }
+}
+
 /* Custom risk level badge colors */
 .badge.bg-very-high {
   background-color: #dc2626 !important; /* Red */
