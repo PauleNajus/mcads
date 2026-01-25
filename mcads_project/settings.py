@@ -173,8 +173,12 @@ CSRF_USE_SESSIONS = False  # Use cookies instead of sessions for better AJAX sup
 CSRF_COOKIE_SECURE = not DEBUG  # Use secure cookies in production
 
 # File upload security
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+#
+# DICOM uploads are commonly larger than JPG/PNG. We allow larger request bodies,
+# but keep the in-memory threshold modest so Django streams large files to disk.
+# NOTE: Keep this aligned with Nginx `client_max_body_size`.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB in-memory threshold
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB max request size
 FILE_UPLOAD_PERMISSIONS = 0o644
 
 # Logging configuration for security monitoring

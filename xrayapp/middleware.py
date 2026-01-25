@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
 import hashlib
@@ -69,12 +70,15 @@ class RoleBasedAccessMiddleware:
     
     def __init__(self, get_response):
         self.get_response = get_response
-        # Define URL patterns and required permissions
+        # Define URL prefixes and required permissions.
+        #
+        # NOTE: Some endpoints have dynamic parts (e.g. `/prediction-history/<id>/delete/`).
+        # Those are handled in `_required_permission_for_path()` below.
         self.protected_patterns = {
             '/secure-admin-mcads-2024/': 'can_access_admin',
             '/admin/': 'can_access_admin',
-            '/prediction-history/delete': 'can_delete_data',
             '/interpretability/': 'can_generate_interpretability',
+            '/segmentation/': 'can_generate_interpretability',
         }
         
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -103,15 +107,21 @@ class RoleBasedAccessMiddleware:
     def _check_access(self, request: HttpRequest) -> bool:
         """Check if user has access to the requested resource"""
         try:
-            # Get user profile
-            profile = getattr(request.user, 'profile', None)
-            if not profile:
-                return False
-            
-            # Check against protected patterns
-            for pattern, permission in self.protected_patterns.items():
-                if request.path.startswith(pattern):
-                    return getattr(profile, permission, lambda: False)()
+            # Get or create user profile.
+            #
+            # Some flows in this codebase create `UserProfile` lazily (e.g. on first upload).
+            # Middleware must not lock those users out with a 403 before the view can run.
+            try:
+                profile = request.user.profile  # type: ignore[attr-defined]
+            except ObjectDoesNotExist:
+                from .models import UserProfile, UserRole  # local import to avoid import-time side effects
+
+                default_role = UserRole.ADMINISTRATOR if request.user.is_superuser else UserRole.RADIOGRAPHER
+                profile, _ = UserProfile.objects.get_or_create(user=request.user, defaults={'role': default_role})
+
+            permission = self._required_permission_for_path(request.path)
+            if permission:
+                return getattr(profile, permission, lambda: False)()
             
             # Allow access if no specific protection is defined
             return True
@@ -120,3 +130,26 @@ class RoleBasedAccessMiddleware:
             # If there's any error, deny access and log for audit/debugging.
             logger.exception("RoleBasedAccessMiddleware error for path=%s", request.path)
             return False 
+
+    def _required_permission_for_path(self, path: str) -> str | None:
+        """Return the permission method name required for a path (or None).
+
+        Keep this intentionally simple and fast: pure string matching.
+        """
+        # Dynamic prediction-history actions
+        if path.startswith('/prediction-history/'):
+            if path.endswith('/delete/') or path.startswith('/prediction-history/delete-all/'):
+                return 'can_delete_data'
+            if path.endswith('/edit/'):
+                return 'can_edit_predictions'
+
+        # Dynamic visualization deletion
+        if path.startswith('/visualization/') and path.endswith('/delete/'):
+            return 'can_delete_data'
+
+        # Static prefix patterns
+        for pattern, permission in self.protected_patterns.items():
+            if path.startswith(pattern):
+                return permission
+
+        return None

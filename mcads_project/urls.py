@@ -25,7 +25,9 @@ urlpatterns = [
     # Add Django's i18n URLs for JavaScript internationalization
     path('i18n/', include('django.conf.urls.i18n')),
     # Add JavaScript catalog for internationalization
-    path('i18n/jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
+    # NOTE: This project stores JS strings in the main `django` catalog (django.po/mo),
+    # so we serve that domain here to make `gettext()` in JS actually translate.
+    path('i18n/jsi18n/', JavaScriptCatalog.as_view(domain='django'), name='javascript-catalog'),
     path('', include('xrayapp.urls')),
     # Add favicon redirect
     path('favicon.ico', 

@@ -122,7 +122,7 @@
                     <div class="mb-2">
                         <label for="id_image" class="form-label">{% trans "Select X-ray image:" %}</label>
                         <!-- Hidden file input -->
-                        <input type="file" name="image" id="id_image" accept="image/*" class="d-none" required>
+                        <input type="file" name="image" id="id_image" accept="image/*,.dcm,.dicom,application/dicom" class="d-none" required>
                         <!-- Custom file input button -->
                         <div class="input-group">
                             <button type="button" class="btn btn-outline-secondary" id="custom-file-button">
@@ -303,7 +303,7 @@
 
 {% block extra_js %}
 {% load static %}
-<script src="{% static 'xrayapp/js/analysis.js' %}?v=1.0.4"></script>
+<script src="{% static 'xrayapp/js/analysis.js' %}?v=1.0.5"></script>
 <script>
   // Register service worker to clean cache
   if ('serviceWorker' in navigator) {

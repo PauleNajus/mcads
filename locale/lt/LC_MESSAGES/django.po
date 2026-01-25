@@ -236,59 +236,47 @@ msgstr "Pagrindinė informacija"
 
 #: .\xrayapp\admin.py:343
 msgid "File Paths"
-msgstr ""
+msgstr "Failų keliai"
 
 #: .\xrayapp\admin.py:346
-#, fuzzy
-#| msgid "Image Metadata"
 msgid "Metadata"
-msgstr "Nuotraukos metaduomenys"
+msgstr "Metaduomenys"
 
 #: .\xrayapp\admin.py:349 .\xrayapp\admin.py:372
 msgid "Preview"
-msgstr ""
+msgstr "Peržiūra"
 
 #: .\xrayapp\admin.py:361
-#, fuzzy
-#| msgid "X-ray date"
 msgid "X-ray"
-msgstr "Rentgeno data"
+msgstr "Rentgeno nuotrauka"
 
 #: .\xrayapp\admin.py:371
-#, fuzzy
-#| msgid "No profile information available"
 msgid "No visualization available"
-msgstr "Profilio informacija nepasiekiama"
+msgstr "Vizualizacija nepasiekiama"
 
 #: .\xrayapp\admin.py:379
-#, fuzzy
-#| msgid "GRAD-CAM Visualization"
 msgid "Main Visualization"
-msgstr "GRAD-CAM vizualizacija"
+msgstr "Pagrindinė vizualizacija"
 
 #: .\xrayapp\admin.py:381
 msgid "Heatmap"
 msgstr "Šilumos žemėlapis"
 
 #: .\xrayapp\admin.py:383
-#, fuzzy
-#| msgid "GRAD-CAM Overlay"
 msgid "Overlay"
-msgstr "GRAD-CAM perdanga"
+msgstr "Perdanga"
 
 #: .\xrayapp\admin.py:385
 msgid "Saliency Map"
-msgstr ""
+msgstr "Svarbos žemėlapis"
 
 #: .\xrayapp\admin.py:389
-#, fuzzy
-#| msgid "No profile information available"
 msgid "No files available"
-msgstr "Profilio informacija nepasiekiama"
+msgstr "Failų nėra"
 
 #: .\xrayapp\admin.py:390
 msgid "File Links"
-msgstr ""
+msgstr "Failų nuorodos"
 
 #: .\xrayapp\admin.py:394
 msgid "MCADS Administration"
@@ -362,24 +350,20 @@ msgid "X-ray date cannot be in the future."
 msgstr "Rentgeno data negali būti ateityje."
 
 #: .\xrayapp\forms.py:120
-#, fuzzy
-#| msgid ""
-#| "First name should only contain letters, spaces, hyphens, and apostrophes."
 msgid ""
 "Technologist first name should only contain letters, spaces, hyphens, and "
 "apostrophes."
 msgstr ""
-"Vardas turi būti sudarytas tik iš raidžių, tarpų, brūkšnelių ir apostrofų."
+"Technologo vardas turi būti sudarytas tik iš raidžių, tarpų, brūkšnelių ir "
+"apostrofų."
 
 #: .\xrayapp\forms.py:127
-#, fuzzy
-#| msgid ""
-#| "Last name should only contain letters, spaces, hyphens, and apostrophes."
 msgid ""
 "Technologist last name should only contain letters, spaces, hyphens, and "
 "apostrophes."
 msgstr ""
-"Pavardė turi būti sudaryta tik iš raidžių, tarpų, brūkšnelių ir apostrofų."
+"Technologo pavardė turi būti sudaryta tik iš raidžių, tarpų, brūkšnelių ir "
+"apostrofų."
 
 #: .\xrayapp\forms.py:133 .\xrayapp\forms.py:177
 msgid "All"
@@ -426,7 +410,7 @@ msgstr "Minimali tikimybė"
 #: .\xrayapp\templates\xrayapp\prediction_history.html:48
 #: .\xrayapp\templates\xrayapp\saved_records.html:48
 msgid "Records per page"
-msgstr ""
+msgstr "Įrašų per puslapį"
 
 # Medical pathologies
 #: .\xrayapp\forms.py:178
@@ -604,8 +588,6 @@ msgid "GRAD-CAM"
 msgstr "GRAD-CAM"
 
 #: .\xrayapp\models.py:289
-#, fuzzy
-#| msgid "Pixel-level interpretability"
 msgid "Pixel-level Interpretability"
 msgstr "Pikselių lygio interpretavimas"
 
@@ -615,7 +597,7 @@ msgstr "Kombinuotas GRAD-CAM"
 
 #: .\xrayapp\models.py:291
 msgid "Combined PLI"
-msgstr ""
+msgstr "Kombinuotas PLI"
 
 #: .\xrayapp\models.py:390
 msgid "System Default"
@@ -899,27 +881,21 @@ msgid "Active"
 msgstr "Aktyvus"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:120
-#, fuzzy
-#| msgid "Active"
 msgid "Inactive"
-msgstr "Aktyvus"
+msgstr "Neaktyvus"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:124
-#, fuzzy
-#| msgid "Superuser"
 msgid "Superuser:"
-msgstr "Supernaudotojas"
+msgstr "Supernaudotojas:"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:124
 #: .\xrayapp\templates\xrayapp\account_settings.html:127
 msgid "Yes"
-msgstr ""
+msgstr "Taip"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:127
-#, fuzzy
-#| msgid "Staff"
 msgid "Staff:"
-msgstr "Personalas"
+msgstr "Personalas:"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:133
 msgid "Account Dates"
@@ -964,10 +940,8 @@ msgstr "El. pašto pranešimai:"
 #: .\xrayapp\templates\xrayapp\account_settings.html:151
 #: .\xrayapp\templates\xrayapp\account_settings.html:158
 #: .\xrayapp\templates\xrayapp\account_settings.html:165
-#, fuzzy
-#| msgid "Disabled"
 msgid "Enabled"
-msgstr "Išjungta"
+msgstr "Įjungta"
 
 #: .\xrayapp\templates\xrayapp\account_settings.html:153
 #: .\xrayapp\templates\xrayapp\account_settings.html:160
@@ -1163,10 +1137,8 @@ msgid "Powered by"
 msgstr "Veikia su"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:5
-#, fuzzy
-#| msgid "Edit Predictions"
 msgid "Edit prediction"
-msgstr "Redaguoti prognozes"
+msgstr "Redaguoti prognozę"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:12
 msgid "Edit prediction for"
@@ -1212,16 +1184,12 @@ msgid "Additional information"
 msgstr "Papildoma informacija"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:62
-#, fuzzy
-#| msgid "Technologist first name:"
 msgid "Technologist First Name"
-msgstr "Technologo vardas:"
+msgstr "Technologo vardas"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:66
-#, fuzzy
-#| msgid "Technologist last name:"
 msgid "Technologist Last Name"
-msgstr "Technologo pavardė:"
+msgstr "Technologo pavardė"
 
 #: .\xrayapp\templates\xrayapp\edit_prediction.html:73
 msgid "Back to history"
@@ -1410,6 +1378,14 @@ msgstr "Taikyti filtrus"
 msgid "Clear filters"
 msgstr "Išvalyti filtrus"
 
+#: .\xrayapp\templates\xrayapp\prediction_history.html:68
+msgid "Sorting"
+msgstr "Rūšiavimas"
+
+#: .\xrayapp\templates\xrayapp\prediction_history.html:86
+msgid "Reset sorting"
+msgstr "Atstatyti rūšiavimą"
+
 #: .\xrayapp\templates\xrayapp\prediction_history.html:67
 msgid "History Records"
 msgstr "Istorijos įrašai"
@@ -1451,14 +1427,12 @@ msgstr "Veiksmai"
 #: .\xrayapp\templates\xrayapp\prediction_history.html:455
 #: .\xrayapp\templates\xrayapp\saved_records.html:132
 msgid "Remove from saved"
-msgstr ""
+msgstr "Pašalinti iš išsaugotų"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:130
 #: .\xrayapp\templates\xrayapp\prediction_history.html:466
-#, fuzzy
-#| msgid "Save profile"
 msgid "Save record"
-msgstr "Išsaugoti profilį"
+msgstr "Išsaugoti įrašą"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:170
 #: .\xrayapp\templates\xrayapp\saved_records.html:170
@@ -1494,12 +1468,12 @@ msgstr "Peržiūrėti"
 #: .\xrayapp\templates\xrayapp\prediction_history.html:457
 #: .\xrayapp\templates\xrayapp\saved_records.html:223
 msgid "Unsave"
-msgstr ""
+msgstr "Pašalinti iš išsaugotų"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:220
 #: .\xrayapp\templates\xrayapp\prediction_history.html:468
 msgid "Save"
-msgstr ""
+msgstr "Išsaugoti"
 
 # Deletion confirmation modal
 #: .\xrayapp\templates\xrayapp\prediction_history.html:236
@@ -1517,74 +1491,62 @@ msgid "No prediction history found with the current filters."
 msgstr "Su dabartiniais filtrais nerasta prognozių istorijos."
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:285
-#, fuzzy
-#| msgid "Prediction history"
 msgid "Prediction history pagination"
-msgstr "Prognozių istorija"
+msgstr "Prognozių istorijos puslapiavimas"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:288
 #: .\xrayapp\templates\xrayapp\saved_records.html:248
-#, fuzzy
-#| msgid "First Name"
 msgid "First"
-msgstr "Vardas"
+msgstr "Pirmas"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:288
 #: .\xrayapp\templates\xrayapp\saved_records.html:248
-#, fuzzy
-#| msgid "First Name"
 msgid "First page"
-msgstr "Vardas"
+msgstr "Pirmas puslapis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:291
 #: .\xrayapp\templates\xrayapp\saved_records.html:251
 msgid "Previous"
-msgstr ""
+msgstr "Ankstesnis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:291
 #: .\xrayapp\templates\xrayapp\saved_records.html:251
 msgid "Previous page"
-msgstr ""
+msgstr "Ankstesnis puslapis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:305
 #: .\xrayapp\templates\xrayapp\saved_records.html:265
 msgid "Next"
-msgstr ""
+msgstr "Kitas"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:305
 #: .\xrayapp\templates\xrayapp\saved_records.html:265
 msgid "Next page"
-msgstr ""
+msgstr "Kitas puslapis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:308
 #: .\xrayapp\templates\xrayapp\saved_records.html:268
-#, fuzzy
-#| msgid "Last Name"
 msgid "Last"
-msgstr "Pavardė"
+msgstr "Paskutinis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:308
 #: .\xrayapp\templates\xrayapp\saved_records.html:268
-#, fuzzy
-#| msgid "Last Name"
 msgid "Last page"
-msgstr "Pavardė"
+msgstr "Paskutinis puslapis"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:317
 #: .\xrayapp\templates\xrayapp\saved_records.html:277
 msgid "Showing"
-msgstr ""
+msgstr "Rodoma"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:317
 #: .\xrayapp\templates\xrayapp\saved_records.html:277
 msgid "of"
-msgstr ""
+msgstr "iš"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:317
-#, fuzzy
-#| msgid "History Records"
 msgid "records"
-msgstr "Istorijos įrašai"
+msgstr "įrašų"
 
 #: .\xrayapp\templates\xrayapp\prediction_history.html:325
 #: .\xrayapp\templates\xrayapp\results.html:917
@@ -1654,27 +1616,23 @@ msgstr "Vizualizacija"
 
 #: .\xrayapp\templates\xrayapp\results.html:634
 msgid "Learn more about"
-msgstr ""
+msgstr "Sužinoti daugiau apie"
 
 #: .\xrayapp\templates\xrayapp\results.html:653
-#, fuzzy
-#| msgid "Grad-CAM visualization"
 msgid "Generate Grad-CAM visualization for"
-msgstr "Grad-CAM vizualizacija"
+msgstr "Generuoti Grad-CAM vizualizaciją dėl"
 
 #: .\xrayapp\templates\xrayapp\results.html:654
 msgid "Grad-CAM"
 msgstr "Grad-CAM"
 
 #: .\xrayapp\templates\xrayapp\results.html:659
-#, fuzzy
-#| msgid "Pixel-Level interpretability"
 msgid "Generate Pixel-Level interpretability for"
-msgstr "Pikselių lygio interpretavimas"
+msgstr "Generuoti pikselių lygio interpretavimą dėl"
 
 #: .\xrayapp\templates\xrayapp\results.html:660
 msgid "PLI"
-msgstr ""
+msgstr "PLI"
 
 #: .\xrayapp\templates\xrayapp\results.html:670
 msgid ""
@@ -1693,10 +1651,8 @@ msgstr "GRAD-CAM vizualizacija"
 #: .\xrayapp\templates\xrayapp\results.html:782
 #: .\xrayapp\templates\xrayapp\results.html:1115
 #: .\xrayapp\templates\xrayapp\results.html:1230
-#, fuzzy
-#| msgid "Generate visualization"
 msgid "Delete this visualization"
-msgstr "Generuoti vizualizaciją"
+msgstr "Ištrinti šią vizualizaciją"
 
 #: .\xrayapp\templates\xrayapp\results.html:698
 #: .\xrayapp\templates\xrayapp\results.html:791
@@ -1832,7 +1788,7 @@ msgstr "Sugeneruota"
 #: .\xrayapp\templates\xrayapp\results.html:855
 #: .\xrayapp\templates\xrayapp\results.html:1303
 msgid "Threshold"
-msgstr ""
+msgstr "Slenkstis"
 
 #: .\xrayapp\templates\xrayapp\results.html:776
 #: .\xrayapp\templates\xrayapp\results.html:1224
@@ -1852,6 +1808,8 @@ msgid ""
 "Pixel-Level Interpretability shows which individual pixels had the most "
 "influence on the model's prediction for"
 msgstr ""
+"Pikselių lygio interpretavimas parodo, kurie atskiri pikseliai turėjo "
+"didžiausią įtaką modelio prognozei dėl"
 
 #: .\xrayapp\templates\xrayapp\results.html:897
 msgid "Interpretability options"
@@ -3047,30 +3005,24 @@ msgid "No prediction history records to delete."
 msgstr "Nėra prognozių istorijos įrašų šalinimui."
 
 #: .\xrayapp\views.py:812
-#, fuzzy
-#| msgid "Key Permissions"
 msgid "Permission denied"
-msgstr "Pagrindiniai leidimai"
+msgstr "Prieiga uždrausta"
 
 #: .\xrayapp\views.py:840
 msgid "Visualization not found"
-msgstr ""
+msgstr "Vizualizacija nerasta"
 
 #: .\xrayapp\views.py:860
 msgid "Prediction record has been updated."
 msgstr "Prognozės įrašas atnaujintas."
 
 #: .\xrayapp\views.py:909
-#, fuzzy
-#| msgid "Interpretability options"
 msgid "Interpretability generation started"
-msgstr "Interpretavimo galimybės"
+msgstr "Interpretavimo generavimas pradėtas"
 
 #: .\xrayapp\views.py:997
-#, fuzzy
-#| msgid "Page Not Found"
 msgid "Image not found"
-msgstr "Puslapis nerastas"
+msgstr "Vaizdas nerastas"
 
 #: .\xrayapp\views.py:1014
 msgid "Your profile information has been updated successfully."
@@ -3101,17 +3053,56 @@ msgid "Please correct the errors in your password form."
 msgstr "Prašome ištaisyti klaidas slaptažodžio formoje."
 
 #: .\xrayapp\views.py:1129
-#, fuzzy
-#| msgid "Your password has been changed successfully."
 msgid "Record saved successfully"
-msgstr "Jūsų slaptažodis sėkmingai pakeistas."
+msgstr "Įrašas sėkmingai išsaugotas"
 
 #: .\xrayapp\views.py:1137
 msgid "Record removed from saved"
-msgstr ""
+msgstr "Įrašas pašalintas iš išsaugotų"
 
 #: .\xrayapp\views.py:1143
-#, fuzzy
-#| msgid "Prediction history record not found."
 msgid "Prediction record not found"
-msgstr "Prognozių istorijos įrašas nerastas."
+msgstr "Prognozės įrašas nerastas."
+
+# --- Additional strings (recent UI / DICOM additions) -------------------------
+#
+# Keep user-facing strings translated even when they originate from JavaScript
+# (via gettext) or were added after the last `makemessages` run.
+
+#: .\xrayapp\static\xrayapp\js\analysis.js:207
+msgid "File too large. Please upload a smaller file."
+msgstr "Failas per didelis. Įkelkite mažesnį failą."
+
+#: .\xrayapp\static\xrayapp\js\analysis.js:234
+#: .\xrayapp\static\xrayapp\js\analysis.js:245
+msgid "Error: "
+msgstr "Klaida: "
+
+#: .\xrayapp\forms.py:177
+#, python-format
+msgid "Image file too large. Maximum size is %(max_mb).0fMB."
+msgstr "Nuotraukos failas per didelis. Maksimalus dydis yra %(max_mb).0fMB."
+
+#: .\xrayapp\forms.py:54
+msgid "DICOM support is not available on this server."
+msgstr "DICOM palaikymas šiame serveryje nepasiekiamas."
+
+#: .\xrayapp\forms.py:60
+msgid "Invalid DICOM file."
+msgstr "Netinkamas DICOM failas."
+
+#: .\xrayapp\forms.py:66
+msgid "Unable to read DICOM pixel data."
+msgstr "Nepavyko nuskaityti DICOM pikselių duomenų."
+
+#: .\xrayapp\forms.py:101
+msgid "DICOM pixel data is empty or invalid."
+msgstr "DICOM pikselių duomenys tušti arba netinkami."
+
+#: .\xrayapp\forms.py:220
+msgid "Image validation is not available on this server."
+msgstr "Vaizdo tikrinimas šiame serveryje nepasiekiamas."
+
+#: .\xrayapp\forms.py:237
+msgid "Invalid image file."
+msgstr "Netinkamas vaizdo failas."

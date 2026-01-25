@@ -19,6 +19,9 @@ matplotlib==3.10.3
 opencv-python==4.12.0.88
 scikit-image==0.25.2
 
+# Medical imaging (DICOM)
+pydicom==3.0.1
+
 # Utilities and Core Libraries
 python-dateutil==2.9.0.post0
 pytz==2024.2

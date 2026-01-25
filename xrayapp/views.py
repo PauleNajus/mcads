@@ -537,6 +537,11 @@ def home(request: HttpRequest) -> HttpResponse:
             # Set model_used field
             model_type = request.POST.get('model_type', 'densenet')
             xray_instance.model_used = model_type
+
+            # Preserve source format for DICOM uploads (stored as PNG for processing).
+            source_format = getattr(form, "_mcads_source_format", None)
+            if source_format:
+                xray_instance.image_format = str(source_format)
             # Now save the instance
             try:
                 xray_instance.save()
@@ -994,6 +999,16 @@ def generate_interpretability(request: HttpRequest, pk: int) -> HttpResponse:
     # Get user's hospital from profile
     user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
+        # This endpoint is often called via fetch(); return JSON for AJAX callers.
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'error': _('Permission denied'),
+                    'message': _('Your user profile is missing a hospital assignment.'),
+                },
+                status=403,
+            )
         return redirect('home')
     
     # Allow access to any X-ray from the same hospital
@@ -1048,6 +1063,15 @@ def generate_segmentation(request: HttpRequest, pk: int) -> HttpResponse:
     # Get user's hospital from profile
     user_hospital = _get_user_hospital(request.user)
     if user_hospital is None:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'error': _('Permission denied'),
+                    'message': _('Your user profile is missing a hospital assignment.'),
+                },
+                status=403,
+            )
         return redirect('home')
     
     # Allow access to any X-ray from the same hospital
@@ -1070,6 +1094,14 @@ def generate_segmentation(request: HttpRequest, pk: int) -> HttpResponse:
     if not started:
         # For now, segmentation requires Celery
         # Could implement a threaded version later if needed
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'error': _('Segmentation processing is currently unavailable. Please try again later.'),
+                },
+                status=503,
+            )
         messages.error(request, _('Segmentation processing is currently unavailable. Please try again later.'))
         return redirect('xray_results', pk=pk)
     
@@ -1101,9 +1133,19 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
         }, status=401)
     
     try:
-        # For now, allow access to any X-ray the user uploaded
-        # TODO: Implement proper hospital-based access control later
-        xray_instance = XRayImage.objects.get(pk=pk, user=request.user)
+        # Allow access to any X-ray from the same hospital (matches `xray_results`
+        # and enables radiologists to monitor progress for shared records).
+        user_hospital = _get_user_hospital(request.user)
+        if user_hospital is None:
+            return JsonResponse(
+                {
+                    'error': 'Permission denied',
+                    'message': 'User profile is missing a hospital assignment.',
+                },
+                status=403,
+            )
+
+        xray_instance = XRayImage.objects.for_hospital(user_hospital).get(pk=pk)
         
         response_data = {
             'status': xray_instance.processing_status,
@@ -1192,7 +1234,7 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
         # Log the 404 for debugging
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"XRayImage {pk} not found for user {request.user.username}")
+        logger.warning("XRayImage %s not found/denied for user=%s", pk, request.user.username)
         
         return JsonResponse({
             'error': 'Image not found or access denied',
@@ -1330,7 +1372,9 @@ def toggle_save_record(request: HttpRequest, pk: int) -> JsonResponse:
     """Toggle save/unsave a prediction history record via AJAX"""
     try:
         # Get user's hospital from profile
-        user_hospital = request.user.profile.hospital
+        user_hospital = _get_user_hospital(request.user)
+        if user_hospital is None:
+            return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
         
         # Get the prediction history record (must be from same hospital)
         prediction_record = PredictionHistory.objects.for_hospital(user_hospital).get(pk=pk)

@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         ca-certificates \
         gosu \
+        gettext \
         libmagic1 \
         libgl1 \
         libglib2.0-0 \
@@ -61,6 +62,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Copy the application code last.
 COPY . /app
+
+# Compile translation catalogs (.po -> .mo). Requires `msgfmt` (gettext).
+# This keeps runtime images consistent even if `.mo` files aren't committed.
+RUN /opt/venv/bin/python /app/manage.py compilemessages
 
 # Runtime directories must be writable by the app user.
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin mcads && \

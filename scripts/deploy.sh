@@ -53,6 +53,12 @@ echo "Building Docker images..."
 echo "Starting services..."
 "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d
 
+# Nginx reads config only on start/reload. Since our config is mounted from the host
+# (and Compose doesn't detect content-only changes), explicitly restart Nginx so
+# updates like `client_max_body_size` take effect.
+echo "Restarting nginx to apply config..."
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" restart nginx
+
 # Wait for services to be ready
 echo "Waiting for services to initialize..."
 sleep 30

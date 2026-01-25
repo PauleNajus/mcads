@@ -176,15 +176,48 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         cache: 'no-store',
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+      .then(async (response) => {
+        // Always try to parse JSON (even on non-2xx) so we can show real errors.
+        const contentType = response.headers.get('content-type') || '';
+        let data = null;
+        if (contentType.includes('application/json')) {
+          try {
+            data = await response.json();
+          } catch (err) {
+            data = null;
+          }
         }
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
+
+        if (!response.ok) {
+          // Prefer server-provided error details when available.
+          let errorMessage = (data && data.error) ? data.error : `HTTP error! status: ${response.status}`;
+
+          // If we got field-level errors, surface the most relevant one.
+          if (data && data.errors && data.errors.image) {
+            const imageErrors = data.errors.image;
+            if (Array.isArray(imageErrors) && imageErrors.length) {
+              errorMessage = imageErrors[0];
+            } else if (typeof imageErrors === 'string') {
+              errorMessage = imageErrors;
+            }
+          }
+
+          // Common reverse-proxy error for large uploads.
+          if (response.status === 413) {
+            errorMessage = gettext('File too large. Please upload a smaller file.');
+          }
+
+          const err = new Error(errorMessage);
+          err.status = response.status;
+          err.data = data;
+          throw err;
+        }
+
+        if (!data) {
           throw new Error('Response is not JSON');
         }
-        return response.json();
+
+        return data;
       })
       .then(data => {
         console.log('Server response:', data);
@@ -208,7 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(error => {
         console.error('Error submitting form:', error);
         console.error('Error details:', error.message, error.stack);
-        alert(gettext('Error submitting form. Please try again.'));
+        const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
+        alert(gettext('Error: ') + message);
       });
     });
   }

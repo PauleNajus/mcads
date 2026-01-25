@@ -339,7 +339,10 @@ def process_image(
     # Extract and save image metadata
     if xray_instance:
         metadata = extract_image_metadata(image_path)
-        xray_instance.image_format = metadata.format
+        # If the upload was DICOM (converted to PNG for processing), keep the
+        # user-facing format as DICOM instead of overwriting with "PNG".
+        if not (xray_instance.image_format and str(xray_instance.image_format).upper() == "DICOM"):
+            xray_instance.image_format = metadata.format
         xray_instance.image_size = metadata.size
         xray_instance.image_resolution = metadata.resolution
         xray_instance.image_date_created = metadata.date_created
