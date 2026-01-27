@@ -22,6 +22,11 @@ wheels/
 
 # Django
 *.log
+*.pid
+*.mo
+logs/
+backups/
+data_exports/
 local_settings.py
 media/
 

@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.6
 
-# Debian 13 (trixie) + Python 3.11.9 runtime.
+# Debian 13 (trixie) + Python 3.13.11 runtime.
 #
-# Note: Debian 13 ships Python 3.13 by default, so we install a pinned CPython
-# 3.11.9 using `uv` (fast, reproducible, and avoids compiling from source).
+# Note: Debian 13 ships Python 3.13 by default, but we install a pinned CPython
+# 3.13.11 using `uv` (fast, reproducible, and avoids compiling from source).
 FROM ghcr.io/astral-sh/uv:0.9.26 AS uv
 
 FROM debian:trixie-slim
 
-ARG PYTHON_VERSION=3.11.9
+ARG PYTHON_VERSION=3.13.11
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

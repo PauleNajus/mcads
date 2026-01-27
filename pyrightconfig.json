@@ -1,8 +1,8 @@
 {
     "venvPath": ".",
-    "venv": "venv",
-    "pythonPath": "./venv/bin/python",
-    "pythonVersion": "3.12",
+    "venv": ".venv",
+    "pythonPath": "./.venv/bin/python",
+    "pythonVersion": "3.13",
     "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
     "reportMissingImports": "warning",

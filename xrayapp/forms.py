@@ -195,6 +195,7 @@ class XRayUploadForm(forms.ModelForm):
         is_dicom = _looks_like_dicom(getattr(image, "name", None), header)
         
         # Check MIME type for security if magic is available
+        file_mime: str | None = None
         if MAGIC_AVAILABLE and not is_dicom:
             file_mime = None
             try:
@@ -204,13 +205,22 @@ class XRayUploadForm(forms.ModelForm):
                 logger.warning("python-magic MIME detection failed: %s", exc)
             finally:
                 image.seek(0)  # Always reset file pointer after read
+            # Common safe image MIME types.
+            allowed_mimes = {
+                'image/jpeg', 'image/jpg', 'image/png',
+                'image/bmp', 'image/tiff', 'image/x-ms-bmp',
+            }
+            # Some libmagic installations may label DICOM explicitly.
+            dicom_mimes = {'application/dicom'}
 
-                allowed_mimes = [
-                    'image/jpeg', 'image/jpg', 'image/png', 
-                    'image/bmp', 'image/tiff', 'image/x-ms-bmp'
-                ]
-                
-                if file_mime and file_mime not in allowed_mimes:
+            if file_mime in dicom_mimes:
+                is_dicom = True
+            elif file_mime and file_mime not in allowed_mimes:
+                # `application/octet-stream` is ambiguous and is often returned for
+                # DICOM exports without the "DICM" marker. Don't reject it here;
+                # we'll fall back to Pillow verification and then attempt DICOM decode
+                # if the payload isn't a valid image.
+                if file_mime != 'application/octet-stream':
                     raise ValidationError(_('Invalid file type. Only image files are allowed.'))
 
         # If this is a DICOM file, convert it to PNG before saving to the model.
@@ -229,21 +239,29 @@ class XRayUploadForm(forms.ModelForm):
             raise ValidationError(_("Image validation is not available on this server.")) from exc
 
         # Quick extension sanity check (optional; content checks are the source of truth).
-        # This prevents accidental uploads like "report.pdf" when MIME detection is unavailable.
+        # Only enforce this when MIME detection is unavailable/ambiguous.
         name = (getattr(image, "name", "") or "").lower()
-        if "." in name:
-            ext = name.rsplit(".", 1)[-1]
-            allowed_exts = {"jpg", "jpeg", "png", "bmp", "tif", "tiff"}
-            if ext not in allowed_exts:
-                raise ValidationError(_('Invalid file type. Only image files are allowed.'))
+        if (not MAGIC_AVAILABLE) or (file_mime in (None, 'application/octet-stream')):
+            if "." in name:
+                ext = name.rsplit(".", 1)[-1]
+                allowed_exts = {"jpg", "jpeg", "png", "bmp", "tif", "tiff"}
+                if ext not in allowed_exts:
+                    raise ValidationError(_('Invalid file type. Only image files are allowed.'))
 
         # Verify the image can be opened by Pillow.
+        #
+        # If Pillow cannot read it, try DICOM conversion as a fallback. This enables
+        # extensionless/preamble-less DICOM uploads that don't include the "DICM" marker.
         try:
             image.seek(0)
             with Image.open(image) as img:
                 img.verify()
-        except (UnidentifiedImageError, OSError) as exc:
-            raise ValidationError(_("Invalid image file.")) from exc
+        except (UnidentifiedImageError, OSError):
+            try:
+                self._mcads_source_format = "DICOM"
+                return _dicom_to_png(image)
+            except ValidationError as exc:
+                raise ValidationError(_("Invalid image file.")) from exc
         finally:
             image.seek(0)
 

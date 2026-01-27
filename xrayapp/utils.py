@@ -2,41 +2,65 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import logging
+import os
+from pathlib import Path
+from typing import Any, cast
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+
+# CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue.
+#
+# These environment variables must be set *before* importing torch to affect
+# the underlying CPU backends. Operators can override them externally if needed.
+os.environ.setdefault('MKLDNN_ENABLED', '0')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
 
 import torch
 import torchxrayvision as xrv
-import skimage.io
 import torchvision
-import time
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-from pathlib import Path
-import os
 from PIL import Image
 from PIL.ExifTags import TAGS
-from .model_loader import load_model as cached_load_model, load_autoencoder as cached_load_autoencoder, load_segmentation_model
-from typing import Any, cast
+
+from .xrv_io import load_xrv_image as _load_xrv_image
+from .model_loader import (
+    load_autoencoder as cached_load_autoencoder,
+    load_model as cached_load_model,
+    load_segmentation_model,
+)
 from .models import XRayImage
 
-# CRITICAL FIX: PyTorch CPU backend configuration to prevent 75% stuck issue
-import logging
 logger = logging.getLogger(__name__)
 
-# PyTorch environment fixes - MUST be set before any PyTorch operations
-os.environ['MKLDNN_ENABLED'] = '0'
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+def _env_int(name: str, default: int) -> int:
+    """Parse an int environment variable with a safe fallback."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
 
-# Force PyTorch to use simple CPU backend to prevent "could not create a primitive" error
-torch.backends.mkldnn.enabled = False
-torch.set_num_threads(1)
+# Force PyTorch to use a safe CPU backend configuration.
+if os.environ.get("MKLDNN_ENABLED", "0") == "0":
+    torch.backends.mkldnn.enabled = False
+
+torch.set_num_threads(_env_int("OMP_NUM_THREADS", 1))
+try:
+    torch.set_num_interop_threads(_env_int("OMP_NUM_THREADS", 1))
+except Exception:
+    # Some builds disallow changing interop threads after initialization.
+    pass
 
 # Additional memory optimizations to prevent model inference hanging
-if hasattr(torch.backends, 'openmp'):
+if hasattr(torch.backends, 'openmp') and os.environ.get("MCADS_DISABLE_OPENMP", "1") == "1":
     torch.backends.openmp.is_available = lambda: False
-if hasattr(torch.backends, 'cudnn'):
+if hasattr(torch.backends, 'cudnn') and not torch.cuda.is_available():
     torch.backends.cudnn.enabled = False
 
 logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
@@ -354,12 +378,8 @@ def process_image(
         xray_instance.progress = 10
         xray_instance.save(update_fields=['progress'])
     
-    # Ensure image_path is a Path object, then convert to string for skimage
+    # Ensure image_path is a Path object.
     image_path = Path(image_path)
-    image_path_str = str(image_path)
-    
-    # Load image
-    img = skimage.io.imread(image_path_str)
     
     # Normalize the image
     # Update progress to 20%
@@ -367,16 +387,9 @@ def process_image(
         xray_instance.progress = 20
         xray_instance.save(update_fields=['progress'])
     
-    img = xrv.datasets.normalize(img, 255)
-    
-    # Check that images are 2D arrays - average across channels for robustness
-    if len(img.shape) > 2:
-        img = img.mean(axis=2)
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
+    # TorchXRayVision helper: supports DICOM + normal images and returns the
+    # expected model input (normalized, shape (1, H, W)).
+    img = _load_xrv_image(image_path)
 
     # OOD gate (reconstruction error)
     ood = compute_ood_score(img[0])  # pass (H, W)
@@ -394,18 +407,11 @@ def process_image(
     model, resize_dim = load_model(model_type)
     model = cast(torch.nn.Module, model)
     
-    # Apply transforms for model
-    # Use consistent preprocessing: center-crop then resize for both models
-    if model_type == 'resnet':
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(resize_dim)
-        ])
-    else:
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(resize_dim)
-        ])
+    # Apply transforms for model: center-crop then resize.
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(resize_dim),
+    ])
     img = transform(img)
     
     # Convert to tensor
@@ -713,21 +719,11 @@ def apply_segmentation(image_path: str) -> dict[str, Any]:
     # Load the segmentation model
     seg_model = load_segmentation_model()
     
-    # Load and preprocess the image
-    img = skimage.io.imread(image_path)
-    img = xrv.datasets.normalize(img, 255)
+    # Load + normalize image (supports DICOM via pydicom).
+    img = _load_xrv_image(image_path)
     
-    # Preserve original image for visualization
-    original_img = img.copy()
-    
-    # Check that images are 2D arrays
-    if len(img.shape) > 2:
-        img = img[:, :, 0]  # Take first channel
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
+    # Preserve original image for visualization (2D)
+    original_img = img[0].copy()
     
     # Resize to 512x512 for PSPNet
     transform = torchvision.transforms.Compose([
@@ -798,14 +794,23 @@ def save_segmentation_visualization(
     binary_masks = segmentation_results['binary_masks']
     anatomical_structures = segmentation_results['anatomical_structures']
     
-    # Convert original to RGB if grayscale
+    # `original` is stored in TorchXRayVision's normalized space (~[-1024, 1024]).
+    # Convert it to a displayable 8-bit image before compositing overlays.
+    #
+    # This fixed mapping is intentional (fast + consistent across images):
+    #   -1024 -> 0, 0 -> 127/128, 1024 -> 255
     if len(original.shape) == 2:
-        original_rgb = cv2.cvtColor((original * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
+        orig01 = (original.astype("float32") / 1024.0 + 1.0) * 0.5
+        orig01 = np.clip(orig01, 0.0, 1.0)
+        original_u8 = (orig01 * 255.0).astype(np.uint8)
+        # Keep OpenCV images in BGR because our overlay colors are defined in BGR.
+        original_bgr = cv2.cvtColor(original_u8, cv2.COLOR_GRAY2BGR)
     else:
-        original_rgb = (original * 255).astype(np.uint8)
+        # Fallback for unexpected 3-channel inputs (assume already in [0, 1]).
+        original_bgr = (np.clip(original, 0.0, 1.0) * 255.0).astype(np.uint8)
     
     # Resize original to match mask dimensions (512x512)
-    original_resized = cv2.resize(original_rgb, (512, 512))
+    original_resized = cv2.resize(original_bgr, (512, 512))
     
     # Create overlay image
     overlay = original_resized.copy()

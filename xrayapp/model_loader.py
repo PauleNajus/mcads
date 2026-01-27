@@ -9,7 +9,6 @@ import torchxrayvision as xrv
 _model_cache: Dict[str, tuple] = {}
 
 _AE_CACHE_KEY = "autoencoder"
-_CALIBRATION_CACHE_KEY = "calibration"
 _SEGMENTATION_CACHE_KEY = "segmentation_pspnet"
 
 

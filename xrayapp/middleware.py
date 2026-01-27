@@ -31,10 +31,17 @@ class RateLimitMiddleware:
         
         response = self.get_response(request)
         
-        # Track failed login attempts
-        if (request.path == '/accounts/login/' and 
-            request.method == 'POST' and 
-            response.status_code in [200, 302] and 
+        # Track failed login attempts.
+        #
+        # Django's login view returns:
+        # - 200 for invalid credentials (form re-render)
+        # - 302 for successful login (redirect)
+        #
+        # We must NOT count 302 as a failure; `request.user` may still be
+        # unauthenticated in middleware even though the session was updated.
+        if (request.path == '/accounts/login/' and
+            request.method == 'POST' and
+            response.status_code == 200 and
             not request.user.is_authenticated):
             self._record_failed_attempt(request)
             

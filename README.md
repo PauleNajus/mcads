@@ -28,7 +28,7 @@ Example of a GRAD-CAM heatmap:
 
 ## Technology Stack
 
-- **Backend**: Django 5.2, Python 3.11.9
+- **Backend**: Django 5.2, Python 3.13.11
 - **Machine Learning**: PyTorch 2.7.0, TorchXRayVision
 - **Database**: PostgreSQL (recommended: 15+)
 - **Frontend**: Django-Bootstrap5 25.1, HTML5, CSS3, JavaScript
@@ -38,7 +38,7 @@ Example of a GRAD-CAM heatmap:
 
 ### Prerequisites
 
-- Python 3.11.9
+- Python 3.13.11
 - pip (Python package manager)
 - Git
 - PostgreSQL (recommended: 15+)
@@ -210,7 +210,7 @@ Test images are available in the `tests/` directory:
 ### Docker Deployment
 
 ```dockerfile
-FROM python:3.11.9-slim
+FROM python:3.13.11-slim
 
 WORKDIR /app
 COPY requirements.txt .

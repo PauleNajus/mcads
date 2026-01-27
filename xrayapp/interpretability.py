@@ -5,13 +5,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision
-import skimage
 import cv2
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter threading issues
 from typing import Any, Optional
 import torchxrayvision as xrv
 from .model_loader import load_model
+from .xrv_io import load_xrv_image as _load_xrv_image
 
 logger = logging.getLogger(__name__)
 
@@ -771,21 +771,10 @@ def apply_gradcam(
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Load and preprocess the image
-    img = skimage.io.imread(image_path)
-    img = xrv.datasets.normalize(img, 255)
-    
-    # Preserve original image for visualization
-    original_img = img.copy()
-    
-    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
-    if len(img.shape) > 2:
-        img = img.mean(axis=2)
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
+    # Load + normalize image (supports DICOM via pydicom).
+    img = _load_xrv_image(image_path)
+    # Preserve original image for visualization (2D).
+    original_img = img[0].copy()
     
     # IMPORTANT: Keep preprocessing consistent with inference (`xrayapp/utils.py`).
     transform = torchvision.transforms.Compose([
@@ -882,21 +871,10 @@ def apply_combined_gradcam(
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Load and preprocess the image
-    img = skimage.io.imread(image_path)
-    img = xrv.datasets.normalize(img, 255)
-    
-    # Preserve original image for visualization
-    original_img = img.copy()
-    
-    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
-    if len(img.shape) > 2:
-        img = img.mean(axis=2)
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
+    # Load + normalize image (supports DICOM via pydicom).
+    img = _load_xrv_image(image_path)
+    # Preserve original image for visualization (2D).
+    original_img = img[0].copy()
     
     # IMPORTANT: Keep preprocessing consistent with inference (`xrayapp/utils.py`).
     transform = torchvision.transforms.Compose([
@@ -984,36 +962,16 @@ def apply_pixel_interpretability(
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Load and preprocess the image
-    img = skimage.io.imread(image_path)
-    img = xrv.datasets.normalize(img, 255)
+    # Load + normalize image (supports DICOM via pydicom).
+    img = _load_xrv_image(image_path)
+    # Preserve original image for visualization (2D).
+    original_img = img[0].copy()
     
-    # Preserve original image for visualization
-    original_img = img.copy()
-    
-    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
-    if len(img.shape) > 2:
-        img = img.mean(axis=2)
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
-    
-    # Set up transformation pipeline
-    if model_type == 'densenet':
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(224),
-        ])
-        resize_dim = 224
-    else:  # resnet
-        # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(512),
-        ])
-        resize_dim = 512
+    # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(resize_dim),
+    ])
     
     # Apply transforms
     img = transform(img)
@@ -1145,39 +1103,21 @@ def apply_combined_pixel_interpretability(
         Dictionary with combined visualization results
     """
     # Load model via shared cache
-    model, _ = load_model(model_type)
+    model, resize_dim = load_model(model_type)
     
     # Wrap model to prevent in-place operations
     wrapped_model = NoInplaceReLU(model)
     
-    # Load and preprocess the image
-    img = skimage.io.imread(image_path)
-    img = xrv.datasets.normalize(img, 255)
+    # Load + normalize image (supports DICOM via pydicom).
+    img = _load_xrv_image(image_path)
+    # Preserve original image for visualization (2D).
+    original_img = img[0].copy()
     
-    # Preserve original image for visualization
-    original_img = img.copy()
-    
-    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
-    if len(img.shape) > 2:
-        img = img.mean(axis=2)
-    if len(img.shape) < 2:
-        raise ValueError("Input image must have at least 2 dimensions")
-    
-    # Add channel dimension
-    img = img[None, :, :]
-    
-    # Set up transformation pipeline
-    if model_type == 'densenet':
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(224)
-        ])
-    else:  # resnet
-        # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
-        transform = torchvision.transforms.Compose([
-            xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(512),
-        ])
+    # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
+    transform = torchvision.transforms.Compose([
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(resize_dim),
+    ])
     
     # Apply transforms
     img = transform(img)

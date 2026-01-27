@@ -28,8 +28,6 @@ export DB_PORT="${DB_PORT:-5432}"
 export DB_NAME="${DB_NAME:-mcads_db}"
 export DB_USER="${DB_USER:-mcads_user}"
 
-wait_seconds="${MCADS_WAIT_TIMEOUT_SECONDS:-60}"
-
 if [[ -n "${DB_HOST:-}" ]]; then
   echo "Waiting for Postgres (${DB_HOST}:${DB_PORT})..."
   python - <<'PY'
