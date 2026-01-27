@@ -135,10 +135,17 @@ mcads/
 ├── mcads_project/          # Django project configuration
 ├── xrayapp/               # Main application
 │   ├── models.py          # Database models
-│   ├── views.py           # View controllers
+│   ├── views/             # View controllers (modularized)
+│   │   ├── auth.py        # Authentication views
+│   │   ├── xray.py        # Main X-ray analysis views
+│   │   └── history.py     # History & records views
 │   ├── forms.py           # Form definitions
+│   ├── inference_logic.py # Core ML inference logic
 │   ├── interpretability.py # Interpretability implementation
-│   ├── utils.py           # Utility functions
+│   ├── visualization_utils.py # Visualization saving/processing
+│   ├── image_processing.py # Image handling & metadata
+│   ├── model_loader.py    # Model loading & caching
+│   ├── tasks.py           # Celery tasks
 │   └── templates/         # HTML templates
 ├── static/                # Static files (CSS, JS, images)
 ├── media/                 # User uploaded files

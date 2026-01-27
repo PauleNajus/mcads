@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 import pytz
 from typing import Any
+from ..models import PATHOLOGY_FIELDS, RESULT_KEY_TO_FIELD, SEVERITY_MAPPING
 
 register = template.Library()
 
@@ -28,39 +29,23 @@ def percentage(value: Any) -> str:
 def get_top_pathology(prediction_history: Any) -> tuple[str, float]:
     """Get the top pathology (highest probability) from a prediction history item
     Returns a tuple (pathology_name, probability)"""
-    pathology_fields = {
-        'Atelectasis': prediction_history.atelectasis,
-        'Cardiomegaly': prediction_history.cardiomegaly,
-        'Consolidation': prediction_history.consolidation,
-        'Edema': prediction_history.edema,
-        'Effusion': prediction_history.effusion,
-        'Emphysema': prediction_history.emphysema,
-        'Fibrosis': prediction_history.fibrosis,
-        'Hernia': prediction_history.hernia,
-        'Infiltration': prediction_history.infiltration,
-        'Mass': prediction_history.mass,
-        'Nodule': prediction_history.nodule,
-        'Pleural Thickening': prediction_history.pleural_thickening,
-        'Pneumonia': prediction_history.pneumonia,
-        'Pneumothorax': prediction_history.pneumothorax,
-        'Fracture': prediction_history.fracture,
-        'Lung Opacity': prediction_history.lung_opacity,
-    }
     
-    # Add DenseNet-only fields if they exist
-    if prediction_history.enlarged_cardiomediastinum is not None:
-        pathology_fields['Enlarged Cardiomediastinum'] = prediction_history.enlarged_cardiomediastinum
-    if prediction_history.lung_lesion is not None:
-        pathology_fields['Lung Lesion'] = prediction_history.lung_lesion
+    # Invert the key mapping to get display names from field names
+    FIELD_TO_DISPLAY = {v: k for k, v in RESULT_KEY_TO_FIELD.items()}
     
-    # Filter out None values
-    pathology_fields = {k: v for k, v in pathology_fields.items() if v is not None}
+    pathology_values = {}
+    for field in PATHOLOGY_FIELDS:
+        val = getattr(prediction_history, field, None)
+        if val is not None:
+            # Use display name if available, else capitalize field name
+            name = FIELD_TO_DISPLAY.get(field, field.replace('_', ' ').title())
+            pathology_values[name] = val
     
     # Find the max
-    if not pathology_fields:
+    if not pathology_values:
         return ('None', 0.0)
     
-    top_pathology = max(pathology_fields.items(), key=lambda x: x[1])
+    top_pathology = max(pathology_values.items(), key=lambda x: x[1])
     return top_pathology
 
 @register.filter
@@ -83,20 +68,16 @@ def get_severity_label(obj: Any) -> str:
     if hasattr(obj, 'severity_label'):
         return obj.severity_label
         
-    # If no severity_label property, calculate manually
-    severity_mapping = {
-        1: _("Insignificant findings"),
-        2: _("Moderate findings"),
-        3: _("Significant findings"),
-    }
-    
-    level = None
+    level: int | None = None
     if hasattr(obj, 'severity_level') and obj.severity_level is not None:
         level = obj.severity_level
     elif hasattr(obj, 'calculate_severity_level'):
         level = obj.calculate_severity_level
         
-    return severity_mapping.get(level, _("Unknown"))
+    if level is None:
+        return str(_("Unknown"))
+
+    return str(SEVERITY_MAPPING.get(level, _("Unknown")))
 
 @register.filter
 def get_severity_color(level: int | None) -> str:
@@ -114,4 +95,4 @@ def current_eest_time() -> str:
     """Get current server time in EEST timezone with seconds precision"""
     eest = pytz.timezone('Europe/Tallinn')  # EEST (UTC+3)
     current_time = timezone.now().astimezone(eest)
-    return current_time.strftime('%Y-%m-%d %H:%M:%S EEST (UTC+3)') 
+    return current_time.strftime('%Y-%m-%d %H:%M:%S EEST (UTC+3)')

@@ -201,152 +201,15 @@
             language: '{{ user.profile.preferred_language|default:"en" }}',
             dashboardView: '{{ user.profile.dashboard_view|default:"grid" }}'
         };
-        
-        // Global helper function to get CSRF token
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-        
-        // Get CSRF token from DOM or cookies
-        function getCSRFToken() {
-            // First try from form input (most reliable for POST requests)
-            let csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
-            if (csrfInput) {
-                return csrfInput.value;
-            }
-            
-            // Then try from cookie
-            let cookieToken = getCookie('csrftoken');
-            if (cookieToken) {
-                return cookieToken;
-            }
-            
-            console.warn('CSRF token not found');
-            return null;
-        }
     </script>
     
     <!-- Django JavaScript Internationalization -->
     {% load i18n %}
     <script src="{% url 'javascript-catalog' %}"></script>
     
-    <!-- Fallback for gettext if i18n catalog fails to load -->
-    <script>
-        // Fallback gettext function
-        if (typeof gettext === 'undefined') {
-            window.gettext = function(str) {
-                return str; // Return the string as-is if translation is not available
-            };
-        }
-    </script>
-    
+    <script src="{% static 'xrayapp/js/common.js' %}?v=20260127"></script>
     <script src="{% static 'xrayapp/js/theme.js' %}?v=20260125-1"></script>
     <script src="{% static 'xrayapp/js/image-maximize.js' %}"></script>
-    
-    <!-- Header Icon Assignment Script -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Map header text patterns to CSS classes
-        const headerPatterns = [
-            { pattern: /MCADS/i, className: 'header-mcads' },
-            { pattern: /Patient/i, className: 'header-patient' },
-            { pattern: /Severity/i, className: 'header-severity' },
-            { pattern: /X-ray/i, className: 'header-xray' },
-            { pattern: /Prediction/i, className: 'header-prediction' },
-            { pattern: /History/i, className: 'header-history' },
-            { pattern: /Account/i, className: 'header-account' },
-            { pattern: /Interpretability/i, className: 'header-interpretability' },
-            { pattern: /Advanced.*filter/i, className: 'header-filters' },
-            { pattern: /Filter/i, className: 'header-filters' },
-            { pattern: /Login|Auth/i, className: 'header-auth' },
-            { pattern: /Danger/i, className: 'header-danger' },
-            { pattern: /Settings/i, className: 'header-account' },
-            { pattern: /Generate/i, className: 'header-interpretability' }
-        ];
-        
-        // Find all card headers
-        const cardHeaders = document.querySelectorAll('.card-header');
-        
-        cardHeaders.forEach(header => {
-            const headerText = header.textContent.trim();
-            
-            // Check each pattern
-            for (const { pattern, className } of headerPatterns) {
-                if (pattern.test(headerText)) {
-                    header.classList.add(className);
-                    break; // Use first match
-                }
-            }
-        });
-        
-        // Style medical warning messages to match header color
-        const alertElements = document.querySelectorAll('.alert-danger, .alert-info');
-        alertElements.forEach(alert => {
-            const strongElements = alert.querySelectorAll('strong');
-            const spanElements = alert.querySelectorAll('span');
-            const alertText = alert.textContent.trim();
-            
-            // Apply red background to critical medical disclaimers
-            strongElements.forEach(strong => {
-                // Note: CRITICAL MEDICAL DISCLAIMER and FINAL MEDICAL WARNING now use CSS classes directly
-            });
-            
-            // Check for no records found message (both English and Lithuanian)
-            if (alertText.includes('No prediction history found with the current filters') || 
-                alertText.includes('Su dabartiniais filtrais nerasta prognozių istorijos')) {
-                alert.classList.add('no-records-info');
-            }
-            
-            // Check for loading/processing messages
-            const loadingTexts = [
-                'Please wait while the model analyzes',
-                'Please wait while we generate',
-                'Generating',
-                'Analyzing X-ray image'
-            ];
-            
-            const allTextElements = [...strongElements, ...spanElements, ...alert.querySelectorAll('h4')];
-            allTextElements.forEach(element => {
-                const text = element.textContent.trim();
-                if (loadingTexts.some(loadingText => text.includes(loadingText))) {
-                    alert.classList.add('medical-warning');
-                }
-            });
-        });
-    });
-    
-    // Real-time EEST clock
-    function updateEESTTime() {
-        const now = new Date();
-        const eestTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Tallinn"}));
-        const timeString = eestTime.getFullYear() + '-' + 
-                          String(eestTime.getMonth() + 1).padStart(2, '0') + '-' + 
-                          String(eestTime.getDate()).padStart(2, '0') + ' ' + 
-                          String(eestTime.getHours()).padStart(2, '0') + ':' + 
-                          String(eestTime.getMinutes()).padStart(2, '0') + ':' + 
-                          String(eestTime.getSeconds()).padStart(2, '0') + ' EEST (UTC+3)';
-        
-        const serverTimeElement = document.getElementById('server-time');
-        if (serverTimeElement) {
-            serverTimeElement.textContent = timeString;
-        }
-    }
-    
-    // Update time immediately and then every second
-    updateEESTTime();
-    setInterval(updateEESTTime, 1000);
-    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

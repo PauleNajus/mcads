@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
@@ -15,8 +16,8 @@ class RateLimitMiddleware:
     
     def __init__(self, get_response):
         self.get_response = get_response
-        self.max_attempts = 5
-        self.lockout_duration = 300  # 5 minutes in seconds
+        self.max_attempts = getattr(settings, 'RATELIMIT_MAX_ATTEMPTS', 5)
+        self.lockout_duration = getattr(settings, 'RATELIMIT_LOCKOUT_DURATION', 300)
         
     def __call__(self, request: HttpRequest) -> HttpResponse:
         # Only apply rate limiting to login attempts
@@ -65,10 +66,15 @@ class RateLimitMiddleware:
         return f"login_attempts:{hashlib.sha256(ip.encode()).hexdigest()}"
     
     def _get_client_ip(self, request: HttpRequest) -> str:
-        """Get client IP address"""
+        """Get client IP address, preferring X-Real-IP set by Nginx"""
+        x_real_ip = request.META.get('HTTP_X_REAL_IP')
+        if x_real_ip:
+            return x_real_ip.strip()
+            
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             # Proxy headers may include multiple IPs; use the left-most one.
+            # Split by comma and strip whitespace from the first element
             return x_forwarded_for.split(',')[0].strip()
         return request.META.get('REMOTE_ADDR', '0.0.0.0')
     
@@ -90,13 +96,11 @@ class RoleBasedAccessMiddleware:
     
     def __init__(self, get_response):
         self.get_response = get_response
-        # Define URL prefixes and required permissions.
-        #
-        # NOTE: Some endpoints have dynamic parts (e.g. `/prediction-history/<id>/delete/`).
-        # Those are handled in `_required_permission_for_path()` below.
+        # Use setting for admin URL to avoid duplication
+        admin_url = '/' + getattr(settings, 'ADMIN_URL', 'admin/').lstrip('/')
         self.protected_patterns = {
-            '/secure-admin-mcads-2024/': 'can_access_admin',
-            '/admin/': 'can_access_admin',
+            admin_url: 'can_access_admin',
+            '/admin/': 'can_access_admin', # Keep legacy just in case
             '/interpretability/': 'can_generate_interpretability',
             '/segmentation/': 'can_generate_interpretability',
         }

@@ -24,27 +24,20 @@ import torch.nn.functional as F
 import torchvision.transforms
 import torchxrayvision as xrv
 
+# Reuse the central I/O logic to avoid duplication
+try:
+    from xrayapp.xrv_io import load_xrv_image
+except ImportError:
+    # Fallback for when running outside of django context/without installed package
+    import sys
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+    from xrayapp.xrv_io import load_xrv_image
+
 
 def _infer_input_size(weights: str) -> int | None:
     """Infer model input size from weight name (e.g. 'res224' / 'res512')."""
     m = re.search(r"res(\d{3,4})", weights)
     return int(m.group(1)) if m else None
-
-
-def _load_xrv_image(path: str | Path) -> np.ndarray:
-    """Load and normalize an X-ray image for TorchXRayVision.
-
-    Returns a numpy array shaped (1, H, W) in TorchXRayVision's normalized space.
-    """
-    p = Path(path)
-    s = str(p)
-    try:
-        return xrv.utils.load_image(s)
-    except Exception:
-        # Some DICOM exports omit the 128-byte preamble ("DICM" marker); fall back.
-        if p.suffix.lower() in (".dcm", ".dicom"):
-            return xrv.utils.read_xray_dcm(s)[None, ...]
-        raise
 
 
 def main() -> None:
@@ -74,7 +67,7 @@ def main() -> None:
 
     cfg = parser.parse_args()
 
-    img = _load_xrv_image(cfg.img_path)
+    img = load_xrv_image(cfg.img_path)
 
     if cfg.resize:
         size = int(cfg.size) if int(cfg.size) > 0 else (_infer_input_size(cfg.weights) or 224)

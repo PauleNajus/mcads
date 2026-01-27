@@ -350,6 +350,13 @@ LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
 
+# Admin URL (keep secret)
+ADMIN_URL = 'secure-admin-mcads-2024/'
+
+# Rate limiting settings
+RATELIMIT_MAX_ATTEMPTS = 5
+RATELIMIT_LOCKOUT_DURATION = 300  # 5 minutes in seconds
+
 # Celery Configuration
 USE_CELERY = os.environ.get('USE_CELERY', '0') == '1'
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
@@ -382,3 +389,18 @@ CELERY_BEAT_SCHEDULE = {
     # Add scheduled tasks here if needed
 }
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Test configuration
+import sys
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+    import tempfile
+    # Use a temporary directory for media files during tests
+    MEDIA_ROOT = tempfile.mkdtemp()
+    
+    # Disable Celery for tests
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True

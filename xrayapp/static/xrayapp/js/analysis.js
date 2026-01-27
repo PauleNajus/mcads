@@ -5,6 +5,68 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressBar = document.getElementById('analysis-progress-bar');
   const progressPercentage = document.getElementById('progress-percentage');
 
+  // --- Date Field Handling (Home Page) ---
+  // Set today's date as default for X-ray date and ensure proper date format (YYYY-MM-DD)
+  const today = new Date();
+  const dateField = document.getElementById('id_date_of_xray');
+  const birthField = document.getElementById('id_date_of_birth');
+  
+  // Format today's date in YYYY-MM-DD format
+  const formattedDate = today.toISOString().split('T')[0];
+  
+  // Set default date for X-ray date field
+  if (dateField && !dateField.value) {
+    dateField.value = formattedDate;
+  }
+  
+  // Force YYYY-MM-DD format for all date fields
+  const formatDate = (date) => {
+    if (!date) return '';
+    const parts = date.split(/[-\/]/);
+    
+    // If format is MM/DD/YYYY, convert to YYYY-MM-DD
+    if (parts.length === 3) {
+      if (parts[2].length === 4) { // Likely MM/DD/YYYY format
+        return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+      } else {
+        // Already YYYY-MM-DD or similar
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+    }
+    return date; // return original if cannot parse
+  };
+  
+  // Add input event listeners to ensure correct format
+  [dateField, birthField].forEach(field => {
+    if (field) {
+      // Format existing value if needed
+      if (field.value) {
+        field.value = formatDate(field.value);
+      }
+      
+      field.addEventListener('focus', function() {
+        this.setAttribute('data-original-value', this.value);
+      });
+      
+      field.addEventListener('blur', function() {
+        const value = this.value;
+        if (value) {
+          this.value = formatDate(value);
+          
+          // Validate date format
+          const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(this.value);
+          if (!isValidDate) {
+            // If invalid, restore original value
+            this.value = this.getAttribute('data-original-value') || '';
+            alert(gettext('Please use the YYYY-MM-DD format for dates'));
+          }
+        }
+      });
+    }
+  });
+
+  // --- Form Progress Handling ---
+
   // Show the progress UI immediately on submit.
   // This prevents a "dead" period for slow server-side work (e.g., DICOM -> PNG conversion).
   const showProgressUI = () => {
@@ -20,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.parentElement.setAttribute('aria-valuenow', initialProgress);
       }
     }
-    if (progressPercentage) progressPercentage.textContent = `${initialProgress}% Complete`;
+    if (progressPercentage) progressPercentage.textContent = `${initialProgress}% ${gettext('Complete')}`;
   };
 
   // Restore the form UI if the upload/validation fails.
@@ -35,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.parentElement.setAttribute('aria-valuenow', 0);
       }
     }
-    if (progressPercentage) progressPercentage.textContent = '0% Complete';
+    if (progressPercentage) progressPercentage.textContent = `0% ${gettext('Complete')}`;
   };
   
   // Custom file input functionality
@@ -144,16 +206,16 @@ document.addEventListener('DOMContentLoaded', () => {
             progressBar.setAttribute('aria-valuenow', currentProgress);
             progressBar.parentElement.setAttribute('aria-valuenow', currentProgress);
           }
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% Complete`;
+          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% ${gettext('Complete')}`;
           
           // Update screen reader announcements
           const statusElement = document.getElementById('analysis-status');
           if (statusElement && currentProgress % 25 === 0) {
             const statusMessages = {
-              25: 'Image uploaded successfully, analysis 25% complete',
-              50: 'AI model processing X-ray data, analysis 50% complete', 
-              75: 'Generating predictions, analysis 75% complete',
-              100: 'Analysis complete, redirecting to results'
+              25: gettext('Image uploaded successfully, analysis 25% complete'),
+              50: gettext('AI model processing X-ray data, analysis 50% complete'), 
+              75: gettext('Generating predictions, analysis 75% complete'),
+              100: gettext('Analysis complete, redirecting to results')
             };
             if (statusMessages[currentProgress]) {
               statusElement.textContent = statusMessages[currentProgress];
@@ -177,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
             progressBar.style.width = `${currentProgress}%`;
             progressBar.setAttribute('aria-valuenow', currentProgress);
           }
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% Complete`;
+          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% ${gettext('Complete')}`;
           
           // Try again after a delay
           setTimeout(() => checkProgress(), 1000);
@@ -201,13 +263,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create FormData object from the form
         const formData = new FormData(analysisForm);
         
+        // Get CSRF token using global helper or fallback to form input
+        const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
         // Submit form via AJAX
         fetch('/', {
           method: 'POST',
           body: formData,
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': getCSRFToken(),
+            'X-CSRFToken': csrfToken,
           },
           cache: 'no-store',
         })
@@ -283,4 +348,4 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 0);
     });
   }
-}); 
+});

@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import gc
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -61,6 +62,7 @@ def load_model(model_type: str = 'densenet') -> Tuple[torch.nn.Module, int]:
         model.to(device)
         model.eval()
         _model_cache[model_type] = (model, resize_dim)
+        logger.info("Loaded model type: %s", model_type)
         return model, resize_dim
 
 
@@ -96,6 +98,7 @@ def load_autoencoder() -> Tuple[torch.nn.Module, int]:
                 )
                 ae_resize = ae_resize_default
         _model_cache[_AE_CACHE_KEY] = (ae, ae_resize)
+        logger.info("Loaded autoencoder: %s", ae_weights)
         return ae, ae_resize
 
 
@@ -103,21 +106,20 @@ def clear_model_cache() -> None:
     """Clear cached models to free memory."""
     with _cache_lock:
         _model_cache.clear()
-    import gc
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
-def load_segmentation_model() -> torch.nn.Module:
+def load_segmentation_model() -> Tuple[torch.nn.Module, int]:
     """Load and cache TorchXRayVision PSPNet segmentation model.
     
     Returns:
-        PSPNet model for anatomical structure segmentation
+        (model, resize_dim) - PSPNet model and its input resize dimension (512)
     """
     with _cache_lock:
         if _SEGMENTATION_CACHE_KEY in _model_cache:
-            return _model_cache[_SEGMENTATION_CACHE_KEY][0]  # Return just the model, no resize dim
+            return _model_cache[_SEGMENTATION_CACHE_KEY]  # type: ignore[return-value]
 
         device = torch.device('cpu')
         _ensure_cache_dirs()
@@ -131,10 +133,11 @@ def load_segmentation_model() -> torch.nn.Module:
             seg_model.eval()
 
             # Cache the model (store as tuple for consistency)
-            _model_cache[_SEGMENTATION_CACHE_KEY] = (seg_model, 512)  # PSPNet uses 512x512 input
+            resize_dim = 512  # PSPNet uses 512x512 input
+            _model_cache[_SEGMENTATION_CACHE_KEY] = (seg_model, resize_dim)
             logger.info("PSPNet segmentation model loaded successfully")
 
-            return seg_model
+            return seg_model, resize_dim
         except Exception:
             # Include full traceback for operational debugging.
             logger.exception("Failed to load segmentation model")
@@ -145,5 +148,3 @@ def get_cached_model_count() -> int:
     """Return number of cached models (classifier + AE entries)."""
     with _cache_lock:
         return len(_model_cache)
-
-

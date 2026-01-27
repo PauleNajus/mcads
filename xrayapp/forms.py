@@ -12,123 +12,17 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.utils.translation import gettext_lazy as _
 from django.core.files.uploadedfile import UploadedFile
-try:
-    import magic
-    MAGIC_AVAILABLE = True
-except ImportError:
-    MAGIC_AVAILABLE = False
-from .models import XRayImage, UserProfile
 from django.contrib.auth.models import User
 
+from .models import XRayImage, UserProfile
+from .image_processing import (
+    looks_like_dicom,
+    convert_dicom_to_png,
+    get_image_mime_type,
+    MAGIC_AVAILABLE
+)
+
 logger = logging.getLogger(__name__)
-
-def _looks_like_dicom(filename: str | None, header: bytes) -> bool:
-    """Heuristic DICOM detection.
-
-    We intentionally keep this lightweight:
-    - Standard DICOM files have a 128-byte preamble followed by b"DICM".
-    - Many uploads also use the conventional .dcm extension.
-    """
-    if len(header) >= 132 and header[128:132] == b"DICM":
-        return True
-    if filename and filename.lower().endswith((".dcm", ".dicom")):
-        return True
-    return False
-
-
-def _dicom_to_png(uploaded: UploadedFile) -> ContentFile:
-    """Convert a DICOM upload into a PNG `ContentFile`.
-
-    Why convert?
-    - The rest of MCADS expects an image that PIL/skimage can read.
-    - Templates use `<img src="{{ image_url }}">`, which won't render a `.dcm`.
-
-    We keep the original name stem, but always return a `.png` file.
-    """
-    try:
-        import numpy as np
-        import pydicom
-        from pydicom.pixel_data_handlers.util import apply_voi_lut
-        from PIL import Image
-    except Exception as exc:  # pragma: no cover (dependency/runtime)
-        raise ValidationError(_("DICOM support is not available on this server.")) from exc
-
-    uploaded.seek(0)
-    try:
-        ds = pydicom.dcmread(uploaded, force=True)
-    except Exception as exc:
-        raise ValidationError(_("Invalid DICOM file.")) from exc
-
-    try:
-        arr = np.asarray(ds.pixel_array)
-    except Exception as exc:
-        # This can happen for compressed pixel data without extra decoders.
-        raise ValidationError(_("Unable to read DICOM pixel data.")) from exc
-
-    # Handle common shapes:
-    # - (H, W) grayscale
-    # - (frames, H, W) multi-frame → take first frame
-    # - (H, W, 3/4) RGB/RGBA → take first channel (rare for X-rays)
-    if arr.ndim == 3:
-        if arr.shape[-1] in (3, 4):
-            arr = arr[..., 0]
-        else:
-            arr = arr[0]
-    elif arr.ndim > 3:
-        # Fall back to the last 2 dimensions as an image plane.
-        arr = arr.reshape(arr.shape[-2], arr.shape[-1])
-
-    arr = arr.astype("float32", copy=False)
-
-    # Apply rescale slope/intercept when present.
-    slope = float(getattr(ds, "RescaleSlope", 1.0) or 1.0)
-    intercept = float(getattr(ds, "RescaleIntercept", 0.0) or 0.0)
-    arr = arr * slope + intercept
-
-    # Apply VOI LUT / windowing when available.
-    try:
-        arr = apply_voi_lut(arr, ds)
-    except Exception:
-        pass
-
-    # MONOCHROME1 means the grayscale is inverted.
-    if str(getattr(ds, "PhotometricInterpretation", "")).upper() == "MONOCHROME1":
-        arr = float(arr.max()) - arr
-
-    # Robust normalization to 8-bit for downstream pipelines.
-    finite_mask = np.isfinite(arr)
-    if not finite_mask.any():
-        raise ValidationError(_("DICOM pixel data is empty or invalid."))
-
-    finite_vals = arr[finite_mask]
-
-    # Percentile computation on very large arrays can be noticeably slow.
-    # A light, deterministic subsample preserves robustness while improving latency.
-    sample = finite_vals
-    if sample.size > 512_000:
-        step = max(1, sample.size // 512_000)
-        sample = sample[::step]
-
-    low, high = np.percentile(sample, [1, 99]).astype("float32")
-    if not (high > low):
-        low = float(finite_vals.min())
-        high = float(finite_vals.max())
-    if not (high > low):
-        high = low + 1.0
-
-    arr = np.clip(arr, low, high)
-    arr = (arr - low) / (high - low)
-    arr8 = (arr * 255.0).clip(0, 255).astype("uint8")
-
-    img = Image.fromarray(arr8, mode="L")
-    out = BytesIO()
-    # `optimize=True` can add seconds for large PNGs; prefer fast compression.
-    img.save(out, format="PNG", compress_level=1)
-
-    # Keep name stable and safe.
-    original_name = (uploaded.name or "dicom").rsplit("/", 1)[-1]
-    stem = original_name.rsplit(".", 1)[0] or "dicom"
-    return ContentFile(out.getvalue(), name=f"{stem}.png")
 
 
 class XRayUploadForm(forms.ModelForm):
@@ -149,7 +43,10 @@ class XRayUploadForm(forms.ModelForm):
         }
     
     def __init__(self, *args: object, **kwargs: object) -> None:
-        user = kwargs.pop('user', None)
+        user_obj = kwargs.pop('user', None)
+        # Cast to correct type for mypy
+        user: User | None = user_obj if isinstance(user_obj, User) else None
+        
         super().__init__(*args, **kwargs)
         
         # Auto-populate technologist fields with current user's information
@@ -192,19 +89,13 @@ class XRayUploadForm(forms.ModelForm):
         finally:
             image.seek(0)
 
-        is_dicom = _looks_like_dicom(getattr(image, "name", None), header)
+        is_dicom = looks_like_dicom(getattr(image, "name", None), header)
         
         # Check MIME type for security if magic is available
         file_mime: str | None = None
         if MAGIC_AVAILABLE and not is_dicom:
-            file_mime = None
-            try:
-                file_mime = magic.from_buffer(header, mime=True)
-            except Exception as exc:
-                # If magic fails, rely on Django's validation (do not block uploads).
-                logger.warning("python-magic MIME detection failed: %s", exc)
-            finally:
-                image.seek(0)  # Always reset file pointer after read
+            file_mime = get_image_mime_type(header)
+            
             # Common safe image MIME types.
             allowed_mimes = {
                 'image/jpeg', 'image/jpg', 'image/png',
@@ -229,7 +120,7 @@ class XRayUploadForm(forms.ModelForm):
             # We convert DICOM → PNG for processing/display, but we still want user-facing
             # metadata to say "DICOM".
             self._mcads_source_format = "DICOM"
-            return _dicom_to_png(image)
+            return convert_dicom_to_png(image)
 
         # For non-DICOM uploads, we must validate that the content is a real image.
         # (We use FileField to accept .dcm, so we need to reintroduce ImageField-like verification.)
@@ -259,7 +150,7 @@ class XRayUploadForm(forms.ModelForm):
         except (UnidentifiedImageError, OSError):
             try:
                 self._mcads_source_format = "DICOM"
-                return _dicom_to_png(image)
+                return convert_dicom_to_png(image)
             except ValidationError as exc:
                 raise ValidationError(_("Invalid image file.")) from exc
         finally:
@@ -267,19 +158,18 @@ class XRayUploadForm(forms.ModelForm):
 
         return image
     
+    def _clean_name_field(self, field_name: str, label: str) -> str:
+        """Helper to sanitize name inputs."""
+        value = self.cleaned_data.get(field_name, '').strip()
+        if value and not value.replace(' ', '').replace('-', '').replace("'", '').isalpha():
+            raise ValidationError(_('%(label)s should only contain letters, spaces, hyphens, and apostrophes.') % {'label': label})
+        return value
+
     def clean_first_name(self) -> str:
-        """Sanitize first name input"""
-        first_name = self.cleaned_data.get('first_name', '').strip()
-        if first_name and not first_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
-            raise ValidationError(_('First name should only contain letters, spaces, hyphens, and apostrophes.'))
-        return first_name
+        return self._clean_name_field('first_name', _('First name'))
     
     def clean_last_name(self) -> str:
-        """Sanitize last name input"""
-        last_name = self.cleaned_data.get('last_name', '').strip()
-        if last_name and not last_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
-            raise ValidationError(_('Last name should only contain letters, spaces, hyphens, and apostrophes.'))
-        return last_name
+        return self._clean_name_field('last_name', _('Last name'))
     
     def clean_patient_id(self) -> str:
         """Validate patient ID format"""
@@ -305,18 +195,10 @@ class XRayUploadForm(forms.ModelForm):
         return xray_date
     
     def clean_technologist_first_name(self) -> str:
-        """Sanitize technologist first name input"""
-        technologist_first_name = self.cleaned_data.get('technologist_first_name', '').strip()
-        if technologist_first_name and not technologist_first_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
-            raise ValidationError(_('Technologist first name should only contain letters, spaces, hyphens, and apostrophes.'))
-        return technologist_first_name
+        return self._clean_name_field('technologist_first_name', _('Technologist first name'))
     
     def clean_technologist_last_name(self) -> str:
-        """Sanitize technologist last name input"""
-        technologist_last_name = self.cleaned_data.get('technologist_last_name', '').strip()
-        if technologist_last_name and not technologist_last_name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
-            raise ValidationError(_('Technologist last name should only contain letters, spaces, hyphens, and apostrophes.'))
-        return technologist_last_name
+        return self._clean_name_field('technologist_last_name', _('Technologist last name'))
 
 
 class PredictionHistoryFilterForm(forms.Form):
@@ -383,28 +265,23 @@ class PredictionHistoryFilterForm(forms.Form):
     
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
-        # Populate pathology choices dynamically
-        pathology_choices = [
-            ('', _('All')),
-            ('atelectasis', _('Atelectasis')),
-            ('cardiomegaly', _('Cardiomegaly')),
-            ('consolidation', _('Consolidation')),
-            ('edema', _('Edema')),
-            ('effusion', _('Effusion')),
-            ('emphysema', _('Emphysema')),
-            ('fibrosis', _('Fibrosis')),
-            ('hernia', _('Hernia')),
-            ('infiltration', _('Infiltration')),
-            ('mass', _('Mass')),
-            ('nodule', _('Nodule')),
-            ('pleural_thickening', _('Pleural Thickening')),
-            ('pneumonia', _('Pneumonia')),
-            ('pneumothorax', _('Pneumothorax')),
-            ('fracture', _('Fracture')),
-            ('lung_opacity', _('Lung Opacity')),
-            ('enlarged_cardiomediastinum', _('Enlarged Cardiomediastinum')),
-            ('lung_lesion', _('Lung Lesion'))
-        ]
+        # Populate pathology choices dynamically from model constant
+        # This keeps the filter form in sync with PATHOLOGY_FIELDS automatically.
+        from .models import PATHOLOGY_FIELDS, RESULT_KEY_TO_FIELD
+        
+        # Build choices with localized labels
+        pathology_choices = [('', _('All'))]
+        
+        # Create reverse mapping for display labels (same logic as in views)
+        FIELD_TO_LABEL = {v: k for k, v in RESULT_KEY_TO_FIELD.items()}
+        
+        for field in PATHOLOGY_FIELDS:
+            # Use original key as label if available, else capitalize field name
+            raw_label = FIELD_TO_LABEL.get(field, field.replace('_', ' ').title())
+            # Translate the label
+            label = _(raw_label)
+            pathology_choices.append((field, label))
+            
         self.fields['pathology'].choices = pathology_choices
     
     def clean(self) -> dict:
@@ -498,21 +375,11 @@ class ChangePasswordForm(forms.Form):
         """Validate new password strength"""
         new_password = self.cleaned_data.get('new_password') or ""
         
-        # Basic password validation
-        if len(new_password) < 8:
-            raise ValidationError(_('Password must be at least 8 characters long.'))
-        
-        # Check for at least one digit
-        if not any(char.isdigit() for char in new_password):
-            raise ValidationError(_('Password must contain at least one digit.'))
-        
-        # Check for at least one uppercase letter
-        if not any(char.isupper() for char in new_password):
-            raise ValidationError(_('Password must contain at least one uppercase letter.'))
-        
-        # Check for at least one lowercase letter
-        if not any(char.islower() for char in new_password):
-            raise ValidationError(_('Password must contain at least one lowercase letter.'))
+        try:
+            from django.contrib.auth.password_validation import validate_password
+            validate_password(new_password, self.user)
+        except ValidationError as e:
+            raise ValidationError(e.messages)
             
         return new_password
     
@@ -525,4 +392,4 @@ class ChangePasswordForm(forms.Form):
         if new_password and confirm_password and new_password != confirm_password:
             raise ValidationError(_('New passwords do not match.'))
             
-        return cleaned_data 
+        return cleaned_data

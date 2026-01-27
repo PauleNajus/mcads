@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult
+from .models import XRayImage, PredictionHistory, UserProfile, VisualizationResult, SEVERITY_MAPPING
 
 # Shared role colors used across admin displays.
 ROLE_COLORS: dict[str, str] = {
@@ -16,6 +16,34 @@ ROLE_COLORS: dict[str, str] = {
     'Technologist': '#007bff',   # Blue
     'Radiologist': '#6f42c1',    # Purple
 }
+
+
+@admin.display(description=_('User (Role)'), ordering='user__username')
+def get_user_with_role(obj):
+    """Display user with their role"""
+    try:
+        role = obj.user.profile.role
+        color = ROLE_COLORS.get(role, '#6c757d')
+        return format_html(
+            '{} <span style="color: {}; font-size: 0.8em;">({})</span>',
+            obj.user.username, color, role
+        )
+    except (ObjectDoesNotExist, AttributeError):
+        return getattr(getattr(obj, "user", None), "username", _("Unknown"))
+
+
+@admin.display(description=_('Severity'))
+def get_severity_display(obj):
+    """Display severity with color coding"""
+    level = obj.severity_level or obj.calculate_severity_level
+    label = SEVERITY_MAPPING.get(level, _('Unknown'))
+    if level == 1:
+        return format_html('<span style="color: #28a745;">{}</span>', label)
+    elif level == 2:
+        return format_html('<span style="color: #ffc107;">{}</span>', label)
+    elif level == 3:
+        return format_html('<span style="color: #dc3545;">{}</span>', label)
+    return label
 
 
 # Unregister the default User admin
@@ -34,6 +62,7 @@ class CustomUserAdmin(UserAdmin):
         # Avoid N+1 queries in list_display (`obj.profile` access).
         return super().get_queryset(request).select_related('profile')
 
+    @admin.display(description=_('Role'), ordering='profile__role')
     def get_role(self, obj):
         """Get user role with color coding"""
         try:
@@ -45,8 +74,6 @@ class CustomUserAdmin(UserAdmin):
             )
         except (ObjectDoesNotExist, AttributeError):
             return format_html('<span style="color: #dc3545;">{}</span>', _('No Profile'))
-    get_role.short_description = _('Role')
-    get_role.admin_order_field = 'profile__role'
 
     def get_fieldsets(self, request, obj=None):
         """Override fieldsets to include role management"""
@@ -65,6 +92,7 @@ class CustomUserAdmin(UserAdmin):
             )
         return fieldsets
 
+    @admin.display(description=_('Role Information'))
     def get_role_info(self, obj):
         """Display role information in user edit form"""
         try:
@@ -85,7 +113,6 @@ class CustomUserAdmin(UserAdmin):
                 reverse('admin:xrayapp_userprofile_add') + f'?user={obj.pk}',
                 _('Create Profile')
             )
-    get_role_info.short_description = _('Role Information')
 
     readonly_fields = (*UserAdmin.readonly_fields, 'get_role_info')
 
@@ -132,12 +159,12 @@ class UserProfileAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user')
 
+    @admin.display(description=_('Full Name'), ordering='user__first_name')
     def get_user_full_name(self, obj):
         """Get user's full name"""
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
-    get_user_full_name.short_description = _('Full Name')
-    get_user_full_name.admin_order_field = 'user__first_name'
 
+    @admin.display(description=_('User Information'))
     def get_user_info(self, obj):
         """Display user information"""
         user = obj.user
@@ -154,8 +181,8 @@ class UserProfileAdmin(admin.ModelAdmin):
             reverse('admin:auth_user_change', args=[user.pk]),
             _('Edit User Details')
         )
-    get_user_info.short_description = _('User Information')
 
+    @admin.display(description=_('Key Permissions'))
     def get_role_permissions(self, obj):
         """Show key permissions for the role"""
         perms = []
@@ -169,8 +196,8 @@ class UserProfileAdmin(admin.ModelAdmin):
             perms.append(_('Delete'))
         
         return ', '.join(perms) if perms else _('View Only')
-    get_role_permissions.short_description = _('Key Permissions')
 
+    @admin.display(description=_('Role Permissions'))
     def get_permissions_display(self, obj):
         """Display all permissions for the role"""
         permissions = [
@@ -190,15 +217,14 @@ class UserProfileAdmin(admin.ModelAdmin):
         html += '</table>'
         
         return format_html(html)
-    get_permissions_display.short_description = _('Role Permissions')
 
 
 @admin.register(XRayImage)
 class XRayImageAdmin(admin.ModelAdmin):
     """Enhanced XRayImage admin with role-based features"""
     list_display = (
-        'id', 'get_user_with_role', 'get_patient_display', 'patient_id', 
-        'gender', 'uploaded_at', 'processing_status', 'get_severity_display'
+        'id', get_user_with_role, 'get_patient_display', 'patient_id', 
+        'gender', 'uploaded_at', 'processing_status', get_severity_display
     )
     list_filter = (
         'user__profile__role', 'processing_status', 'gender', 'uploaded_at', 
@@ -249,20 +275,7 @@ class XRayImageAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'user__profile')
 
-    def get_user_with_role(self, obj):
-        """Display user with their role"""
-        try:
-            role = obj.user.profile.role
-            color = ROLE_COLORS.get(role, '#6c757d')
-            return format_html(
-                '{} <span style="color: {}; font-size: 0.8em;">({})</span>',
-                obj.user.username, color, role
-            )
-        except (ObjectDoesNotExist, AttributeError):
-            return getattr(getattr(obj, "user", None), "username", _("Unknown"))
-    get_user_with_role.short_description = _('User (Role)')
-    get_user_with_role.admin_order_field = 'user__username'
-
+    @admin.display(description=_('User Role Info'))
     def get_user_role_info(self, obj):
         """Display user role information in detail view"""
         try:
@@ -277,25 +290,12 @@ class XRayImageAdmin(admin.ModelAdmin):
             )
         except (ObjectDoesNotExist, AttributeError):
             return _('No profile information available')
-    get_user_role_info.short_description = _('User Role Info')
-
-    def get_severity_display(self, obj):
-        """Display severity with color coding"""
-        level = obj.severity_level or obj.calculate_severity_level
-        if level == 1:
-            return format_html('<span style="color: #28a745;">{}</span>', _('Insignificant'))
-        elif level == 2:
-            return format_html('<span style="color: #ffc107;">{}</span>', _('Moderate'))
-        elif level == 3:
-            return format_html('<span style="color: #dc3545;">{}</span>', _('Significant'))
-        return _('Unknown')
-    get_severity_display.short_description = _('Severity')
 
 
 @admin.register(PredictionHistory)
 class PredictionHistoryAdmin(admin.ModelAdmin):
     """Enhanced PredictionHistory admin"""
-    list_display = ('id', 'get_user_with_role', 'xray', 'created_at', 'model_used', 'get_severity_display')
+    list_display = ('id', get_user_with_role, 'xray', 'created_at', 'model_used', get_severity_display)
     list_filter = ('user__profile__role', 'model_used', 'created_at', 'severity_level')
     search_fields = ('user__username', 'xray__patient_id', 'xray__first_name', 'xray__last_name')
     readonly_fields = (
@@ -310,32 +310,6 @@ class PredictionHistoryAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         # Avoid N+1 queries for user role and xray fields.
         return super().get_queryset(request).select_related('user', 'user__profile', 'xray')
-
-    def get_user_with_role(self, obj):
-        """Display user with their role"""
-        try:
-            role = obj.user.profile.role
-            color = ROLE_COLORS.get(role, '#6c757d')
-            return format_html(
-                '{} <span style="color: {}; font-size: 0.8em;">({})</span>',
-                obj.user.username, color, role
-            )
-        except (ObjectDoesNotExist, AttributeError):
-            return getattr(getattr(obj, "user", None), "username", _("Unknown"))
-    get_user_with_role.short_description = _('User (Role)')
-    get_user_with_role.admin_order_field = 'user__username'
-
-    def get_severity_display(self, obj):
-        """Display severity with color coding"""
-        level = obj.severity_level or obj.calculate_severity_level
-        if level == 1:
-            return format_html('<span style="color: #28a745;">{}</span>', _('Insignificant'))
-        elif level == 2:
-            return format_html('<span style="color: #ffc107;">{}</span>', _('Moderate'))
-        elif level == 3:
-            return format_html('<span style="color: #dc3545;">{}</span>', _('Significant'))
-        return _('Unknown')
-    get_severity_display.short_description = _('Severity')
 
 
 @admin.register(VisualizationResult)
@@ -366,15 +340,15 @@ class VisualizationResultAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('xray', 'xray__user')
 
+    @admin.display(description=_('X-ray'), ordering='xray')
     def get_xray_info(self, obj):
         """Get X-ray information with link"""
         xray = obj.xray
         url = reverse('admin:xrayapp_xrayimage_change', args=[xray.pk])
         patient_info = f"{xray.first_name} {xray.last_name}".strip() if xray.first_name or xray.last_name else f"X-ray #{xray.id}"
         return format_html('<a href="{}">{}</a>', url, patient_info)
-    get_xray_info.short_description = _('X-ray')
-    get_xray_info.admin_order_field = 'xray'
     
+    @admin.display(description=_('Preview'))
     def get_preview(self, obj):
         """Get image preview"""
         if obj.visualization_url:
@@ -383,8 +357,8 @@ class VisualizationResultAdmin(admin.ModelAdmin):
                 obj.visualization_url
             )
         return _('No visualization available')
-    get_preview.short_description = _('Preview')
     
+    @admin.display(description=_('File Links'))
     def get_file_links(self, obj):
         """Get links to all visualization files"""
         links = []
@@ -401,7 +375,6 @@ class VisualizationResultAdmin(admin.ModelAdmin):
         if links:
             return format_html(' | '.join(links))
         return _('No files available')
-    get_file_links.short_description = _('File Links')
 
 
 # Customize admin site headers

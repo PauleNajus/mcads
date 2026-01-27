@@ -73,6 +73,13 @@ RESULT_KEY_TO_FIELD: dict[str, str] = {
     "Lung Lesion": "lung_lesion",
 }
 
+# Centralized severity mapping for consistent display across the app
+SEVERITY_MAPPING = {
+    1: _("Insignificant findings"),
+    2: _("Moderate findings"),
+    3: _("Significant findings"),
+}
+
 
 def _iter_present_pathology_values(obj: object) -> list[float]:
     """Return all non-null pathology values from a model instance.
@@ -270,18 +277,13 @@ class XRayImage(models.Model):
     @property
     def severity_label(self) -> str:
         """Get severity level label"""
-        severity_mapping = {
-            1: _("Insignificant findings"),
-            2: _("Moderate findings"),
-            3: _("Significant findings"),
-        }
         level = self.severity_level
         if level is None:
             calculated = self.calculate_severity_level
             if calculated is None:
                 return _("Unknown")
-            return severity_mapping.get(calculated, _("Unknown"))
-        return severity_mapping.get(level, _("Unknown"))
+            return str(SEVERITY_MAPPING.get(calculated, _("Unknown")))
+        return str(SEVERITY_MAPPING.get(level, _("Unknown")))
     
     def __str__(self) -> str:
         if self.patient_id and (self.first_name or self.last_name):
@@ -315,15 +317,6 @@ class PredictionHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     model_used = models.CharField(max_length=50, db_index=True)  # densenet, resnet, etc.
     
-    # Filters
-    filter_by_gender = models.CharField(max_length=10, blank=True, db_index=True)
-    filter_by_age_min = models.IntegerField(null=True, blank=True)
-    filter_by_age_max = models.IntegerField(null=True, blank=True)
-    filter_by_date_min = models.DateField(null=True, blank=True, db_index=True)
-    filter_by_date_max = models.DateField(null=True, blank=True, db_index=True)
-    filter_by_pathology = models.CharField(max_length=50, blank=True, db_index=True)
-    filter_by_pathology_threshold = models.FloatField(null=True, blank=True)
-    
     # Predicted pathologies - copied from XRayImage for historical record
     atelectasis = models.FloatField(null=True, blank=True)
     cardiomegaly = models.FloatField(null=True, blank=True)
@@ -354,8 +347,6 @@ class PredictionHistory(models.Model):
         indexes = [
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['model_used', 'created_at']),
-            models.Index(fields=['filter_by_gender', 'created_at']),
-            models.Index(fields=['filter_by_pathology', 'created_at']),
             models.Index(fields=['severity_level', 'created_at']),
         ]
         # Optimize database table order
@@ -373,18 +364,13 @@ class PredictionHistory(models.Model):
     @property
     def severity_label(self) -> str:
         """Get severity level label"""
-        severity_mapping = {
-            1: _("Insignificant findings"),
-            2: _("Moderate findings"),
-            3: _("Significant findings"),
-        }
         level = self.severity_level
         if level is None:
             calculated = self.calculate_severity_level
             if calculated is None:
                 return _("Unknown")
-            return severity_mapping.get(calculated, _("Unknown"))
-        return severity_mapping.get(level, _("Unknown"))
+            return str(SEVERITY_MAPPING.get(calculated, _("Unknown")))
+        return str(SEVERITY_MAPPING.get(level, _("Unknown")))
     
     def __str__(self) -> str:
         return f"Prediction #{self.pk} for {self.xray} using {self.model_used}"

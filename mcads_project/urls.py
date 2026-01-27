@@ -19,8 +19,10 @@ from django.urls import path, include
 from django.views.generic.base import RedirectView
 from django.views.i18n import JavaScriptCatalog
 
+from django.conf import settings
+
 urlpatterns = [
-    path('secure-admin-mcads-2024/', admin.site.urls),  # Changed from 'admin/' for security
+    path(settings.ADMIN_URL, admin.site.urls),  # Changed from 'admin/' for security
     path('accounts/', include('django.contrib.auth.urls')),
     # Add Django's i18n URLs for JavaScript internationalization
     path('i18n/', include('django.conf.urls.i18n')),
