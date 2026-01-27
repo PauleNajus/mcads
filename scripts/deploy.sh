@@ -51,7 +51,9 @@ echo "Building Docker images..."
 "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" build
 
 echo "Starting services..."
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d
+# `--build` ensures the running containers pick up fresh code changes.
+# `--remove-orphans` avoids stale services after compose file edits.
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d --build --remove-orphans
 
 # Nginx reads config only on start/reload. Since our config is mounted from the host
 # (and Compose doesn't detect content-only changes), explicitly restart Nginx so

@@ -1,4 +1,18 @@
 services:
+  # Production should default to DEBUG=0 so static assets use hashed filenames
+  # (required for long-lived immutable caching headers in Nginx).
+  web:
+    environment:
+      DEBUG: ${DEBUG:-0}
+
+  celery-worker:
+    environment:
+      DEBUG: ${DEBUG:-0}
+
+  celery-beat:
+    environment:
+      DEBUG: ${DEBUG:-0}
+
   # Production reverse proxy: enable TLS on 443 and redirect 80 -> 443.
   nginx:
     ports:

@@ -101,7 +101,15 @@ def _dicom_to_png(uploaded: UploadedFile) -> ContentFile:
         raise ValidationError(_("DICOM pixel data is empty or invalid."))
 
     finite_vals = arr[finite_mask]
-    low, high = np.percentile(finite_vals, [1, 99]).astype("float32")
+
+    # Percentile computation on very large arrays can be noticeably slow.
+    # A light, deterministic subsample preserves robustness while improving latency.
+    sample = finite_vals
+    if sample.size > 512_000:
+        step = max(1, sample.size // 512_000)
+        sample = sample[::step]
+
+    low, high = np.percentile(sample, [1, 99]).astype("float32")
     if not (high > low):
         low = float(finite_vals.min())
         high = float(finite_vals.max())
@@ -114,7 +122,8 @@ def _dicom_to_png(uploaded: UploadedFile) -> ContentFile:
 
     img = Image.fromarray(arr8, mode="L")
     out = BytesIO()
-    img.save(out, format="PNG", optimize=True)
+    # `optimize=True` can add seconds for large PNGs; prefer fast compression.
+    img.save(out, format="PNG", compress_level=1)
 
     # Keep name stable and safe.
     original_name = (uploaded.name or "dicom").rsplit("/", 1)[-1]

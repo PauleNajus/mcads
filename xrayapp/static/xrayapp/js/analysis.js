@@ -4,6 +4,39 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressWrapper = document.getElementById('progress-wrapper');
   const progressBar = document.getElementById('analysis-progress-bar');
   const progressPercentage = document.getElementById('progress-percentage');
+
+  // Show the progress UI immediately on submit.
+  // This prevents a "dead" period for slow server-side work (e.g., DICOM -> PNG conversion).
+  const showProgressUI = () => {
+    if (formWrapper) formWrapper.style.display = 'none';
+    if (progressWrapper) progressWrapper.style.display = 'block';
+
+    // Give the user instant feedback even before we have an upload_id to poll.
+    const initialProgress = 1;
+    if (progressBar) {
+      progressBar.style.width = `${initialProgress}%`;
+      progressBar.setAttribute('aria-valuenow', initialProgress);
+      if (progressBar.parentElement) {
+        progressBar.parentElement.setAttribute('aria-valuenow', initialProgress);
+      }
+    }
+    if (progressPercentage) progressPercentage.textContent = `${initialProgress}% Complete`;
+  };
+
+  // Restore the form UI if the upload/validation fails.
+  const restoreFormUI = () => {
+    if (progressWrapper) progressWrapper.style.display = 'none';
+    if (formWrapper) formWrapper.style.display = 'block';
+
+    if (progressBar) {
+      progressBar.style.width = '0%';
+      progressBar.setAttribute('aria-valuenow', 0);
+      if (progressBar.parentElement) {
+        progressBar.parentElement.setAttribute('aria-valuenow', 0);
+      }
+    }
+    if (progressPercentage) progressPercentage.textContent = '0% Complete';
+  };
   
   // Custom file input functionality
   const customFileButton = document.getElementById('custom-file-button');
@@ -162,88 +195,97 @@ document.addEventListener('DOMContentLoaded', () => {
   if (analysisForm) {
     analysisForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      
-      // Create FormData object from the form
-      const formData = new FormData(analysisForm);
-      
-      // Submit form via AJAX
-      fetch('/', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRFToken': getCSRFToken(),
-        },
-        cache: 'no-store',
-      })
-      .then(async (response) => {
-        // Always try to parse JSON (even on non-2xx) so we can show real errors.
-        const contentType = response.headers.get('content-type') || '';
-        let data = null;
-        if (contentType.includes('application/json')) {
-          try {
-            data = await response.json();
-          } catch (err) {
-            data = null;
-          }
-        }
 
-        if (!response.ok) {
-          // Prefer server-provided error details when available.
-          let errorMessage = (data && data.error) ? data.error : `HTTP error! status: ${response.status}`;
+      // Show progress instantly (even if the server is slow to respond).
+      showProgressUI();
 
-          // If we got field-level errors, surface the most relevant one.
-          if (data && data.errors && data.errors.image) {
-            const imageErrors = data.errors.image;
-            if (Array.isArray(imageErrors) && imageErrors.length) {
-              errorMessage = imageErrors[0];
-            } else if (typeof imageErrors === 'string') {
-              errorMessage = imageErrors;
+      // Let the browser paint the progress UI before starting the upload.
+      setTimeout(() => {
+        // Create FormData object from the form
+        const formData = new FormData(analysisForm);
+        
+        // Submit form via AJAX
+        fetch('/', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          cache: 'no-store',
+        })
+        .then(async (response) => {
+          // Always try to parse JSON (even on non-2xx) so we can show real errors.
+          const contentType = response.headers.get('content-type') || '';
+          let data = null;
+          if (contentType.includes('application/json')) {
+            try {
+              data = await response.json();
+            } catch (err) {
+              data = null;
             }
           }
 
-          // Common reverse-proxy error for large uploads.
-          if (response.status === 413) {
-            errorMessage = gettext('File too large. Please upload a smaller file.');
+          if (!response.ok) {
+            // Prefer server-provided error details when available.
+            let errorMessage = (data && data.error) ? data.error : `HTTP error! status: ${response.status}`;
+
+            // If we got field-level errors, surface the most relevant one.
+            if (data && data.errors && data.errors.image) {
+              const imageErrors = data.errors.image;
+              if (Array.isArray(imageErrors) && imageErrors.length) {
+                errorMessage = imageErrors[0];
+              } else if (typeof imageErrors === 'string') {
+                errorMessage = imageErrors;
+              }
+            }
+
+            // Common reverse-proxy error for large uploads.
+            if (response.status === 413) {
+              errorMessage = gettext('File too large. Please upload a smaller file.');
+            }
+
+            const err = new Error(errorMessage);
+            err.status = response.status;
+            err.data = data;
+            throw err;
           }
 
-          const err = new Error(errorMessage);
-          err.status = response.status;
-          err.data = data;
-          throw err;
-        }
-
-        if (!data) {
-          throw new Error('Response is not JSON');
-        }
-
-        return data;
-      })
-      .then(data => {
-        console.log('Server response:', data);
-        if (data.upload_id) {
-          console.log('Upload successful, tracking progress for ID:', data.upload_id);
-          // Start tracking progress
-          trackProgress(data.upload_id);
-        } else if (data.error) {
-          // Handle validation errors
-          console.error('Form validation error:', data.error);
-          if (data.errors) {
-            console.error('Detailed errors:', data.errors);
+          if (!data) {
+            throw new Error('Response is not JSON');
           }
-          alert(gettext('Error: ') + data.error);
-        } else {
-          // Generic error handling
-          console.error('Unexpected response format:', data);
-          alert(gettext('Error starting analysis. Please try again.'));
-        }
-      })
-      .catch(error => {
-        console.error('Error submitting form:', error);
-        console.error('Error details:', error.message, error.stack);
-        const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
-        alert(gettext('Error: ') + message);
-      });
+
+          return data;
+        })
+        .then(data => {
+          console.log('Server response:', data);
+          if (data.upload_id) {
+            console.log('Upload successful, tracking progress for ID:', data.upload_id);
+            // Start tracking progress
+            trackProgress(data.upload_id);
+          } else if (data.error) {
+            // Handle validation errors
+            console.error('Form validation error:', data.error);
+            if (data.errors) {
+              console.error('Detailed errors:', data.errors);
+            }
+            restoreFormUI();
+            alert(gettext('Error: ') + data.error);
+          } else {
+            // Generic error handling
+            console.error('Unexpected response format:', data);
+            restoreFormUI();
+            alert(gettext('Error starting analysis. Please try again.'));
+          }
+        })
+        .catch(error => {
+          console.error('Error submitting form:', error);
+          console.error('Error details:', error.message, error.stack);
+          restoreFormUI();
+          const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
+          alert(gettext('Error: ') + message);
+        });
+      }, 0);
     });
   }
 }); 

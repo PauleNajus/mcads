@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torchvision
 import skimage
 import cv2
@@ -13,6 +14,95 @@ import torchxrayvision as xrv
 from .model_loader import load_model
 
 logger = logging.getLogger(__name__)
+
+def _center_crop_bounds(h: int, w: int) -> tuple[int, int, int, int]:
+    """Return (y0, y1, x0, x1) bounds for TorchXRayVision-style center crop.
+
+    TorchXRayVision's `XRayCenterCrop()` produces a centered square crop with side
+    length `min(h, w)`. We replicate that here so Grad-CAM heatmaps (computed on
+    the cropped+resized model input) can be mapped back onto the *original*
+    rectangular image without stretching.
+    """
+    size = min(int(h), int(w))
+    y0 = max(0, (int(h) - size) // 2)
+    x0 = max(0, (int(w) - size) // 2)
+    return y0, y0 + size, x0, x0 + size
+
+
+def _overlay_colormap_on_gray(
+    gray01: np.ndarray,
+    heatmap01: np.ndarray,
+    *,
+    alpha: float = 0.4,
+    colormap: int = cv2.COLORMAP_JET,
+    gamma: float = 1.0,
+) -> np.ndarray:
+    """Overlay a heatmap on a grayscale image (OpenCV-friendly).
+
+    This intentionally uses *per-pixel* alpha (derived from heatmap intensity)
+    instead of a constant alpha, so low-activation regions remain mostly
+    unchanged (closer to Chester's visualization style).
+
+    Args:
+        gray01: 2D grayscale image scaled to [0, 1]
+        heatmap01: 2D heatmap scaled to [0, 1] (resized to match gray if needed)
+        alpha: max overlay strength (0..1)
+        colormap: OpenCV colormap id
+        gamma: optional gamma on heatmap before alpha (>=1 focuses on peaks)
+
+    Returns:
+        BGR uint8 image (OpenCV channel order).
+    """
+    if gray01.ndim != 2:
+        raise ValueError("gray01 must be a 2D array")
+
+    heat = heatmap01
+    if heat.shape[:2] != gray01.shape[:2]:
+        heat = cv2.resize(heat, (gray01.shape[1], gray01.shape[0]))
+
+    gray_u8 = (np.clip(gray01, 0.0, 1.0) * 255.0).astype(np.uint8)
+    img_bgr = cv2.cvtColor(gray_u8, cv2.COLOR_GRAY2BGR)  # type: ignore
+
+    heat_f = np.clip(heat.astype(np.float32), 0.0, 1.0)
+    if gamma != 1.0:
+        heat_f = np.power(heat_f, float(gamma))
+
+    heat_u8 = (heat_f * 255.0).astype(np.uint8)
+    heat_bgr = cv2.applyColorMap(heat_u8, colormap)  # type: ignore
+
+    a = (heat_f * float(alpha)).clip(0.0, 1.0).astype(np.float32)[..., None]
+    out = img_bgr.astype(np.float32) * (1.0 - a) + heat_bgr.astype(np.float32) * a
+    return out.astype(np.uint8)
+
+
+def _unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
+    """Unwrap `NoInplaceReLU` wrappers (used for interpretability)."""
+    return model.model if isinstance(model, NoInplaceReLU) else model
+
+
+def _forward_xrv_logits(model: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """Best-effort raw-logit forward for TorchXRayVision models.
+
+    TorchXRayVision core models may apply sigmoid + operating-point normalization
+    in `forward()`. For gradient-based explanations, logits are usually more
+    stable (avoid saturation and piecewise ops).
+    """
+    base = _unwrap_model(model)
+
+    # TorchXRayVision DenseNet has `.features` + `.classifier`.
+    if hasattr(base, "features") and hasattr(base, "classifier"):
+        feats = base.features(x)
+        feats = F.relu(feats, inplace=False)
+        pooled = F.adaptive_avg_pool2d(feats, (1, 1)).view(feats.size(0), -1)
+        return base.classifier(pooled)
+
+    # TorchXRayVision ResNet wrapper stores torchvision model at `.model`.
+    inner = getattr(base, "model", None)
+    if inner is not None and callable(inner):
+        return inner(x)
+
+    # Fallback: best effort (may include sigmoid/op_norm depending on model).
+    return base(x)
 
 
 def _model_device(model: torch.nn.Module) -> torch.device:
@@ -80,51 +170,28 @@ class GradCAM:
     def __init__(self, model, target_layer=None):
         self.model = model
         self.model.eval()
-        
-        # Check if model is wrapped with NoInplaceReLU
-        actual_model = model.model if isinstance(model, NoInplaceReLU) else model
-        
-        # For DenseNet-121, the default target layer is the last convolutional layer
+
+        # Cache the underlying model for architecture inspection.
+        self.base_model = _unwrap_model(model)
+
+        # Pick a sensible default target layer (last conv-stage feature map).
         if target_layer is None:
-            # TorchXRayVision DenseNet models have features directly accessible
-            if hasattr(actual_model, 'features') and hasattr(actual_model.features, 'denseblock4'):
-                # For DenseNet models - use the last conv layer before the classifier
-                if hasattr(actual_model.features.denseblock4, 'denselayer16'):
-                    if hasattr(actual_model.features.denseblock4.denselayer16, 'conv2'):
-                        self.target_layer = actual_model.features.denseblock4.denselayer16.conv2
-                    else:
-                        # Fallback to relu2 if conv2 doesn't exist
-                        self.target_layer = actual_model.features.denseblock4.denselayer16.relu2
-                else:
-                    # If denselayer16 doesn't exist, use the transition3 conv layer
-                    self.target_layer = actual_model.features.transition3.conv
-            elif hasattr(actual_model, 'model'):
-                # Some models might have a nested .model attribute
-                inner_model = actual_model.model
-                if hasattr(inner_model, 'features') and hasattr(inner_model.features, 'denseblock4'):
-                    # For nested DenseNet models
-                    if hasattr(inner_model.features.denseblock4, 'denselayer16'):
-                        if hasattr(inner_model.features.denseblock4.denselayer16, 'conv2'):
-                            self.target_layer = inner_model.features.denseblock4.denselayer16.conv2
-                        else:
-                            self.target_layer = inner_model.features.denseblock4.denselayer16.relu2
-                    else:
-                        self.target_layer = inner_model.features.transition3.conv
-                elif hasattr(inner_model, 'layer4'):
-                    # For ResNet models
-                    self.target_layer = inner_model.layer4[-1]
-                else:
-                    raise ValueError("Could not determine target layer for inner model")
-            elif hasattr(actual_model, 'layer4'):
-                # Direct ResNet model
-                self.target_layer = actual_model.layer4[-1]
+            # TorchXRayVision DenseNet: `features.norm5` is the final conv-stage output.
+            if hasattr(self.base_model, "features") and hasattr(self.base_model.features, "norm5"):
+                self.target_layer = self.base_model.features.norm5
+            # Fallback for DenseNet-like models.
+            elif hasattr(self.base_model, "features") and hasattr(self.base_model.features, "denseblock4"):
+                self.target_layer = self.base_model.features.denseblock4
+            # TorchXRayVision ResNet wrapper: torchvision model is at `.model`.
+            elif hasattr(self.base_model, "model") and hasattr(self.base_model.model, "layer4"):
+                self.target_layer = self.base_model.model.layer4[-1]
+            # Raw torchvision ResNet.
+            elif hasattr(self.base_model, "layer4"):
+                self.target_layer = self.base_model.layer4[-1]
             else:
-                # Log model structure to help with debugging (avoid stdout in production).
                 logger.debug("Unable to auto-detect Grad-CAM target layer; model structure follows.")
-                for name, _module in actual_model.named_modules():
+                for name, _module in self.base_model.named_modules():
                     logger.debug("Module: %s", name)
-                    if 'conv' in name.lower() or 'layer' in name.lower():
-                        logger.debug("Potential target: %s", name)
                 raise ValueError("Could not determine the target layer. Please specify explicitly.")
         else:
             self.target_layer = target_layer
@@ -185,6 +252,18 @@ class GradCAM:
                 return self.model(input_tensor.cpu())
             raise
 
+    def _safe_forward_logits(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        """Forward pass that returns logits (no sigmoid/op_norm if possible)."""
+        try:
+            return _forward_xrv_logits(self.model, input_tensor)
+        except RuntimeError as e:
+            if "could not create a primitive" in str(e):
+                logger.warning("PyTorch primitive error in Grad-CAM logits forward; using CPU fallback.")
+                self.model = self.model.cpu()
+                self.base_model = _unwrap_model(self.model)
+                return _forward_xrv_logits(self.model, input_tensor.cpu())
+            raise
+
     def _resolve_target_index(
         self,
         output: torch.Tensor,
@@ -198,10 +277,23 @@ class GradCAM:
 
         if isinstance(target_class, str):
             names = _pathology_names_for_output(self.model, n_outputs)
-            try:
-                return int(names.index(target_class))
-            except ValueError as e:
-                raise ValueError(f"Pathology {target_class} not found in model outputs.") from e
+            # UI/display names may differ from model names (e.g. "Pleural Thickening"
+            # vs TorchXRayVision's "Pleural_Thickening"). Try a few safe normalizations.
+            candidates = [
+                target_class,
+                target_class.replace(" ", "_"),
+                target_class.replace("_", " "),
+            ]
+            for cand in candidates:
+                if cand in names:
+                    return int(names.index(cand))
+            # Case-insensitive fallback.
+            lower_map = {n.lower(): i for i, n in enumerate(names)}
+            for cand in candidates:
+                idx = lower_map.get(cand.lower())
+                if idx is not None:
+                    return int(idx)
+            raise ValueError(f"Pathology {target_class} not found in model outputs.")
 
         idx = int(target_class)
         if not (0 <= idx < n_outputs):
@@ -220,15 +312,14 @@ class GradCAM:
             heatmap: Numpy array representing the heatmap
             output: Model output logits
         """
-        # Forward pass
+        # Forward pass (prefer logits to avoid sigmoid/op-norm saturation).
         self.model.zero_grad()
-        output = self._safe_forward(input_tensor)
-        target_idx = self._resolve_target_index(output, target_class)
-        
+        logits = self._safe_forward_logits(input_tensor)
+        target_idx = self._resolve_target_index(logits, target_class)
+
         # Backward pass (calculate gradients)
-        one_hot = torch.zeros_like(output)
-        one_hot[0, target_idx] = 1
-        output.backward(gradient=one_hot)
+        self.model.zero_grad()
+        logits[0, target_idx].backward()
         
         # Check if gradients and activations were captured
         if self.gradients is None:
@@ -242,11 +333,11 @@ class GradCAM:
         # Weight activation maps with gradients (vectorized; faster than Python loops)
         activations = self.activations
         assert activations is not None
-        heatmap_t = torch.mean(
+        heatmap_t = torch.sum(
             activations * pooled_gradients[None, :, None, None],
             dim=1,
         ).squeeze()
-        heatmap = heatmap_t.cpu().detach().numpy()
+        heatmap = heatmap_t.detach().cpu().numpy()
         
         # ReLU on heatmap
         heatmap = np.maximum(heatmap, 0)
@@ -259,7 +350,7 @@ class GradCAM:
             logger.warning("Grad-CAM heatmap is all zeros; using a minimal fallback.")
             heatmap = np.ones_like(heatmap) * 0.1
         
-        return heatmap, output.detach()
+        return heatmap, logits.detach()
     
     def overlay_heatmap(self, img, heatmap, alpha=0.4, colormap=cv2.COLORMAP_JET):
         """
@@ -274,22 +365,9 @@ class GradCAM:
         Returns:
             overlaid_img: Image with overlaid heatmap
         """
-        # Resize heatmap to match image dimensions
-        heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
-        
-        # Apply colormap to heatmap
-        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap), colormap)  # type: ignore
-        
-        # Convert grayscale image to RGB if needed
-        if len(img.shape) == 2:
-            img_rgb = cv2.cvtColor(np.uint8(img * 255), cv2.COLOR_GRAY2RGB)  # type: ignore
-        else:
-            img_rgb = np.uint8(img * 255)
-        
-        # Overlay heatmap on original image
-        overlaid_img = cv2.addWeighted(img_rgb, 1 - alpha, heatmap_colored, alpha, 0)  # type: ignore
-        
-        return overlaid_img
+        # Keep low-activation pixels mostly transparent (per-pixel alpha).
+        # This avoids the full-image blue tint from constant-alpha overlays.
+        return _overlay_colormap_on_gray(img, heatmap, alpha=alpha, colormap=colormap, gamma=1.0)
     
     def __del__(self):
         # Best-effort cleanup; prefer explicit `close()` via context manager.
@@ -311,13 +389,14 @@ class GradCAM:
             selected_pathologies: List of pathology names and their probabilities above threshold
             output: Model output logits
         """
-        # Single forward pass (we reuse `output` for all backprops below).
+        # Single forward pass on logits (reuse graph for all backprops below).
+        # Using logits avoids sigmoid/op-norm saturation in gradients.
         self.model.zero_grad()
-        output = self._safe_forward(input_tensor)
+        logits = self._safe_forward_logits(input_tensor)
 
-        # Convert output to probabilities using sigmoid (multi-label); no graph needed here.
+        # Probabilities used only for thresholding/weighting.
         with torch.no_grad():
-            probabilities = torch.sigmoid(output).squeeze().cpu().numpy()
+            probabilities = torch.sigmoid(logits).squeeze().detach().cpu().numpy()
 
         pathology_names = _pathology_names_for_output(self.model, int(probabilities.shape[0]))
         
@@ -350,10 +429,8 @@ class GradCAM:
             # Reset gradients for each pathology
             self.model.zero_grad()
 
-            # Backward pass for this specific pathology (reuse the same `output` graph)
-            one_hot = torch.zeros_like(output)
-            one_hot[0, int(target_class)] = 1
-            output.backward(gradient=one_hot, retain_graph=(i < len(selected_indices) - 1))
+            # Backward pass for this specific pathology (reuse the same `logits` graph)
+            logits[0, int(target_class)].backward(retain_graph=(i < len(selected_indices) - 1))
             
             # Calculate weights based on global average pooling of gradients
             if self.gradients is None or self.activations is None:
@@ -362,11 +439,11 @@ class GradCAM:
 
             activations = self.activations
             assert activations is not None
-            heatmap_t = torch.mean(
+            heatmap_t = torch.sum(
                 activations * pooled_gradients[None, :, None, None],
                 dim=1,
             ).squeeze()
-            heatmap = heatmap_t.cpu().detach().numpy()
+            heatmap = heatmap_t.detach().cpu().numpy()
             
             # ReLU on heatmap
             heatmap = np.maximum(heatmap, 0)
@@ -390,7 +467,7 @@ class GradCAM:
         if np.max(combined_heatmap) > 0:
             combined_heatmap = combined_heatmap / np.max(combined_heatmap)
         
-        return combined_heatmap, selected_pathologies, output.detach()
+        return combined_heatmap, selected_pathologies, logits.detach()
 
 
 class PixelLevelInterpretability:
@@ -449,32 +526,43 @@ class PixelLevelInterpretability:
         # Create a copy of the input tensor that requires gradients
         input_grad = input_tensor.clone().detach().requires_grad_(True)
         
-        # Forward pass
+        # Forward pass (prefer logits for stable gradients).
         self.model.zero_grad()
-        output = self.model(input_grad)
-        
-        # If target_class is None, get class with highest score
+        logits = _forward_xrv_logits(self.model, input_grad)
+
+        # Resolve target index (name or index).
+        n_outputs = int(logits.shape[-1])
         if target_class is None:
-            target_class = torch.argmax(output).item()
+            target_idx = int(torch.argmax(logits).item())
         elif isinstance(target_class, str):
-            # If target_class is a string (pathology name), get its index
-            # For ResNet model, use default_pathologies for correct mapping
-            if hasattr(self.model, 'pathologies') and 'Lung Opacity' in self.model.pathologies:
-                # This is ResNet model, use default_pathologies for indexing
-                if target_class in xrv.datasets.default_pathologies:
-                    target_class = xrv.datasets.default_pathologies.index(target_class)
-                else:
-                    raise ValueError(f"Pathology {target_class} not found in default pathologies.")
-            elif target_class in self.model.pathologies:
-                target_class = self.model.pathologies.index(target_class)
+            names = _pathology_names_for_output(self.model, n_outputs)
+            candidates = [
+                target_class,
+                target_class.replace(" ", "_"),
+                target_class.replace("_", " "),
+            ]
+            for cand in candidates:
+                if cand in names:
+                    target_idx = int(names.index(cand))
+                    break
             else:
-                raise ValueError(f"Pathology {target_class} not found in model.")
-        
+                lower_map = {n.lower(): i for i, n in enumerate(names)}
+                idx = None
+                for cand in candidates:
+                    idx = lower_map.get(cand.lower())
+                    if idx is not None:
+                        break
+                if idx is None:
+                    raise ValueError(f"Pathology {target_class} not found in model outputs.")
+                target_idx = int(idx)
+        else:
+            target_idx = int(target_class)
+            if not (0 <= target_idx < n_outputs):
+                raise ValueError(f"Target class index {target_idx} is out of range for {n_outputs} outputs.")
+
         # Backward pass
-        one_hot = torch.zeros_like(output)
-        target_idx: int = int(target_class)
-        one_hot[0, target_idx] = 1
-        output.backward(gradient=one_hot)
+        self.model.zero_grad()
+        logits[0, target_idx].backward()
         
         # Get gradients of the input
         grad_data = input_grad.grad.data.clone()  # Clone the gradient data
@@ -489,9 +577,9 @@ class PixelLevelInterpretability:
         if np.max(saliency_map) > 0:
             saliency_map = saliency_map / np.max(saliency_map)
         
-        return saliency_map, output
+        return saliency_map, logits.detach()
     
-    def apply_smoothgrad(self, input_tensor, target_class=None, n_samples=15, noise_level=0.1):
+    def apply_smoothgrad(self, input_tensor, target_class=None, n_samples=8, noise_level=0.1):
         """
         Apply SmoothGrad technique to reduce visual noise in saliency maps
         
@@ -505,32 +593,47 @@ class PixelLevelInterpretability:
             smooth_saliency: Smoothed saliency map
             output: Model output logits from the original input
         """
-        # Get the original output for the input
+        # Get the original output logits (used only for selecting the target class).
         with torch.no_grad():
-            output = self.model(input_tensor.clone())
-        
-        # Determine target class if not provided
+            output = _forward_xrv_logits(self.model, input_tensor.clone())
+
+        # Resolve target index (name or index).
+        n_outputs = int(output.shape[-1])
         if target_class is None:
-            target_class = torch.argmax(output).item()
+            target_idx = int(torch.argmax(output).item())
         elif isinstance(target_class, str):
-            # If target_class is a string (pathology name), get its index
-            # For ResNet model, use default_pathologies for correct mapping
-            if hasattr(self.model, 'pathologies') and 'Lung Opacity' in self.model.pathologies:
-                # This is ResNet model, use default_pathologies for indexing
-                if target_class in xrv.datasets.default_pathologies:
-                    target_class = xrv.datasets.default_pathologies.index(target_class)
-                else:
-                    raise ValueError(f"Pathology {target_class} not found in default pathologies.")
-            elif target_class in self.model.pathologies:
-                target_class = self.model.pathologies.index(target_class)
+            names = _pathology_names_for_output(self.model, n_outputs)
+            candidates = [
+                target_class,
+                target_class.replace(" ", "_"),
+                target_class.replace("_", " "),
+            ]
+            for cand in candidates:
+                if cand in names:
+                    target_idx = int(names.index(cand))
+                    break
             else:
-                raise ValueError(f"Pathology {target_class} not found in model.")
-        
-        # Calculate the standard deviation for Gaussian noise
-        stdev = noise_level * (torch.max(input_tensor) - torch.min(input_tensor)).item()
-        
+                lower_map = {n.lower(): i for i, n in enumerate(names)}
+                idx = None
+                for cand in candidates:
+                    idx = lower_map.get(cand.lower())
+                    if idx is not None:
+                        break
+                if idx is None:
+                    raise ValueError(f"Pathology {target_class} not found in model outputs.")
+                target_idx = int(idx)
+        else:
+            target_idx = int(target_class)
+            if not (0 <= target_idx < n_outputs):
+                raise ValueError(f"Target class index {target_idx} is out of range for {n_outputs} outputs.")
+
+        # Calculate the standard deviation for Gaussian noise.
+        # NOTE: Inputs are in [-1024, 1024]. Using (max-min) makes noise enormous.
+        # Using std(input) keeps noise scale reasonable and stable across images.
+        stdev = float(noise_level) * float(input_tensor.detach().std().item() or 1.0)
+
         # Initialize an empty saliency map
-        smooth_saliency = np.zeros_like(input_tensor.squeeze().cpu().numpy())
+        smooth_saliency = np.zeros_like(input_tensor.squeeze().cpu().numpy(), dtype=np.float32)
         
         # Generate multiple noisy samples and average their saliency maps
         for _ in range(n_samples):
@@ -538,10 +641,10 @@ class PixelLevelInterpretability:
             noise = torch.normal(0, stdev, size=input_tensor.shape, device=input_tensor.device)
             
             # Add noise to the input (create a new tensor rather than modifying in-place)
-            noisy_input = input_tensor.clone() + noise
+            noisy_input = (input_tensor.clone() + noise).clamp(-1024.0, 1024.0)
             
             # Compute saliency map for the noisy input
-            saliency, _ = self.generate_saliency(noisy_input, target_class)
+            saliency, _ = self.generate_saliency(noisy_input, target_idx)
             
             # Add to the accumulated saliency map
             smooth_saliency = smooth_saliency + saliency
@@ -562,7 +665,7 @@ class PixelLevelInterpretability:
         # Release hooks when object is deleted
         self._release_hooks()
     
-    def get_combined_saliency(self, input_tensor, probability_threshold=0.5, use_smoothgrad=True, n_samples=15, noise_level=0.1):
+    def get_combined_saliency(self, input_tensor, probability_threshold=0.5, use_smoothgrad=True, n_samples=8, noise_level=0.1):
         """
         Generate a combined saliency map for all pathologies above threshold
         
@@ -576,22 +679,16 @@ class PixelLevelInterpretability:
         Returns:
             combined_saliency: Numpy array representing the combined saliency map
             selected_pathologies: List of pathology names and their probabilities above threshold
-            output: Model output logits
+            output: Model output probabilities (TorchXRayVision calibrated)
         """
         # Forward pass to get predictions
         with torch.no_grad():
             output = self.model(input_tensor.clone())
         
-        # Convert output to probabilities using sigmoid (for multi-label classification)
-        probabilities = torch.sigmoid(output).squeeze().cpu().detach().numpy()
+        # TorchXRayVision core models already output calibrated probabilities in [0, 1].
+        probabilities = output.squeeze().cpu().detach().numpy()
         
-        # Determine pathology names based on model type
-        if hasattr(self.model, 'pathologies') and 'Lung Opacity' in self.model.pathologies:
-            # This is ResNet model, use default_pathologies for correct mapping
-            pathology_names = xrv.datasets.default_pathologies
-        else:
-            # This is DenseNet or other model
-            pathology_names = self.model.pathologies
+        pathology_names = _pathology_names_for_output(self.model, int(probabilities.shape[0]))
         
         # Find pathologies above threshold
         selected_pathologies = []
@@ -681,9 +778,9 @@ def apply_gradcam(
     # Preserve original image for visualization
     original_img = img.copy()
     
-    # Check that images are 2D arrays
+    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
     if len(img.shape) > 2:
-        img = img[:, :, 0]  # Take first channel instead of averaging
+        img = img.mean(axis=2)
     if len(img.shape) < 2:
         raise ValueError("Input image must have at least 2 dimensions")
     
@@ -717,21 +814,47 @@ def apply_gradcam(
         idx = int(target_class)
         target_name = names[idx] if 0 <= idx < len(names) else idx
     
-    # Convert original image to a suitable format for visualization
+    # Convert original image to a suitable format for visualization (match inference preprocessing).
     original_vis = original_img
     if len(original_vis.shape) > 2:
-        original_vis = original_vis[:, :, 0]  # Take first channel for visualization
+        original_vis = original_vis.mean(axis=2)
     
     # Scale to [0, 1] for visualization
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
     
     # Overlay heatmap on original image
-    overlaid_img = gradcam.overlay_heatmap(original_vis, heatmap)
+    # IMPORTANT: `heatmap` is in the model's center-cropped coordinate system.
+    # If we resize it to the full rectangular image, the heatmap will be stretched
+    # and appear "shifted" (wrong locations) for non-square inputs.
+    #
+    # We instead map the heatmap back into the center-crop window inside the
+    # original image, leaving the uncropped borders unchanged.
+    H, W = int(original_vis.shape[0]), int(original_vis.shape[1])
+    y0, y1, x0, x1 = _center_crop_bounds(H, W)
+    crop_h, crop_w = int(y1 - y0), int(x1 - x0)
+
+    # Resize heatmap to match the *cropped* region once.
+    heatmap_crop = cv2.resize(heatmap, (crop_w, crop_h))
+    # Re-normalize after interpolation for consistent visualization intensity.
+    hm_max = float(np.max(heatmap_crop))
+    if hm_max > 0:
+        heatmap_crop = heatmap_crop / hm_max
+
+    # Overlay within the crop region only.
+    original_crop = original_vis[y0:y1, x0:x1]
+    overlay_crop = gradcam.overlay_heatmap(original_crop, heatmap_crop)
+
+    # Build full-size outputs (same shape as original image).
+    heatmap_full = np.zeros((H, W), dtype=np.float32)
+    heatmap_full[y0:y1, x0:x1] = heatmap_crop.astype(np.float32)
+
+    overlaid_img = cv2.cvtColor(np.uint8(original_vis * 255), cv2.COLOR_GRAY2BGR)  # type: ignore
+    overlaid_img[y0:y1, x0:x1] = overlay_crop
     
     # Return results
     return {
         'original': original_vis,
-        'heatmap': heatmap,
+        'heatmap': heatmap_full,
         'overlay': overlaid_img,
         'target_class': target_name
     }
@@ -766,9 +889,9 @@ def apply_combined_gradcam(
     # Preserve original image for visualization
     original_img = img.copy()
     
-    # Check that images are 2D arrays
+    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
     if len(img.shape) > 2:
-        img = img[:, :, 0]  # Take first channel instead of averaging
+        img = img.mean(axis=2)
     if len(img.shape) < 2:
         raise ValueError("Input image must have at least 2 dimensions")
     
@@ -793,16 +916,32 @@ def apply_combined_gradcam(
             img_tensor, probability_threshold=probability_threshold
         )
     
-    # Convert original image to a suitable format for visualization
+    # Convert original image to a suitable format for visualization (match inference preprocessing).
     original_vis = original_img
     if len(original_vis.shape) > 2:
-        original_vis = original_vis[:, :, 0]  # Take first channel for visualization
+        original_vis = original_vis.mean(axis=2)
     
     # Scale to [0, 1] for visualization
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
     
-    # Overlay heatmap on original image
-    overlaid_img = gradcam.overlay_heatmap(original_vis, combined_heatmap)
+    # Map the combined heatmap back into the original image's center-crop window
+    # to avoid stretching/misalignment on non-square inputs.
+    H, W = int(original_vis.shape[0]), int(original_vis.shape[1])
+    y0, y1, x0, x1 = _center_crop_bounds(H, W)
+    crop_h, crop_w = int(y1 - y0), int(x1 - x0)
+
+    combined_crop = cv2.resize(combined_heatmap, (crop_w, crop_h))
+    hm_max = float(np.max(combined_crop))
+    if hm_max > 0:
+        combined_crop = combined_crop / hm_max
+    original_crop = original_vis[y0:y1, x0:x1]
+    overlay_crop = gradcam.overlay_heatmap(original_crop, combined_crop)
+
+    combined_full = np.zeros((H, W), dtype=np.float32)
+    combined_full[y0:y1, x0:x1] = combined_crop.astype(np.float32)
+
+    overlaid_img = cv2.cvtColor(np.uint8(original_vis * 255), cv2.COLOR_GRAY2BGR)  # type: ignore
+    overlaid_img[y0:y1, x0:x1] = overlay_crop
     
     # Create pathology summary string
     pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
@@ -810,7 +949,7 @@ def apply_combined_gradcam(
     # Return results
     return {
         'original': original_vis,
-        'heatmap': combined_heatmap,
+        'heatmap': combined_full,
         'overlay': overlaid_img,
         'selected_pathologies': selected_pathologies,
         'pathology_summary': pathology_summary,
@@ -837,6 +976,8 @@ def apply_pixel_interpretability(
     Returns:
         Dictionary with visualization results
     """
+    requested_target_class = target_class
+
     # Load model via shared cache
     model, resize_dim = load_model(model_type)
     
@@ -850,9 +991,9 @@ def apply_pixel_interpretability(
     # Preserve original image for visualization
     original_img = img.copy()
     
-    # Check that images are 2D arrays
+    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
     if len(img.shape) > 2:
-        img = img[:, :, 0]  # Take first channel instead of averaging
+        img = img.mean(axis=2)
     if len(img.shape) < 2:
         raise ValueError("Input image must have at least 2 dimensions")
     
@@ -863,13 +1004,14 @@ def apply_pixel_interpretability(
     if model_type == 'densenet':
         transform = torchvision.transforms.Compose([
             xrv.datasets.XRayCenterCrop(),
-            xrv.datasets.XRayResizer(224)
+            xrv.datasets.XRayResizer(224),
         ])
         resize_dim = 224
     else:  # resnet
+        # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
         transform = torchvision.transforms.Compose([
+            xrv.datasets.XRayCenterCrop(),
             xrv.datasets.XRayResizer(512),
-            xrv.datasets.XRayCenterCrop()
         ])
         resize_dim = 512
     
@@ -908,19 +1050,23 @@ def apply_pixel_interpretability(
         else:
             target_class = wrapped_model.pathologies[pred_idx]
     elif isinstance(target_class, str):
-        # If target_class is a pathology name, validate it exists
+        # Normalize common UI/model naming differences (e.g. spaces vs underscores).
+        candidates = [target_class, target_class.replace(" ", "_"), target_class.replace("_", " ")]
         if model_type == 'resnet':
-            if target_class not in xrv.datasets.default_pathologies:
-                logger.warning("Pathology %s not found; using highest probability class.", target_class)
-                pred_idx = int(torch.argmax(preds).item())
-                target_class = xrv.datasets.default_pathologies[pred_idx]
+            for cand in candidates:
+                if cand in xrv.datasets.default_pathologies:
+                    target_class = cand
+                    break
+            else:
+                logger.warning("Pathology %s not found in model outputs; generating map may fail.", target_class)
         else:
-            try:
-                target_class_idx = wrapped_model.pathologies.index(target_class)
-            except ValueError:
-                logger.warning("Pathology %s not found in model; using highest probability class.", target_class)
-                pred_idx = int(torch.argmax(preds).item())
-                target_class = wrapped_model.pathologies[pred_idx]
+            model_names = list(getattr(wrapped_model, "pathologies", []) or [])
+            for cand in candidates:
+                if cand in model_names:
+                    target_class = cand
+                    break
+            else:
+                logger.warning("Pathology %s not found in model outputs; generating map may fail.", target_class)
     
     # Initialize PixelLevelInterpretability
     try:
@@ -936,35 +1082,46 @@ def apply_pixel_interpretability(
         # Return empty saliency map in case of error
         saliency_map = np.zeros((img.shape[1], img.shape[2]))
     
-    # Convert original image to a suitable format for visualization
+    # Convert original image to a suitable format for visualization (match inference preprocessing).
     original_vis = original_img
     if len(original_vis.shape) > 2:
-        original_vis = original_vis[:, :, 0]  # Take first channel for visualization
+        original_vis = original_vis.mean(axis=2)
     
     # Scale to [0, 1] for visualization
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
-    
-    # Resize saliency map to match original image size
-    saliency_map_resized = cv2.resize(saliency_map, (original_vis.shape[1], original_vis.shape[0]))  # type: ignore
-    
-    # Create colored representation of saliency map (using JET colormap for better contrast)
-    saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map_resized), cv2.COLORMAP_JET)  # type: ignore[arg-type]
-    
-    # Create basic overlay on the original image
-    alpha = 0.6  # Reduce opacity
-    overlay = np.uint8(255 * original_vis)
-    if len(overlay.shape) == 2:
-        overlay = cv2.cvtColor(overlay, cv2.COLOR_GRAY2RGB)  # type: ignore
-    
-    saliency_overlay = cv2.addWeighted(overlay, 1 - alpha, cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB), alpha, 0)  # type: ignore[arg-type]
+
+    # IMPORTANT: `saliency_map` is in the model's center-cropped coordinate system.
+    # Map it back into the center-crop window of the original image to avoid stretching.
+    H, W = int(original_vis.shape[0]), int(original_vis.shape[1])
+    y0, y1, x0, x1 = _center_crop_bounds(H, W)
+    crop_h, crop_w = int(y1 - y0), int(x1 - x0)
+
+    saliency_crop = cv2.resize(saliency_map, (crop_w, crop_h))  # type: ignore
+    sm_max = float(np.max(saliency_crop))
+    if sm_max > 0:
+        saliency_crop = saliency_crop / sm_max
+
+    saliency_full = np.zeros((H, W), dtype=np.float32)
+    saliency_full[y0:y1, x0:x1] = saliency_crop.astype(np.float32)
+
+    # Per-pixel alpha overlay (keeps low-activation regions mostly unchanged).
+    alpha = 0.6
+    overlay_bgr = _overlay_colormap_on_gray(original_vis, saliency_full, alpha=alpha, colormap=cv2.COLORMAP_JET, gamma=1.0)
+    saliency_overlay = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)  # type: ignore
+
+    saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)  # type: ignore[arg-type]
+    saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)  # type: ignore
+
+    # Keep the user-visible label stable even if we normalized the class name for lookup.
+    target_display = requested_target_class if isinstance(requested_target_class, str) else target_class
     
     # Return results
     return {
         'original': original_vis,
-        'saliency_map': saliency_map_resized,
-        'saliency_colored': cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB),
+        'saliency_map': saliency_full,
+        'saliency_colored': saliency_colored,
         'overlay': saliency_overlay,
-        'target_class': target_class,
+        'target_class': target_display,
         'method': 'pli'
     }
 
@@ -1000,9 +1157,9 @@ def apply_combined_pixel_interpretability(
     # Preserve original image for visualization
     original_img = img.copy()
     
-    # Check that images are 2D arrays
+    # Check that images are 2D arrays (match inference preprocessing in `xrayapp/utils.py`).
     if len(img.shape) > 2:
-        img = img[:, :, 0]  # Take first channel instead of averaging
+        img = img.mean(axis=2)
     if len(img.shape) < 2:
         raise ValueError("Input image must have at least 2 dimensions")
     
@@ -1016,9 +1173,10 @@ def apply_combined_pixel_interpretability(
             xrv.datasets.XRayResizer(224)
         ])
     else:  # resnet
+        # Keep preprocessing consistent with inference and Grad-CAM: center-crop then resize.
         transform = torchvision.transforms.Compose([
+            xrv.datasets.XRayCenterCrop(),
             xrv.datasets.XRayResizer(512),
-            xrv.datasets.XRayCenterCrop()
         ])
     
     # Apply transforms
@@ -1041,33 +1199,35 @@ def apply_combined_pixel_interpretability(
         img_tensor, probability_threshold=probability_threshold, use_smoothgrad=use_smoothgrad
     )
     
-    # Convert original image to a suitable format for visualization
+    # Convert original image to a suitable format for visualization (match inference preprocessing).
     original_vis = original_img
     if len(original_vis.shape) > 2:
-        original_vis = original_vis[:, :, 0]  # Take first channel for visualization
+        original_vis = original_vis.mean(axis=2)
     
     # Scale to [0, 1] for visualization
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
-    
-    # Create colored saliency map
-    saliency_colored = cv2.applyColorMap(np.uint8(255 * combined_saliency), cv2.COLORMAP_JET)  # type: ignore[arg-type]
-    saliency_colored = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)  # type: ignore
-    
-    # Create overlay visualization (saliency over original image)
-    # Resize saliency to match original image dimensions
-    original_shape = original_vis.shape
-    saliency_resized = cv2.resize(combined_saliency, (original_shape[1], original_shape[0]))  # type: ignore
-    
-    # Convert original to RGB for overlay
-    original_rgb = cv2.cvtColor(np.uint8(original_vis * 255), cv2.COLOR_GRAY2RGB)  # type: ignore
-    
-    # Apply colormap to saliency
-    saliency_colored_resized = cv2.applyColorMap(np.uint8(255 * saliency_resized), cv2.COLORMAP_JET)  # type: ignore[arg-type]
-    saliency_colored_resized = cv2.cvtColor(saliency_colored_resized, cv2.COLOR_BGR2RGB)  # type: ignore
-    
-    # Create overlay with transparency
-    alpha = 0.4  # Transparency factor
-    overlaid_img = cv2.addWeighted(original_rgb, 1 - alpha, saliency_colored_resized, alpha, 0)  # type: ignore[arg-type]
+
+    # IMPORTANT: `combined_saliency` is in the model's center-cropped coordinate system.
+    # Map it back into the center-crop window of the original image to avoid stretching.
+    H, W = int(original_vis.shape[0]), int(original_vis.shape[1])
+    y0, y1, x0, x1 = _center_crop_bounds(H, W)
+    crop_h, crop_w = int(y1 - y0), int(x1 - x0)
+
+    saliency_crop = cv2.resize(combined_saliency, (crop_w, crop_h))  # type: ignore
+    sm_max = float(np.max(saliency_crop))
+    if sm_max > 0:
+        saliency_crop = saliency_crop / sm_max
+
+    saliency_full = np.zeros((H, W), dtype=np.float32)
+    saliency_full[y0:y1, x0:x1] = saliency_crop.astype(np.float32)
+
+    # Colored saliency and per-pixel alpha overlay.
+    saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)  # type: ignore[arg-type]
+    saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)  # type: ignore
+
+    alpha = 0.4
+    overlay_bgr = _overlay_colormap_on_gray(original_vis, saliency_full, alpha=alpha, colormap=cv2.COLORMAP_JET, gamma=1.0)
+    overlaid_img = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)  # type: ignore
     
     # Create pathology summary string
     pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
@@ -1075,7 +1235,7 @@ def apply_combined_pixel_interpretability(
     # Return results
     return {
         'original': original_vis,
-        'saliency_map': combined_saliency,
+        'saliency_map': saliency_full,
         'saliency_colored': saliency_colored,
         'overlay': overlaid_img,
         'selected_pathologies': selected_pathologies,

@@ -1016,7 +1016,10 @@ def generate_interpretability(request: HttpRequest, pk: int) -> HttpResponse:
     
     # Get parameters from request
     interpretation_method = request.GET.get('method', 'gradcam')  # Default to Grad-CAM
-    model_type = request.GET.get('model_type', 'densenet')  # Default to DenseNet
+    # Default to the model used for the prediction that produced this results page.
+    # This prevents "wrong" interpretability results when users run inference with
+    # ResNet but the UI doesn't pass `model_type` (historically defaulted to DenseNet).
+    model_type = request.GET.get('model_type') or getattr(xray_instance, 'model_used', None) or 'densenet'
     target_class = request.GET.get('target_class', None)  # Default to None (use highest probability class)
     
     # Reset progress to 0 and set status to processing

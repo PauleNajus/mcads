@@ -39,6 +39,16 @@ sudo chmod +x /usr/local/bin/docker-compose
 ./scripts/deploy.sh
 ```
 
+### Production (TLS / port 443)
+If you have TLS certificates present at `./ssl/fullchain.pem` and `./ssl/privkey.pem`,
+`./scripts/deploy.sh` will automatically include `docker-compose.prod.yml` (HTTPS on 443, 80→443 redirect).
+
+To run it manually (same effect):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+```
+
 ### 2. Manual Deployment
 ```bash
 # Create directories
@@ -46,7 +56,7 @@ mkdir -p logs media staticfiles data_exports backups
 
 # Build and start services
 docker-compose build
-docker-compose up -d
+docker-compose up -d --build --remove-orphans
 
 # Check status
 docker-compose ps
