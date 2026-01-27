@@ -448,22 +448,6 @@ button,
   }
 }
 
-@keyframes modern-spinner {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes modern-dots {
-  0%, 80%, 100% { 
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% { 
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
 /* Modern progress container */
 .modern-progress {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -536,51 +520,6 @@ button,
   pointer-events: none;
   letter-spacing: 0.5px;
 }
-
-/* Modern spinner component */
-.modern-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid transparent;
-  border-top: 2px solid var(--primary);
-  border-right: 2px solid var(--primary);
-  border-radius: 50%;
-  animation: modern-spinner 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  display: inline-block;
-}
-
-.modern-spinner.lg {
-  width: 32px;
-  height: 32px;
-  border-width: 3px;
-}
-
-.modern-spinner.sm {
-  width: 16px;
-  height: 16px;
-  border-width: 2px;
-}
-
-/* Modern dots loader */
-.modern-dots {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.modern-dots::before,
-.modern-dots::after,
-.modern-dots {
-  content: '';
-  width: 6px;
-  height: 6px;
-  background: var(--primary);
-  border-radius: 50%;
-  animation: modern-dots 1.4s ease-in-out infinite;
-}
-
-.modern-dots::before { animation-delay: -0.32s; }
-.modern-dots::after { animation-delay: 0.32s; }
 
 /* Static progress bars with modern styling */
 .progress {
@@ -659,25 +598,10 @@ button,
 
 /* Button loading states */
 .btn.loading {
-  position: relative;
-  color: transparent !important;
+  /* Keep feedback simple (no spinners). */
+  cursor: wait;
+  opacity: 0.75;
   pointer-events: none;
-}
-
-.btn.loading::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 16px;
-  height: 16px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  border-radius: 50%;
-  animation: modern-spinner 0.8s linear infinite;
-  color: white;
 }
 
 /* Accessibility improvements */
@@ -697,10 +621,6 @@ button,
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   .modern-progress-bar.animated,
-  .modern-spinner,
-  .modern-dots,
-  .modern-dots::before,
-  .modern-dots::after,
   .progress-bar.bg-loading.progress-bar-animated,
   .modern-progress.pulsing {
     animation: none !important;
@@ -721,17 +641,6 @@ button,
   .modern-progress-bar {
     background: black !important;
   }
-  
-  .modern-spinner {
-    border-top-color: black !important;
-    border-right-color: black !important;
-  }
-  
-  .modern-dots::before,
-  .modern-dots::after,
-  .modern-dots {
-    background: black !important;
-  }
 }
 
 /* Focus states for accessibility */
@@ -744,40 +653,6 @@ button,
 .btn.loading:focus {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-}
-
-/* Loading skeleton animation for slow connections */
-@keyframes skeleton-loading {
-  0% { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
-}
-
-.loading-skeleton {
-  background-color: #eee;
-  background-image: linear-gradient(90deg, #eee, #f5f5f5, #eee);
-  background-size: 200px 100%;
-  background-repeat: no-repeat;
-  border-radius: 4px;
-  animation: skeleton-loading 1.3s ease-in-out infinite;
-}
-
-/* Enhanced progress bar for better UX */
-.modern-progress-enhanced {
-  position: relative;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 16px;
-  padding: 4px;
-  box-shadow: 
-    inset 0 2px 6px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(var(--primary-rgb), 0.15);
-}
-
-.modern-progress-enhanced .modern-progress-bar {
-  border-radius: 12px;
-  box-shadow: 
-    0 3px 12px rgba(var(--primary-rgb), 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 /* ==========================================
@@ -806,33 +681,6 @@ button,
     min-height: 16px;
   }
   
-  /* Larger spinners for better visibility */
-  .modern-spinner {
-    width: 24px;
-    height: 24px;
-    border-width: 3px;
-  }
-  
-  .modern-spinner.lg {
-    width: 40px;
-    height: 40px;
-    border-width: 4px;
-  }
-  
-  .modern-spinner.sm {
-    width: 20px;
-    height: 20px;
-    border-width: 2px;
-  }
-  
-  /* Larger dots for touch accessibility */
-  .modern-dots::before,
-  .modern-dots::after,
-  .modern-dots {
-    width: 8px;
-    height: 8px;
-  }
-  
   /* Touch-friendly progress text */
   .modern-progress-text {
     font-size: 0.9rem;
@@ -858,11 +706,6 @@ button,
   .btn.loading {
     min-height: 44px;
     min-width: 44px;
-  }
-  
-  .btn.loading::after {
-    width: 20px;
-    height: 20px;
   }
 }
 
@@ -891,16 +734,6 @@ button,
   /* Simplified animations for performance */
   .modern-progress-bar.animated {
     animation-duration: 3s;
-  }
-  
-  .modern-spinner {
-    animation-duration: 1s;
-  }
-  
-  .modern-dots::before,
-  .modern-dots::after,
-  .modern-dots {
-    animation-duration: 1.8s;
   }
   
   /* Larger text for readability */
@@ -1035,10 +868,6 @@ button,
     text-align: center;
   }
   
-  .card-header .modern-spinner {
-    margin: 0 auto;
-  }
-  
   /* Ultra-compact pathology progress bars */
   .mobile-pathology-progress {
     min-width: 100px !important;
@@ -1136,16 +965,6 @@ button,
     animation-iteration-count: 3;
     animation-direction: alternate;
   }
-  
-  .modern-spinner {
-    animation-timing-function: steps(8, end);
-  }
-  
-  .modern-dots::before,
-  .modern-dots::after,
-  .modern-dots {
-    animation-iteration-count: 3;
-  }
 }
 
 /* Dark mode mobile optimizations */
@@ -1175,13 +994,6 @@ button,
     border-width: 0.5px;
   }
   
-  .modern-spinner {
-    border-width: 1.5px;
-  }
-  
-  .modern-spinner.lg {
-    border-width: 2px;
-  }
 }
 
 /* Landscape mobile orientation */
@@ -1390,10 +1202,8 @@ button,
 /* Performance optimizations for mobile */
 @media (max-width: 768px) {
   /* Use hardware acceleration for smooth animations */
-  .modern-progress-bar,
-  .modern-spinner,
-  .modern-dots {
-  transform: translateZ(0);
+  .modern-progress-bar {
+    transform: translateZ(0);
     will-change: transform;
   }
   
@@ -1420,10 +1230,6 @@ button,
     -webkit-backface-visibility: hidden;
   }
   
-  .modern-spinner {
-    -webkit-transform: translateZ(0);
-    -webkit-backface-visibility: hidden;
-  }
 }
 
 /* Android Chrome specific optimizations */
@@ -1432,9 +1238,6 @@ button,
     animation-timing-function: ease-out;
   }
   
-  .modern-spinner {
-    animation-timing-function: linear;
-  }
 }
 
 /* Touch device optimizations */
@@ -1463,9 +1266,7 @@ button,
 /* Network-aware animations */
 @media (prefers-reduced-data: reduce) {
   /* Reduce animation complexity for slow connections */
-  .modern-progress-bar.animated,
-  .modern-spinner,
-  .modern-dots {
+  .modern-progress-bar.animated {
     animation-duration: 2s;
     animation-iteration-count: 2;
   }
@@ -1710,22 +1511,6 @@ button,
    RESPONSIVE DESIGN - MOBILE OPTIMIZATIONS
    ========================================== */
 @media (max-width: 768px) {
-  /* Remove side margins on mobile - make content full width */
-  .container-fluid .container {
-    max-width: 100% !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100% !important;
-  }
-  
-  /* Also ensure container-fluid has minimal side padding */
-  .container-fluid {
-    padding-left: var(--spacing-sm) !important;
-    padding-right: var(--spacing-sm) !important;
-  }
-  
   /* Ensure cards have minimal padding to reach near screen edges */
   .card {
     margin-left: 0 !important;

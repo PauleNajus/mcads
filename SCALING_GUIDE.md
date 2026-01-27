@@ -36,7 +36,7 @@ pip install -r requirements.txt
 DB_HOST=<shared_postgres_server_ip>
 DB_NAME=mcads_db
 DB_USER=mcads_user
-DB_PASSWORD=mcads_secure_password_2024
+DB_PASSWORD=<your_secure_password>
 ```
 
 #### Redis (Shared Cache)

@@ -284,10 +284,21 @@ CONTENT_SECURITY_POLICY = {
 }
 
 # Static files storage
-if not DEBUG:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-else:
-    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+#
+# Django 5.x uses the `STORAGES["staticfiles"]` alias for static collection and
+# URL generation. Keeping this explicit avoids relying on deprecated settings.
+STORAGES = {
+    # User uploads / media.
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Collected static assets.
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        )
+    },
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -312,8 +323,6 @@ LANGUAGE_COOKIE_PATH = '/'
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
-USE_L10N = True
-
 USE_TZ = True
 
 

@@ -96,7 +96,7 @@ Key environment variables are defined in `docker-compose.yml`:
 PostgreSQL is configured with:
 - Database: `mcads_db`
 - User: `mcads_user`
-- Password: `mcads_secure_password_2024`
+- Password: set via `POSTGRES_PASSWORD` in your `.env`
 - Port: `5432` (exposed)
 
 ### Redis Configuration
@@ -345,7 +345,7 @@ docker-compose ps
 After deployment, verify:
 - ✅ All services showing "Up" status
 - ✅ Web application accessible at http://localhost
-- ✅ Admin panel accessible at http://localhost/admin
+- ✅ Admin panel accessible at http://localhost/secure-admin-mcads-2024/
 - ✅ Health check endpoint responding
 - ✅ File uploads working
 - ✅ ML processing functional

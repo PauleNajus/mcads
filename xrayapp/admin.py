@@ -51,7 +51,12 @@ class CustomUserAdmin(UserAdmin):
     def get_fieldsets(self, request, obj=None):
         """Override fieldsets to include role management"""
         fieldsets = super().get_fieldsets(request, obj)
-        if obj and hasattr(obj, 'profile'):
+        if obj:
+            try:
+                # Reverse OneToOne access raises DoesNotExist (not AttributeError) when missing.
+                obj.profile  # type: ignore[attr-defined]
+            except ObjectDoesNotExist:
+                return fieldsets
             # Add role information to personal info
             fieldsets = list(fieldsets)
             fieldsets[1] = (

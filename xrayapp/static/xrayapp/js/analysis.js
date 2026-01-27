@@ -164,10 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (currentProgress < 100) {
             setTimeout(() => checkProgress(), 500);
           } else {
-            // Log the redirect URL for debugging
             const redirectUrl = `/xray/${data.xray_id}/`;
-            console.log('Redirecting to:', redirectUrl);
-            
             // Force redirect to xray results, not the old results URL
             window.location.href = redirectUrl;
           }
@@ -258,9 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return data;
         })
         .then(data => {
-          console.log('Server response:', data);
           if (data.upload_id) {
-            console.log('Upload successful, tracking progress for ID:', data.upload_id);
             // Start tracking progress
             trackProgress(data.upload_id);
           } else if (data.error) {

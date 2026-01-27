@@ -30,6 +30,18 @@ class RateLimitMiddleware:
                 return response
         
         response = self.get_response(request)
+
+        # Successful login should reset the failure counter.
+        #
+        # Django's default login view returns a redirect (3xx) on success.
+        # Without clearing, users who previously failed a few times can get
+        # unexpectedly locked out again after a single typo.
+        if (
+            request.path == '/accounts/login/'
+            and request.method == 'POST'
+            and 300 <= int(response.status_code) < 400
+        ):
+            cache.delete(self._get_cache_key(request))
         
         # Track failed login attempts.
         #
@@ -56,7 +68,8 @@ class RateLimitMiddleware:
         """Get client IP address"""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
-            return x_forwarded_for.split(',')[0]
+            # Proxy headers may include multiple IPs; use the left-most one.
+            return x_forwarded_for.split(',')[0].strip()
         return request.META.get('REMOTE_ADDR', '0.0.0.0')
     
     def _check_rate_limit(self, request: HttpRequest) -> bool:

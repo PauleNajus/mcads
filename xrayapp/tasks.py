@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,8 @@ from .interpretability import (
     apply_combined_pixel_interpretability,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
 def run_inference_task(self, xray_id: int, model_type: str = 'densenet') -> Optional[int]:
@@ -37,24 +40,34 @@ def run_inference_task(self, xray_id: int, model_type: str = 'densenet') -> Opti
     except XRayImage.DoesNotExist:
         return None
 
-    image_path = Path(settings.MEDIA_ROOT) / xray.image.name
-    results = process_image(image_path, xray, model_type)
+    try:
+        image_path = Path(settings.MEDIA_ROOT) / xray.image.name
+        results = process_image(image_path, xray, model_type)
 
-    # Persist predictions (single normalization point).
-    xray.apply_predictions_from_results(results)
-    xray.severity_level = xray.calculate_severity_level
-    xray.processing_status = 'completed'
-    xray.progress = 100
-    xray.save(update_fields=[
-        *PATHOLOGY_FIELDS,
-        'severity_level',
-        'processing_status',
-        'progress',
-    ])
+        # Persist predictions (single normalization point).
+        xray.apply_predictions_from_results(results)
+        xray.severity_level = xray.calculate_severity_level
+        xray.processing_status = 'completed'
+        xray.progress = 100
+        xray.save(update_fields=[
+            *PATHOLOGY_FIELDS,
+            'severity_level',
+            'processing_status',
+            'progress',
+        ])
 
-    # Create prediction history snapshot (if user exists).
-    PredictionHistory.create_from_xray(xray, model_type)
-    return xray.pk
+        # Create prediction history snapshot (if user exists).
+        PredictionHistory.create_from_xray(xray, model_type)
+        return xray.pk
+    except Exception:
+        # Mark as error only when retries are exhausted (avoid flickering UI).
+        retries = int(getattr(self.request, "retries", 0) or 0)
+        max_retries = getattr(self, "max_retries", None)
+        if max_retries is None or retries >= int(max_retries):
+            xray.processing_status = 'error'
+            xray.save(update_fields=['processing_status'])
+        logger.exception("Inference task failed for image %s (retry %s/%s)", xray_id, retries, max_retries)
+        raise
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
@@ -77,8 +90,6 @@ def run_interpretability_task(self, xray_id: int, model_type: str = 'densenet', 
     xray.save(update_fields=['progress'])
     
     # Log the start of interpretability processing
-    import logging
-    logger = logging.getLogger(__name__)
     logger.info(f"Starting interpretability task for image {xray_id}, method: {interpretation_method}")
 
     # Compute interpretability
@@ -199,8 +210,8 @@ def run_interpretability_task(self, xray_id: int, model_type: str = 'densenet', 
                 },
             )
 
-    except Exception as e:
-        logger.error(f"Interpretability task failed for image {xray_id}: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Interpretability task failed for image %s", xray_id)
         xray.processing_status = 'error'
         xray.save(update_fields=['processing_status'])
         raise
@@ -239,8 +250,6 @@ def run_segmentation_task(self, xray_id: int) -> Optional[int]:
     xray.save(update_fields=['progress', 'processing_status'])
     
     # Log the start of segmentation processing
-    import logging
-    logger = logging.getLogger(__name__)
     logger.info(f"Starting segmentation task for image {xray_id}")
     
     # Update progress to show model loading
@@ -313,8 +322,8 @@ def run_segmentation_task(self, xray_id: int) -> Optional[int]:
             },
         )
         
-    except Exception as e:
-        logger.error(f"Segmentation task failed for image {xray_id}: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Segmentation task failed for image %s", xray_id)
         xray.processing_status = 'error'
         xray.save(update_fields=['processing_status'])
         raise

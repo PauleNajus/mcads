@@ -5,11 +5,8 @@
   .btn,
   #interpretation-progress,
   .interpretation-btn,
-  #print-button,
   .dropdown-toggle,
   .btn-group,
-  #interpretation-progress,
-  .interpretation-options,
   .interpretability-card,
   .delete-visualization-btn,
   .visualization-controls {
@@ -38,7 +35,6 @@
 
   /* Container layout adjustments - more compact */
   .container,
-  .container-fluid,
   .col-md-10 {
     width: 100% !important;
     max-width: 100% !important;

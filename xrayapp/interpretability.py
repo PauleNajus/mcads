@@ -756,16 +756,13 @@ def apply_gradcam(
     Returns:
         Dictionary with visualization results
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
     try:
         # Load model via shared cache
-        logger.info(f"Loading model for Grad-CAM: {model_type}")
+        logger.info("Loading model for Grad-CAM: %s", model_type)
         model, resize_dim = load_model(model_type)
-        logger.info(f"Model loaded successfully, resize_dim: {resize_dim}")
-    except Exception as e:
-        logger.error(f"Failed to load model for Grad-CAM: {e}")
+        logger.info("Model loaded successfully, resize_dim: %s", resize_dim)
+    except Exception:
+        logger.exception("Failed to load model for Grad-CAM: %s", model_type)
         raise
     
     # Wrap model to prevent in-place operations

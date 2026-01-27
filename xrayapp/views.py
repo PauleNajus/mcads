@@ -18,6 +18,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db.models import Case, F, FloatField, IntegerField, Value, When
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -57,8 +58,10 @@ logger = logging.getLogger(__name__)
 
 def _get_user_hospital(user: Any) -> str | None:
     """Return the user's hospital (from `UserProfile`) if available."""
-
-    profile = getattr(user, "profile", None)
+    try:
+        profile = user.profile  # type: ignore[attr-defined]
+    except (AttributeError, ObjectDoesNotExist):
+        return None
     return getattr(profile, "hospital", None)
 
 
@@ -138,10 +141,14 @@ def process_image_async(image_path: Path, xray_instance: XRayImage, model_type: 
         
         logger.info(f"Successfully processed and saved results for {image_path}")
         
-    except Exception as e:
-        logger.error(f"Error processing image {image_path}: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+    except Exception:
+        # Log the full traceback for debugging/operations.
+        logger.exception(
+            "Error processing image path=%s xray=%s model=%s",
+            image_path,
+            xray_instance.pk,
+            model_type,
+        )
         xray_instance.processing_status = 'error'
         xray_instance.save(update_fields=['processing_status'])
 
@@ -167,34 +174,52 @@ def process_with_interpretability_async(
                 results = apply_gradcam(image_path, model_type, target_class)
                 results['method'] = 'gradcam'
                 logger.info(f"GradCAM generation completed successfully for {target_class}")
-            except Exception as e:
-                logger.error(f"Error in GradCAM generation: {str(e)}")
+            except Exception:
+                logger.exception(
+                    "Error in GradCAM generation xray=%s target=%s model=%s",
+                    xray_instance.pk,
+                    target_class,
+                    model_type,
+                )
                 raise
         elif interpretation_method == 'pli':
             try:
                 results = apply_pixel_interpretability(image_path, model_type, target_class)
                 results['method'] = 'pli'
                 logger.info(f"PLI generation completed successfully for {target_class}")
-            except Exception as e:
-                logger.error(f"Error in PLI generation: {str(e)}")
+            except Exception:
+                logger.exception(
+                    "Error in PLI generation xray=%s target=%s model=%s",
+                    xray_instance.pk,
+                    target_class,
+                    model_type,
+                )
                 raise
         elif interpretation_method == 'combined_gradcam':
             try:
                 results = apply_combined_gradcam(image_path, model_type)
                 logger.info(f"Combined GradCAM generation completed successfully for {len(results['selected_pathologies'])} pathologies")
-            except Exception as e:
-                logger.error(f"Error in Combined GradCAM generation: {str(e)}")
+            except Exception:
+                logger.exception(
+                    "Error in Combined GradCAM generation xray=%s model=%s",
+                    xray_instance.pk,
+                    model_type,
+                )
                 raise
         elif interpretation_method == 'combined_pli':
             try:
                 results = apply_combined_pixel_interpretability(image_path, model_type)
                 logger.info(f"Combined PLI generation completed successfully for {len(results['selected_pathologies'])} pathologies")
-            except Exception as e:
-                logger.error(f"Error in Combined PLI generation: {str(e)}")
+            except Exception:
+                logger.exception(
+                    "Error in Combined PLI generation xray=%s model=%s",
+                    xray_instance.pk,
+                    model_type,
+                )
                 raise
         else:
             # Invalid method, return error
-            logger.error(f"Invalid interpretation method: {interpretation_method}")
+            logger.error("Invalid interpretation method: %s", interpretation_method)
             xray_instance.processing_status = 'error'
             xray_instance.save()
             return
@@ -299,8 +324,13 @@ def process_with_interpretability_async(
                     xray_instance.pli_overlay_visualization = f"interpretability/pli/{overlay_filename}"
                     xray_instance.pli_saliency_map = f"interpretability/pli/{separate_saliency_filename}"
                     xray_instance.pli_target_class = results['target_class']
-                except Exception as e:
-                    logger.error(f"Error saving PLI results: {str(e)}")
+                except Exception:
+                    logger.exception(
+                        "Error saving PLI results xray=%s target=%s model=%s",
+                        xray_instance.pk,
+                        results.get("target_class"),
+                        model_type,
+                    )
                     raise
                 
             elif results['method'] == 'combined_gradcam':
@@ -409,10 +439,14 @@ def process_with_interpretability_async(
         
         logger.info(f"Interpretability visualization complete for {interpretation_method}")
         
-    except Exception as e:
-        import traceback
-        logger.error(f"Error in interpretability processing: {str(e)}")
-        logger.error(traceback.format_exc())
+    except Exception:
+        # Log the full traceback for debugging/operations.
+        logger.exception(
+            "Error in interpretability processing xray=%s method=%s model=%s",
+            xray_instance.pk,
+            interpretation_method,
+            model_type,
+        )
         xray_instance.processing_status = 'error'
         xray_instance.save()
 
@@ -473,12 +507,23 @@ def create_visualization_result(
         visualization.save()
         
         action = "Created" if created else "Updated"
-        logger.info(f"{action} visualization result: {visualization_type} - {target_pathology} for X-ray #{xray_instance.pk}")
+        logger.info(
+            "%s visualization result: %s - %s for X-ray #%s",
+            action,
+            visualization_type,
+            target_pathology,
+            xray_instance.pk,
+        )
         
         return visualization
         
-    except Exception as e:
-        logger.error(f"Error creating visualization result: {str(e)}")
+    except Exception:
+        logger.exception(
+            "Error creating visualization result type=%s target=%s xray=%s",
+            visualization_type,
+            target_pathology,
+            xray_instance.pk,
+        )
         raise
 
 
@@ -510,18 +555,24 @@ def home(request: HttpRequest) -> HttpResponse:
                 else:
                     messages.error(request, _('You do not have permission to upload X-ray images.'))
                     return redirect('home')
-        except AttributeError:
+        except (AttributeError, ObjectDoesNotExist):
             # User doesn't have a profile - create one with default role
-            logger.warning(f"User {request.user.username} doesn't have a profile. Creating one.")
+            logger.warning("User %s doesn't have a profile. Creating one.", request.user.username)
             UserProfile.objects.create(user=request.user, role='Radiographer')
             # Continue with upload since default role allows it
         
         form = XRayUploadForm(request.POST, request.FILES, user=request.user)
         
         # Debug logging for troubleshooting
-        logger.info(f"Upload attempt by user: {request.user.username} (ID: {request.user.id})")
-        logger.info(f"Form fields received: {list(request.POST.keys())}")
-        logger.info(f"Files received: {list(request.FILES.keys())}")
+        # Avoid noisy INFO logs (and potential PII leakage) in production.
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Upload attempt by user=%s (id=%s)",
+                request.user.username,
+                request.user.pk,
+            )
+            logger.debug("Form fields received: %s", list(request.POST.keys()))
+            logger.debug("Files received: %s", list(request.FILES.keys()))
         
         if form.is_valid():
             logger.info(f"Form validation PASSED for user {request.user.username}")
@@ -546,18 +597,19 @@ def home(request: HttpRequest) -> HttpResponse:
             try:
                 xray_instance.save()
             except Exception as e:
-                # Log the error for debugging
-                logger.error(f"Error saving XRayImage: {e}")
+                # Log server-side details; don't leak internal exceptions to clients.
+                logger.exception("Error saving XRayImage for user=%s", request.user.pk)
                 
                 # Return error response for AJAX requests
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'error': 'Database error occurred while saving image',
-                        'details': str(e)
-                    }, status=500)
-                else:
-                    # For non-AJAX requests, re-raise the exception
-                    raise
+                    payload: dict[str, Any] = {
+                        'error': _('Database error occurred while saving image'),
+                    }
+                    if settings.DEBUG:
+                        payload['details'] = str(e)
+                    return JsonResponse(payload, status=500)
+                # For non-AJAX requests, re-raise the exception
+                raise
 
             # Set immediate queued state to avoid UI showing 0% for long
             xray_instance.processing_status = 'queued'
@@ -575,7 +627,7 @@ def home(request: HttpRequest) -> HttpResponse:
                     run_inference_task.delay(xray_instance.pk, model_type)
                     started = True
                 except Exception as e:
-                    logger.warning(f"Celery unavailable; falling back to thread: {e}")
+                    logger.warning("Celery unavailable; falling back to thread: %s", e)
             if not started:
                 # Fallback to lightweight thread on the web worker
                 thread = threading.Thread(
@@ -611,7 +663,10 @@ def home(request: HttpRequest) -> HttpResponse:
         form = XRayUploadForm(user=request.user)
     
     # Check if user has upload permission to conditionally display form
-    can_upload = request.user.profile.can_upload_xrays() if hasattr(request.user, 'profile') else False
+    try:
+        can_upload = bool(request.user.profile.can_upload_xrays())
+    except (AttributeError, ObjectDoesNotExist):
+        can_upload = False
         
     return render(request, 'xrayapp/home.html', {
         'form': form,
@@ -929,7 +984,14 @@ def delete_visualization(request: HttpRequest, pk: int) -> JsonResponse:
         user_hospital = _get_user_hospital(request.user)
         if user_hospital is None:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
-        owner_profile = getattr(visualization.xray.user, 'profile', None)
+        owner_user = visualization.xray.user
+        if owner_user is None:
+            owner_profile = None
+        else:
+            try:
+                owner_profile = owner_user.profile  # type: ignore[attr-defined]
+            except ObjectDoesNotExist:
+                owner_profile = None
         owner_hospital = getattr(owner_profile, 'hospital', None)
         if owner_hospital != user_hospital:
             return JsonResponse({'success': False, 'error': _('Permission denied')}, status=403)
@@ -941,14 +1003,21 @@ def delete_visualization(request: HttpRequest, pk: int) -> JsonResponse:
             visualization.overlay_path,
             visualization.saliency_path,
         ]
+        media_root = Path(settings.MEDIA_ROOT).resolve()
         for file_path in file_paths:
             if file_path:
                 try:
-                    full_path = Path(settings.MEDIA_ROOT) / file_path
+                    # Defensive: ensure we only delete within MEDIA_ROOT even if the
+                    # DB contains unexpected paths.
+                    candidate = Path(str(file_path))
+                    full_path = (candidate if candidate.is_absolute() else (media_root / candidate)).resolve()
+                    if media_root not in full_path.parents:
+                        logger.warning("Refusing to delete path outside MEDIA_ROOT: %s", full_path)
+                        continue
                     if full_path.exists():
                         full_path.unlink()
-                except Exception as e:
-                    logger.warning(f"Error deleting file {file_path}: {e}")
+                except Exception:
+                    logger.warning("Error deleting file %s", file_path, exc_info=True)
         
         # Delete the visualization record
         visualization.delete()
@@ -958,7 +1027,14 @@ def delete_visualization(request: HttpRequest, pk: int) -> JsonResponse:
     except VisualizationResult.DoesNotExist:
         return JsonResponse({'success': False, 'error': _('Visualization not found')}, status=404)
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception("Error deleting visualization pk=%s", pk)
+        payload: dict[str, Any] = {
+            'success': False,
+            'error': _('An error occurred while deleting the visualization.'),
+        }
+        if settings.DEBUG:
+            payload['details'] = str(e)
+        return JsonResponse(payload, status=500)
 
 
 @login_required
@@ -1235,8 +1311,6 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
         return JsonResponse(response_data)
     except XRayImage.DoesNotExist:
         # Log the 404 for debugging
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning("XRayImage %s not found/denied for user=%s", pk, request.user.username)
         
         return JsonResponse({
@@ -1244,16 +1318,16 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
             'message': f'X-ray image {pk} was not found or you do not have permission to access it.'
         }, status=404)
     except Exception as e:
-        # Log the error for debugging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error in check_progress for pk={pk}: {e}")
+        # Log server-side details; don't leak internal exceptions to clients.
+        logger.exception("Error in check_progress for pk=%s", pk)
         
         # Return JSON error response instead of HTML error page
-        return JsonResponse({
-            'error': 'An error occurred while checking progress',
-            'details': str(e)
-        }, status=500)
+        payload: dict[str, Any] = {
+            'error': _('An error occurred while checking progress'),
+        }
+        if settings.DEBUG:
+            payload['details'] = str(e)
+        return JsonResponse(payload, status=500)
 
 
 @login_required
@@ -1360,8 +1434,8 @@ def set_language(request: HttpRequest) -> HttpResponse:
                 profile, created = UserProfile.objects.get_or_create(user=request.user)
                 profile.preferred_language = language
                 profile.save()
-            except Exception as e:
-                logger.error(f"Error updating user language preference: {str(e)}")
+            except Exception:
+                logger.exception("Error updating user language preference for user=%s", request.user.pk)
         
         return response
     
@@ -1410,10 +1484,14 @@ def toggle_save_record(request: HttpRequest, pk: int) -> JsonResponse:
             'error': _('Prediction record not found')
         }, status=404)
     except Exception as e:
-        return JsonResponse({
+        logger.exception("Error toggling saved record pk=%s user=%s", pk, request.user.pk)
+        payload: dict[str, Any] = {
             'success': False,
-            'error': str(e)
-        }, status=500)
+            'error': _('An error occurred while updating saved records.'),
+        }
+        if settings.DEBUG:
+            payload['details'] = str(e)
+        return JsonResponse(payload, status=500)
 
 
 @login_required

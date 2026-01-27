@@ -45,11 +45,6 @@
                             {% trans "DenseNet: All 18 pathologies included" %}<br>
                             {% trans "ResNet: All pathologies except \"Enlarged cardiomediastinum\"" %} {% trans "and" %} {% trans "\"Lung lesion\"" %}
                         </div>
-                        <!-- ResNet Warning Message -->
-                        <div id="resnet-warning" class="alert alert-warning mt-1" style="display: none;">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <strong>ResNet 512 model is not available. Please use DenseNet 224 instead.</strong>
-                        </div>
                     </div>
                     
                     <!-- Patient Information Section -->
@@ -156,7 +151,6 @@
             <div id="progress-wrapper" style="display: none;" class="mobile-optimized">
                 <div class="text-center mb-4">
                     <div class="d-flex align-items-center justify-content-center mb-3 flex-wrap">
-                        <div class="modern-spinner lg me-3 me-sm-2"></div>
                         <h4 class="mb-0 fs-5 fs-sm-4">{% trans "Analyzing X-ray image" %}</h4>
                     </div>
                 </div>
@@ -308,8 +302,8 @@
   // Register service worker to clean cache
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register("{% static 'xrayapp/js/service-worker.js' %}?v=1.0.3")
-      .then(reg => console.log('Service Worker registered:', reg))
-      .catch(err => console.error('Service Worker registration failed:', err));
+      // Registration failures shouldn't block the app.
+      .catch(() => {});
   }
   
   // Set today's date as default for X-ray date and ensure proper date format (YYYY-MM-DD)
@@ -317,37 +311,6 @@
     const today = new Date();
     const dateField = document.getElementById('id_date_of_xray');
     const birthField = document.getElementById('id_date_of_birth');
-    
-    // Model selection warning functionality
-    const densenetRadio = document.getElementById('densenet_model');
-    const resnetRadio = document.getElementById('resnet_model');
-    const resnetWarning = document.getElementById('resnet-warning');
-    
-    // Function to handle ResNet selection and show warning
-    const handleResnetSelection = () => {
-      if (resnetRadio && resnetRadio.checked) {
-        // Show warning message
-        if (resnetWarning) {
-          resnetWarning.style.display = 'block';
-        }
-        // Automatically switch back to DenseNet
-        if (densenetRadio) {
-          densenetRadio.checked = true;
-          resnetRadio.checked = false;
-        }
-        // Hide warning after a brief moment to let user see it
-        setTimeout(() => {
-          if (resnetWarning) {
-            resnetWarning.style.display = 'none';
-          }
-        }, 3000); // Hide after 3 seconds
-      }
-    };
-    
-    // Add event listener to ResNet radio button only
-    if (resnetRadio) {
-      resnetRadio.addEventListener('change', handleResnetSelection);
-    }
     
     // Format today's date in YYYY-MM-DD format
     const formattedDate = today.toISOString().split('T')[0];
@@ -400,11 +363,6 @@
             }
           }
         });
-        
-        // Add helper text below the field
-        const helpText = document.createElement('div');
-        helpText.className = 'form-text text-muted';
-        field.parentNode.appendChild(helpText);
       }
     });
   });

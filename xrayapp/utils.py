@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import cv2
+import matplotlib
+matplotlib.use("Agg")  # Headless-safe backend (server/Docker)
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -146,7 +148,19 @@ def compute_ood_score(img_np: np.ndarray) -> dict[str, float | bool]:
 
     # Threshold from env or default conservative value
     default_thr = 0.015  # empirically safe; adjustable via env
-    thr = float(os.environ.get('XRV_AE_OOD_THRESHOLD', default_thr))
+    raw_thr = os.environ.get('XRV_AE_OOD_THRESHOLD')
+    if raw_thr is None:
+        thr = default_thr
+    else:
+        try:
+            thr = float(raw_thr)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid XRV_AE_OOD_THRESHOLD=%r; using default %.6f",
+                raw_thr,
+                default_thr,
+            )
+            thr = default_thr
     is_ood = recon_err > thr
 
     return { 'ood_score': float(recon_err), 'is_ood': bool(is_ood), 'threshold': float(thr) }

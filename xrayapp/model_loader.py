@@ -1,4 +1,6 @@
 import os
+import logging
+import threading
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -10,6 +12,9 @@ _model_cache: Dict[str, tuple] = {}
 
 _AE_CACHE_KEY = "autoencoder"
 _SEGMENTATION_CACHE_KEY = "segmentation_pspnet"
+
+logger = logging.getLogger(__name__)
+_cache_lock = threading.Lock()
 
 
 def _ensure_cache_dirs() -> str:
@@ -36,25 +41,27 @@ def load_model(model_type: str = 'densenet') -> Tuple[torch.nn.Module, int]:
     Returns:
         (model, resize_dim)
     """
-    if model_type in _model_cache:
-        return _model_cache[model_type]  # type: ignore[return-value]
+    # Thread-safe cache: the web "thread fallback" can run inference concurrently.
+    with _cache_lock:
+        if model_type in _model_cache:
+            return _model_cache[model_type]  # type: ignore[return-value]
 
-    device = torch.device('cpu')
-    _ensure_cache_dirs()
+        device = torch.device('cpu')
+        _ensure_cache_dirs()
 
-    if model_type == 'resnet':
-        weights = os.environ.get('XRV_RESNET_WEIGHTS', 'resnet50-res512-all')
-        model = xrv.models.ResNet(weights=weights)
-        resize_dim = 512
-    else:
-        weights = os.environ.get('XRV_DENSENET_WEIGHTS', 'densenet121-res224-all')
-        model = xrv.models.DenseNet(weights=weights)
-        resize_dim = 224
+        if model_type == 'resnet':
+            weights = os.environ.get('XRV_RESNET_WEIGHTS', 'resnet50-res512-all')
+            model = xrv.models.ResNet(weights=weights)
+            resize_dim = 512
+        else:
+            weights = os.environ.get('XRV_DENSENET_WEIGHTS', 'densenet121-res224-all')
+            model = xrv.models.DenseNet(weights=weights)
+            resize_dim = 224
 
-    model.to(device)
-    model.eval()
-    _model_cache[model_type] = (model, resize_dim)
-    return model, resize_dim
+        model.to(device)
+        model.eval()
+        _model_cache[model_type] = (model, resize_dim)
+        return model, resize_dim
 
 
 def load_autoencoder() -> Tuple[torch.nn.Module, int]:
@@ -63,24 +70,39 @@ def load_autoencoder() -> Tuple[torch.nn.Module, int]:
     Returns:
         (autoencoder, input_resize_dim)
     """
-    if _AE_CACHE_KEY in _model_cache:
-        return _model_cache[_AE_CACHE_KEY]  # type: ignore[return-value]
+    with _cache_lock:
+        if _AE_CACHE_KEY in _model_cache:
+            return _model_cache[_AE_CACHE_KEY]  # type: ignore[return-value]
 
-    device = torch.device('cpu')
-    _ensure_cache_dirs()
-    ae_weights = os.environ.get('XRV_AE_WEIGHTS', '').strip() or '101-elastic'
+        device = torch.device('cpu')
+        _ensure_cache_dirs()
+        ae_weights = os.environ.get('XRV_AE_WEIGHTS', '').strip() or '101-elastic'
 
-    ae = xrv.autoencoders.ResNetAE(weights=ae_weights)
-    ae.to(device)
-    ae.eval()
-    ae_resize = int(os.environ.get('XRV_AE_INPUT_SIZE', '224'))
-    _model_cache[_AE_CACHE_KEY] = (ae, ae_resize)
-    return ae, ae_resize
+        ae = xrv.autoencoders.ResNetAE(weights=ae_weights)
+        ae.to(device)
+        ae.eval()
+        ae_resize_default = 224
+        raw_resize = os.environ.get('XRV_AE_INPUT_SIZE')
+        if raw_resize is None:
+            ae_resize = ae_resize_default
+        else:
+            try:
+                ae_resize = int(raw_resize)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid XRV_AE_INPUT_SIZE=%r; using default %d",
+                    raw_resize,
+                    ae_resize_default,
+                )
+                ae_resize = ae_resize_default
+        _model_cache[_AE_CACHE_KEY] = (ae, ae_resize)
+        return ae, ae_resize
 
 
 def clear_model_cache() -> None:
     """Clear cached models to free memory."""
-    _model_cache.clear()
+    with _cache_lock:
+        _model_cache.clear()
     import gc
     gc.collect()
     if torch.cuda.is_available():
@@ -93,34 +115,35 @@ def load_segmentation_model() -> torch.nn.Module:
     Returns:
         PSPNet model for anatomical structure segmentation
     """
-    if _SEGMENTATION_CACHE_KEY in _model_cache:
-        return _model_cache[_SEGMENTATION_CACHE_KEY][0]  # Return just the model, no resize dim
-    
-    device = torch.device('cpu')
-    _ensure_cache_dirs()
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("Loading PSPNet segmentation model...")
-    
-    try:
-        # Load the PSPNet model
-        seg_model = xrv.baseline_models.chestx_det.PSPNet()
-        seg_model.to(device)
-        seg_model.eval()
-        
-        # Cache the model (store as tuple for consistency)
-        _model_cache[_SEGMENTATION_CACHE_KEY] = (seg_model, 512)  # PSPNet uses 512x512 input
-        logger.info("PSPNet segmentation model loaded successfully")
-        
-        return seg_model
-    except Exception as e:
-        logger.error(f"Failed to load segmentation model: {e}")
-        raise
+    with _cache_lock:
+        if _SEGMENTATION_CACHE_KEY in _model_cache:
+            return _model_cache[_SEGMENTATION_CACHE_KEY][0]  # Return just the model, no resize dim
+
+        device = torch.device('cpu')
+        _ensure_cache_dirs()
+
+        logger.info("Loading PSPNet segmentation model...")
+
+        try:
+            # Load the PSPNet model
+            seg_model = xrv.baseline_models.chestx_det.PSPNet()
+            seg_model.to(device)
+            seg_model.eval()
+
+            # Cache the model (store as tuple for consistency)
+            _model_cache[_SEGMENTATION_CACHE_KEY] = (seg_model, 512)  # PSPNet uses 512x512 input
+            logger.info("PSPNet segmentation model loaded successfully")
+
+            return seg_model
+        except Exception:
+            # Include full traceback for operational debugging.
+            logger.exception("Failed to load segmentation model")
+            raise
 
 
 def get_cached_model_count() -> int:
     """Return number of cached models (classifier + AE entries)."""
-    return len(_model_cache)
+    with _cache_lock:
+        return len(_model_cache)
 
 

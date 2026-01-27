@@ -223,18 +223,16 @@
             // First try from form input (most reliable for POST requests)
             let csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
             if (csrfInput) {
-                console.log('CSRF token from form input:', csrfInput.value);
                 return csrfInput.value;
             }
             
             // Then try from cookie
             let cookieToken = getCookie('csrftoken');
             if (cookieToken) {
-                console.log('CSRF token from cookie:', cookieToken);
                 return cookieToken;
             }
             
-            console.error('CSRF token not found!');
+            console.warn('CSRF token not found');
             return null;
         }
     </script>
