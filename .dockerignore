@@ -22,6 +22,7 @@ docker-compose*
 .dockerignore
 
 # Development files
+.env
 .env.example
 *.md
 README*
@@ -51,6 +52,8 @@ tests/
 
 # Documentation
 docs/
+notebooks/
+data/
 
 # Node modules (if any)
 node_modules/
