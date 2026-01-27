@@ -135,7 +135,8 @@ services:
       web:
         condition: service_healthy
     ports:
-      - "80:80"
+      # Allow remapping the host port for parallel smoke tests.
+      - "${MCADS_HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/mcads.conf:/etc/nginx/conf.d/default.conf:ro
