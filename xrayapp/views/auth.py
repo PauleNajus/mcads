@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
@@ -51,8 +52,9 @@ def account_settings(request: HttpRequest) -> HttpResponse:
         settings_form = UserProfileForm(request.POST, instance=profile)
         if settings_form.is_valid():
             settings_form.save()
-            messages.success(request, _('Your preferences have been updated successfully. Please refresh the page to see theme changes.'))
-            active_tab = 'settings'
+            messages.success(request, _('Your preferences have been updated successfully.'))
+            # Redirect to refresh the page and apply settings immediately
+            return redirect(f"{reverse('account_settings')}?tab=settings")
         else:
             messages.error(request, _('Please correct the errors in your preferences.'))
             active_tab = 'settings'

@@ -31,19 +31,20 @@
                 <form method="post" enctype="multipart/form-data" class="mb-2" id="analysis-form">
                     {% csrf_token %}
                     
-                    <!-- Model Selection Toggle -->
+                    <!-- Model Selection Dropdown -->
                     <div class="mb-2">
-                        <label class="form-label">{% trans "Select model:" %}</label>
-                        <div class="btn-group w-100" role="group" aria-label="Model selection">
-                            <input type="radio" class="btn-check" name="model_type" id="densenet_model" value="densenet" checked>
-                            <label class="btn btn-outline-secondary" for="densenet_model">DenseNet (224px, all classes)</label>
-                            
-                            <input type="radio" class="btn-check" name="model_type" id="resnet_model" value="resnet">
-                            <label class="btn btn-outline-secondary" for="resnet_model">ResNet (512px, filtered classes)</label>
-                        </div>
+                        <label for="model_select" class="form-label">{% trans "Select model:" %}</label>
+                        <select class="form-select" name="model_type" id="model_select">
+                            <option value="densenet121-res224-all" selected>densenet121-res224-all</option>
+                            <option value="densenet121-res224-chex">densenet121-res224-chex</option>
+                            <option value="densenet121-res224-mimic_nb">densenet121-res224-mimic_nb</option>
+                            <option value="densenet121-res224-mimic_ch">densenet121-res224-mimic_ch</option>
+                            <option value="densenet121-res224-nih">densenet121-res224-nih</option>
+                            <option value="densenet121-res224-pc">densenet121-res224-pc</option>
+                            <option value="resnet50-res512-all">resnet50-res512-all</option>
+                        </select>
                         <div class="form-text">
-                            {% trans "DenseNet: All 18 pathologies included" %}<br>
-                            {% trans "ResNet: All pathologies except \"Enlarged cardiomediastinum\"" %} {% trans "and" %} {% trans "\"Lung lesion\"" %}
+                            {% trans "Select the AI model architecture and training dataset." %}
                         </div>
                     </div>
                     

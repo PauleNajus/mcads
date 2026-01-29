@@ -35,6 +35,13 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
+def is_ajax(request: HttpRequest) -> bool:
+    """Check if request is AJAX (supports standard header or Accept header)"""
+    return (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+        'application/json' in request.headers.get('Accept', '')
+    )
+
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
     """
@@ -48,7 +55,7 @@ def home(request: HttpRequest) -> HttpResponse:
         # Allowed roles: Administrator, Radiographer, Technologist
         try:
             if not request.user.profile.can_upload_xrays():
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                if is_ajax(request):
                     return JsonResponse({
                         'error': _('You do not have permission to upload X-ray images. Please contact your administrator.')
                     }, status=403)
@@ -76,6 +83,9 @@ def home(request: HttpRequest) -> HttpResponse:
         
         if form.is_valid():
             logger.info(f"Form validation PASSED for user {request.user.username}")
+            logger.info(f"Request headers: {request.headers}")
+            logger.info(f"Is AJAX: {is_ajax(request)}")
+            
             # Create a new XRayImage instance with all form data but don't save yet
             xray_instance = form.save(commit=False)
             # Assign the current user
@@ -101,7 +111,7 @@ def home(request: HttpRequest) -> HttpResponse:
                 logger.exception("Error saving XRayImage for user=%s", request.user.pk)
                 
                 # Return error response for AJAX requests
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                if is_ajax(request):
                     payload: dict[str, Any] = {
                         'error': _('Database error occurred while saving image'),
                     }
@@ -138,7 +148,7 @@ def home(request: HttpRequest) -> HttpResponse:
                 thread.start()
             
             # Check if it's an AJAX request
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if is_ajax(request):
                 logger.info(f"Returning success response for upload ID: {xray_instance.pk}")
                 # Return JSON response for AJAX requests
                 return JsonResponse({
@@ -154,7 +164,7 @@ def home(request: HttpRequest) -> HttpResponse:
             logger.error(f"Form errors: {form.errors}")
             logger.error(f"Form errors as JSON: {form.errors.as_json()}")
             
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if is_ajax(request):
                 return JsonResponse({
                     'error': 'Form validation failed',
                     'errors': form.errors

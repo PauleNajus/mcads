@@ -37,7 +37,8 @@ def load_model(model_type: str = 'densenet') -> Tuple[torch.nn.Module, int]:
     """Load and cache TorchXRayVision classifier models.
 
     Args:
-        model_type: 'densenet' or 'resnet'
+        model_type: specific weights name (e.g., 'densenet121-res224-all', 'resnet50-res512-all')
+                   or 'densenet'/'resnet' for backward compatibility.
 
     Returns:
         (model, resize_dim)
@@ -50,12 +51,22 @@ def load_model(model_type: str = 'densenet') -> Tuple[torch.nn.Module, int]:
         device = torch.device('cpu')
         _ensure_cache_dirs()
 
-        if model_type == 'resnet':
-            weights = os.environ.get('XRV_RESNET_WEIGHTS', 'resnet50-res512-all')
+        if 'resnet' in model_type:
+            # Handle specific resnet weights or default
+            if model_type == 'resnet':
+                weights = os.environ.get('XRV_RESNET_WEIGHTS', 'resnet50-res512-all')
+            else:
+                weights = model_type
+                
             model = xrv.models.ResNet(weights=weights)
             resize_dim = 512
         else:
-            weights = os.environ.get('XRV_DENSENET_WEIGHTS', 'densenet121-res224-all')
+            # Handle specific densenet weights or default (fallback for 'densenet')
+            if model_type == 'densenet':
+                weights = os.environ.get('XRV_DENSENET_WEIGHTS', 'densenet121-res224-all')
+            else:
+                weights = model_type
+                
             model = xrv.models.DenseNet(weights=weights)
             resize_dim = 224
 

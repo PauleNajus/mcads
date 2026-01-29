@@ -5,6 +5,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressBar = document.getElementById('analysis-progress-bar');
   const progressPercentage = document.getElementById('progress-percentage');
 
+  // --- Model Selection Persistence ---
+  const modelSelect = document.getElementById('model_select');
+  if (modelSelect) {
+    // Restore last selection
+    const lastModel = localStorage.getItem('lastSelectedModel');
+    if (lastModel) {
+      // Check if the option still exists
+      if ([...modelSelect.options].some(o => o.value === lastModel)) {
+        modelSelect.value = lastModel;
+      }
+    }
+
+    // Save selection on change
+    modelSelect.addEventListener('change', function() {
+      localStorage.setItem('lastSelectedModel', this.value);
+    });
+  }
+
   // --- Date Field Handling (Home Page) ---
   // Set today's date as default for X-ray date and ensure proper date format (YYYY-MM-DD)
   const today = new Date();
@@ -273,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'X-CSRFToken': csrfToken,
+            'Accept': 'application/json',
           },
           cache: 'no-store',
         })

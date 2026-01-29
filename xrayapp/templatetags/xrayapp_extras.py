@@ -81,13 +81,25 @@ def get_severity_label(obj: Any) -> str:
 
 @register.filter
 def get_severity_color(level: int | None) -> str:
-    """Get appropriate color class based on severity level"""
+    """Get appropriate color class based on severity level (MTS)
+    
+    Mapping to MTS levels:
+    1: Immediate (Red)
+    2: Very Urgent (Orange)
+    3: Urgent (Yellow)
+    4: Standard (Green)
+    5: Non-urgent (Blue)
+    """
     if level == 1:
-        return "text-success"  # green for insignificant findings
+        return "text-danger"  # Red - Immediate
     elif level == 2:
-        return "text-warning"  # yellow for moderate findings
+        return "text-orange"  # Orange - Very Urgent (will need custom CSS class or inline style)
     elif level == 3:
-        return "text-danger"   # red for significant findings
+        return "text-warning"  # Yellow - Urgent
+    elif level == 4:
+        return "text-success"  # Green - Standard
+    elif level == 5:
+        return "text-info"     # Blue - Non-urgent
     return "" 
 
 @register.simple_tag

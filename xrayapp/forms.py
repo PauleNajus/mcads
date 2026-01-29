@@ -310,7 +310,6 @@ class UserProfileForm(forms.ModelForm):
             'dashboard_view', 
             'email_notifications',
             'processing_complete_notification',
-            'two_factor_auth_enabled'
         ]
         widgets = {
             'preferred_theme': forms.Select(attrs={'class': 'form-select'}),
@@ -318,7 +317,6 @@ class UserProfileForm(forms.ModelForm):
             'dashboard_view': forms.Select(attrs={'class': 'form-select'}),
             'email_notifications': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'processing_complete_notification': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'two_factor_auth_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 

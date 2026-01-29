@@ -190,10 +190,17 @@ def _prepare_interpretability(image_path: str, model_type: str) -> Tuple[torch.n
     img_tensor = img_tensor.to(device)
 
     # Prepare original image for visualization (2D, [0, 1])
-    if len(original_img.shape) > 2:
-        original_img = original_img.mean(axis=2)
+    if len(original_img.shape) == 3:
+        if original_img.shape[0] == 1:
+            original_vis = original_img.squeeze(0)
+        elif original_img.shape[0] == 3:
+            original_vis = original_img.mean(axis=0)
+        else:
+            # Unexpected channel count, fallback to mean if it looks like (C, H, W)
+            original_vis = original_img.mean(axis=0)
+    else:
+        original_vis = original_img
     
-    original_vis = original_img
     original_vis = (original_vis - original_vis.min()) / (original_vis.max() - original_vis.min() + 1e-8)
     
     return wrapped_model, img_tensor, original_vis

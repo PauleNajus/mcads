@@ -1092,52 +1092,60 @@ button,
   }
 }
 
-/* Custom risk level badge colors */
+/* Custom risk level badge colors (MTS compatible) */
 .badge.bg-very-high {
-  background-color: #dc2626 !important; /* Red */
+  background-color: #dc2626 !important; /* Red - Immediate */
   color: white !important;
 }
 
 .badge.bg-high {
-  background-color: #f87171 !important; /* Light Red */
+  background-color: #fd7e14 !important; /* Orange - Very Urgent */
   color: white !important;
 }
 
 .badge.bg-medium {
-  background-color: #f59e0b !important; /* Yellow */
-  color: #1f2937 !important;
+  background-color: #ffc107 !important; /* Yellow - Urgent */
+  color: #212529 !important;
 }
 
 .badge.bg-low {
-  background-color: #16a34a !important; /* Green */
+  background-color: #198754 !important; /* Green - Standard */
   color: white !important;
 }
 
 .badge.bg-very-low {
-  background-color: #86efac !important; /* Light Green */
-  color: #1f2937 !important;
+  background-color: #0dcaf0 !important; /* Blue - Non-urgent */
+  color: white !important; /* White text on blue for better contrast */
 }
 
-/* Progress bar colors to match badge colors */
+/* Progress bar colors to match badge colors (MTS) */
 .progress-bar.bg-very-high {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
 }
 
 .progress-bar.bg-high {
-  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%) !important;
+  background: linear-gradient(135deg, #fd7e14 0%, #e67e22 100%) !important;
 }
 
 .progress-bar.bg-medium {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  background: linear-gradient(135deg, #ffc107 0%, #ffca2c 100%) !important;
+  color: #212529 !important;
 }
 
 .progress-bar.bg-low {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  background: linear-gradient(135deg, #198754 0%, #157347 100%) !important;
 }
 
 .progress-bar.bg-very-low {
-  background: linear-gradient(135deg, #86efac 0%, #4ade80 100%) !important;
+  background: linear-gradient(135deg, #0dcaf0 0%, #0aa2c0 100%) !important;
 }
+
+/* MTS Text Colors */
+.text-danger { color: #dc2626 !important; }
+.text-orange { color: #fd7e14 !important; }
+.text-warning { color: #ffc107 !important; }
+.text-success { color: #198754 !important; }
+.text-info { color: #0dcaf0 !important; }
 
 /* High contrast mode support for custom badges */
 @media (prefers-contrast: high) {
@@ -1147,23 +1155,23 @@ button,
   }
   
   .badge.bg-high {
-    background-color: #dc2626 !important;
+    background-color: #e67e22 !important;
     border: 2px solid #ffffff !important;
   }
   
   .badge.bg-medium {
-    background-color: #d97706 !important;
+    background-color: #ffc107 !important;
     border: 2px solid #000000 !important;
     color: #000000 !important;
   }
   
   .badge.bg-low {
-    background-color: #15803d !important;
+    background-color: #198754 !important;
     border: 2px solid #ffffff !important;
   }
   
   .badge.bg-very-low {
-    background-color: #22c55e !important;
+    background-color: #0dcaf0 !important;
     border: 2px solid #000000 !important;
     color: #000000 !important;
   }
@@ -1176,7 +1184,7 @@ button,
   }
   
   .badge.bg-high {
-    background-color: #f87171 !important;
+    background-color: #f97316 !important;
   }
   
   .badge.bg-medium {
@@ -1189,9 +1197,11 @@ button,
   }
   
   .badge.bg-very-low {
-    background-color: #86efac !important;
-    color: #111827 !important;
+    background-color: #0ea5e9 !important;
+    color: #ffffff !important;
   }
+  
+  .text-orange { color: #f97316 !important; }
 }
 
 /* Mobile touch optimizations */

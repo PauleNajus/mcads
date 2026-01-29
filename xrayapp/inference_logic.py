@@ -266,7 +266,7 @@ def process_image(
     
     # Create a dictionary of pathology predictions
     # For ResNet, ALWAYS use default_pathologies for correct mapping
-    if model_type == 'resnet':
+    if 'resnet' in model_type:
         # ResNet model outputs 18 values in the order of default_pathologies
         results = dict(zip(list(xrv.datasets.default_pathologies), preds[0].detach().numpy()))
     else:
@@ -276,10 +276,14 @@ def process_image(
     
     # Filter out specific classes for ResNet if needed
     # Note: These classes will always output 0.5 for ResNet as they're not trained
-    if model_type == 'resnet':
+    if 'resnet' in model_type:
         excluded_classes = ["Enlarged Cardiomediastinum", "Lung Lesion"]
         results = {k: v for k, v in results.items() if k not in excluded_classes}
     
+    # Apply specific multiplier for resnet50-res512-all
+    if model_type == 'resnet50-res512-all':
+        results = {k: min(float(v) * 2.0, 1.0) for k, v in results.items()}
+
     # Apply calibration and thresholds
     results, calib_meta = apply_calibration_and_thresholds(results)
 

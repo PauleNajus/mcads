@@ -63,8 +63,8 @@ RESULT_KEY_TO_FIELD: dict[str, str] = {
     "Infiltration": "infiltration",
     "Mass": "mass",
     "Nodule": "nodule",
-    "Pleural Thickening": "pleural_thickening",
     "Pleural_Thickening": "pleural_thickening",
+    "Pleural Thickening": "pleural_thickening",
     "Pneumonia": "pneumonia",
     "Pneumothorax": "pneumothorax",
     "Fracture": "fracture",
@@ -73,11 +73,13 @@ RESULT_KEY_TO_FIELD: dict[str, str] = {
     "Lung Lesion": "lung_lesion",
 }
 
-# Centralized severity mapping for consistent display across the app
+# Centralized severity mapping for consistent display across the app (MTS)
 SEVERITY_MAPPING = {
-    1: _("Insignificant findings"),
-    2: _("Moderate findings"),
-    3: _("Significant findings"),
+    1: _("Immediate (Red)"),
+    2: _("Very Urgent (Orange)"),
+    3: _("Urgent (Yellow)"),
+    4: _("Standard (Green)"),
+    5: _("Non-urgent (Blue)"),
 }
 
 
@@ -101,17 +103,34 @@ def _iter_present_pathology_values(obj: object) -> list[float]:
 
 
 def _severity_from_values(values: Iterable[float]) -> int | None:
-    """Compute severity level from pathology probability values."""
+    """Compute severity level from pathology probability values using MTS logic.
+    
+    Manchester Triage System (MTS) approximation based on AI probabilities:
+    1: Immediate (Red) - Very high probability of critical condition (>80%)
+    2: Very Urgent (Orange) - High probability of significant pathology (>60%)
+    3: Urgent (Yellow) - Moderate probability (>40%)
+    4: Standard (Green) - Low but present probability (>20%)
+    5: Non-urgent (Blue) - Very low probability (<20%)
+    """
 
     values_list = list(values)
     if not values_list:
         return None
-    avg_probability = sum(values_list) / len(values_list)
-    if avg_probability <= 0.19:  # 0-19%
-        return 1
-    if avg_probability <= 0.30:  # 20-30%
-        return 2
-    return 3  # 31-100%
+    
+    # Use the maximum probability found as the primary risk indicator
+    # (A single critical finding drives the triage urgency, not the average)
+    max_probability = max(values_list)
+    
+    if max_probability >= 0.80:
+        return 1  # Immediate
+    elif max_probability >= 0.60:
+        return 2  # Very Urgent
+    elif max_probability >= 0.40:
+        return 3  # Urgent
+    elif max_probability >= 0.20:
+        return 4  # Standard
+    else:
+        return 5  # Non-urgent
 
 
 # --- QuerySets / Managers -----------------------------------------------------
@@ -267,11 +286,7 @@ class XRayImage(models.Model):
     
     @property
     def calculate_severity_level(self) -> int | None:
-        """Calculate severity level based on average of pathology probabilities
-        1: Insignificant findings (0-19%)
-        2: Moderate findings (20-30%)
-        3: Significant findings (31-100%)
-        """
+        """Calculate severity level based on max pathology probability (MTS)"""
         return _severity_from_values(_iter_present_pathology_values(self))
     
     @property
@@ -354,11 +369,7 @@ class PredictionHistory(models.Model):
     
     @property
     def calculate_severity_level(self) -> int | None:
-        """Calculate severity level based on average of pathology probabilities
-        1: Insignificant findings (0-19%)
-        2: Moderate findings (20-30%)
-        3: Significant findings (31-100%)
-        """
+        """Calculate severity level based on max pathology probability (MTS)"""
         return _severity_from_values(_iter_present_pathology_values(self))
     
     @property

@@ -82,7 +82,7 @@ def save_interpretability_visualization(
         
         # Plot overlay
         plt.subplot(1, 3, 3)
-        plt.imshow(cv2.cvtColor(interpretation_results['overlay'], cv2.COLOR_BGR2RGB))
+        plt.imshow(interpretation_results['overlay'])
         plt.title('Grad-CAM Overlay')
         plt.axis('off')
     
@@ -95,7 +95,7 @@ def save_interpretability_visualization(
         
         # Plot overlay
         plt.subplot(1, 3, 3)
-        plt.imshow(cv2.cvtColor(interpretation_results['overlay'], cv2.COLOR_BGR2RGB))
+        plt.imshow(interpretation_results['overlay'])
         plt.title('Combined Overlay')
         plt.axis('off')
     
@@ -189,7 +189,7 @@ def save_saliency_map(
         # Apply colormap to saliency map (convert to 0-255 range)
         saliency_colored = cv2.applyColorMap(np.uint8(255 * saliency_map), cv2.COLORMAP_JET)  # type: ignore
         
-        # Convert BGR to RGB for proper color display
+        # Convert BGR to RGB for proper color display (PIL expects RGB)
         saliency_rgb = cv2.cvtColor(saliency_colored, cv2.COLOR_BGR2RGB)
         
         # Save directly as image without matplotlib padding
@@ -225,7 +225,7 @@ def save_heatmap(
         # Apply colormap to heatmap (convert to 0-255 range)
         heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)  # type: ignore
         
-        # Convert BGR to RGB for proper color display
+        # Convert BGR to RGB for proper color display (PIL expects RGB)
         heatmap_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
         
         # Save directly as image without matplotlib padding
@@ -254,11 +254,9 @@ def save_overlay(
         # Get the overlay data (already in RGB format from overlay_heatmap method)
         overlay = interpretation_results['overlay']
         
-        # Convert BGR to RGB if needed (overlay_heatmap returns BGR format)
-        overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
-        
         # Save directly as image without matplotlib padding
-        Image.fromarray(overlay_rgb).save(output_path, format=format.upper())
+        # Overlay is RGB, so no conversion needed
+        Image.fromarray(overlay).save(output_path, format=format.upper())
     
     return output_path
 
@@ -304,7 +302,10 @@ def save_segmentation_visualization(
     # Create overlay image
     overlay = original_resized.copy()
     
-    # Define colors for each anatomical structure (BGR format)
+    # Define colors for each anatomical structure (BGR format for OpenCV)
+    # Note: OpenCV uses BGR, but we want final output in RGB.
+    # However, cv2.addWeighted works on the image as-is.
+    # If overlay is BGR (from original_bgr), we should use BGR colors.
     colors = [
         (255, 0, 0),     # Blue - Left Clavicle
         (0, 255, 0),     # Green - Right Clavicle
@@ -340,7 +341,7 @@ def save_segmentation_visualization(
             masked_color = (colored_mask * mask[:, :, np.newaxis] * 0.3).astype(overlay.dtype)
             overlay = cv2.addWeighted(overlay, 1.0, masked_color, 1.0, 0)
     
-    # Convert BGR to RGB for saving
+    # Convert BGR to RGB for saving (PIL expects RGB)
     overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
     
     # Save the visualization
