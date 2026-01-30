@@ -316,6 +316,9 @@ def apply_segmentation(image_path: str) -> dict[str, Any]:
     
     # Load + normalize image (supports DICOM via pydicom).
     img = _load_xrv_image(image_path)
+
+    # OOD gate (reconstruction error)
+    ood = compute_ood_score(img[0])  # pass (H, W)
     
     # Preserve original image for visualization (2D)
     original_img = img[0].copy()
@@ -359,7 +362,10 @@ def apply_segmentation(image_path: str) -> dict[str, Any]:
         'binary_masks': binary_masks,
         'anatomical_structures': anatomical_structures,
         'original': original_img,
-        'num_structures': len(anatomical_structures)
+        'num_structures': len(anatomical_structures),
+        'OOD_Score': ood.get('ood_score'),
+        'OOD_Threshold': ood.get('threshold'),
+        'Is_OOD': ood.get('is_ood'),
     }
     
     logger.info("Segmentation completed successfully")
@@ -384,6 +390,17 @@ def save_segmentation_results(xray_instance: XRayImage, results: dict[str, Any],
     # Save individual masks
     mask_paths = save_individual_segmentation_masks(results, masks_dir)
     
+    # Check for OOD and prepare metadata
+    if results.get("Is_OOD"):
+        xray_instance.requires_expert_review = True
+        xray_instance.save(update_fields=['requires_expert_review'])
+
+    ood_metadata = {
+        'ood_score': results.get("OOD_Score"),
+        'ood_threshold': results.get("OOD_Threshold"),
+        'is_ood': results.get("Is_OOD"),
+    }
+
     # Store visualization results for each structure
     for idx, structure_name in enumerate(results['anatomical_structures']):
         # Get confidence score (max probability in the mask)
@@ -402,6 +419,7 @@ def save_segmentation_results(xray_instance: XRayImage, results: dict[str, Any],
                     'structure_index': idx,
                     'mask_path': f"segmentation/{xray_instance.pk}/masks/{Path(mask_paths.get(structure_name, '')).name}",
                     'threshold': 0.5,
+                    **ood_metadata,
                 }
             },
         )
@@ -417,6 +435,7 @@ def save_segmentation_results(xray_instance: XRayImage, results: dict[str, Any],
             'metadata': {
                 'num_structures': len(results['anatomical_structures']),
                 'structures': results['anatomical_structures'],
+                **ood_metadata,
             }
         },
     )

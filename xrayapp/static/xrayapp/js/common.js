@@ -1,6 +1,49 @@
 // Common JavaScript functions for MCADS
 
 /**
+ * Show a generic message modal (replacement for alert)
+ * @param {string} message - Message to display
+ * @param {string} title - Optional title (default: "Message")
+ * @param {boolean} isError - Optional, if true styles the header as error
+ */
+window.showModal = function(message, title = null, isError = false) {
+    const modalEl = document.getElementById('genericMessageModal');
+    if (!modalEl) {
+        // Fallback if modal is missing for some reason
+        alert(message);
+        return;
+    }
+
+    const titleEl = document.getElementById('genericMessageModalLabel');
+    const bodyEl = document.getElementById('genericMessageModalBody');
+    const headerEl = modalEl.querySelector('.modal-header');
+
+    // Set content
+    if (bodyEl) bodyEl.textContent = message;
+    if (titleEl) titleEl.textContent = title || (isError ? gettext('Error') : gettext('Message'));
+
+    // Style
+    if (headerEl) {
+        if (isError) {
+            headerEl.classList.add('bg-danger', 'text-white');
+            headerEl.classList.remove('bg-primary', 'bg-info', 'bg-warning');
+             // Also check for close button color if needed
+            const closeBtn = headerEl.querySelector('.btn-close');
+            if(closeBtn) closeBtn.classList.add('btn-close-white');
+        } else {
+            headerEl.classList.remove('bg-danger', 'text-white');
+            const closeBtn = headerEl.querySelector('.btn-close');
+            if(closeBtn) closeBtn.classList.remove('btn-close-white');
+        }
+    }
+
+    // Show
+    // @ts-ignore
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+};
+
+/**
  * Helper to get cookie by name
  * @param {string} name - Cookie name
  * @returns {string|null} - Cookie value

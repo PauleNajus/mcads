@@ -151,7 +151,11 @@
             const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(this.value);
             if (!isValidDate) {
               this.value = this.getAttribute('data-original-value') || '';
-              alert('Please use the YYYY-MM-DD format for dates');
+              if (window.showModal) {
+                window.showModal('{% trans "Please use the YYYY-MM-DD format for dates" %}', '{% trans "Invalid Date Format" %}', true);
+              } else {
+                alert('{% trans "Please use the YYYY-MM-DD format for dates" %}');
+              }
             }
           }
         });

@@ -190,6 +190,24 @@
             </div>
         </div>
     </footer>
+
+    <!-- Generic Message Modal -->
+    <div class="modal fade" id="genericMessageModal" tabindex="-1" aria-labelledby="genericMessageModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="genericMessageModalLabel">{% trans "Message" %}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="genericMessageModalBody">
+                    <!-- Message content goes here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">{% trans "OK" %}</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Bootstrap JS (local only) -->
     <script src="{% static 'xrayapp/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
@@ -213,4 +231,4 @@
     
     {% block extra_js %}{% endblock %}
 </body>
-</html> 
+</html>

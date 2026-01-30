@@ -480,7 +480,11 @@
             const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(this.value);
             if (!isValidDate) {
               this.value = this.getAttribute('data-original-value') || '';
-              alert('Please use the YYYY-MM-DD format for dates');
+              if (window.showModal) {
+                window.showModal('{% trans "Please use the YYYY-MM-DD format for dates" %}', '{% trans "Invalid Date Format" %}', true);
+              } else {
+                alert('{% trans "Please use the YYYY-MM-DD format for dates" %}');
+              }
             }
           }
         });
@@ -548,12 +552,20 @@
                     }
                 } else {
                     console.error('Error:', data.error);
-                    alert('Error: ' + data.error);
+                    if (window.showModal) {
+                        window.showModal('Error: ' + data.error, '{% trans "Error" %}', true);
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred. Please try again.');
+                if (window.showModal) {
+                    window.showModal('{% trans "An error occurred. Please try again." %}', '{% trans "Error" %}', true);
+                } else {
+                    alert('{% trans "An error occurred. Please try again." %}');
+                }
             })
             .finally(() => {
                 this.disabled = false;

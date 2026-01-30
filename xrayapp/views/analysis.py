@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 from xrayapp.models import (
     XRayImage,
     VisualizationResult,
+    PATHOLOGY_FIELDS,
 )
 from xrayapp.tasks import run_interpretability_task, run_segmentation_task
 from .utils import (
@@ -120,6 +121,21 @@ def generate_interpretability(request: HttpRequest, pk: int) -> HttpResponse:
     # ResNet but the UI doesn't pass `model_type` (historically defaulted to DenseNet).
     model_type = request.GET.get('model_type') or getattr(xray_instance, 'model_used', None) or 'densenet'
     target_class = request.GET.get('target_class', None)  # Default to None (use highest probability class)
+    
+    # If target_class is not specified, use the highest probability pathology from the stored predictions
+    # This ensures consistency with the displayed results and avoids re-inference discrepancies
+    if target_class is None:
+        max_prob = -1.0
+        best_pathology = None
+        
+        for field in PATHOLOGY_FIELDS:
+            val = getattr(xray_instance, field, None)
+            if val is not None and val > max_prob:
+                max_prob = val
+                best_pathology = field
+        
+        if best_pathology:
+            target_class = best_pathology
     
     # Reset progress to 0 and set status to processing
     xray_instance.progress = 0

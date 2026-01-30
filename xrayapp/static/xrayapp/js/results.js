@@ -943,6 +943,61 @@ document.addEventListener('DOMContentLoaded', () => {
         return cookieValue;
     }
 
+    // Initialize confirmation button listener
+    const confirmBtn = document.getElementById('confirmDeleteVisualizationBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function() {
+            const vizId = this.getAttribute('data-viz-id');
+            if (!vizId) return;
+
+            // Show loading state
+            this.disabled = true;
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + gettext('Deleting...');
+
+            // Make AJAX request to delete visualization
+            fetch(`/visualization/${vizId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Hide modal
+                    const modalEl = document.getElementById('deleteVisualizationModal');
+                    // @ts-ignore
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+
+                    // Remove the visualization card with animation
+                    const card = document.getElementById(`visualization-${vizId}`);
+                    if (card) {
+                        card.style.transition = 'opacity 0.3s ease-out';
+                        card.style.opacity = '0';
+                        setTimeout(() => {
+                            card.remove();
+                        }, 300);
+                    }
+                } else {
+                    window.showModal(data.error || gettext('Failed to delete visualization'), gettext('Error'), true);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting visualization:', error);
+                window.showModal(gettext('An error occurred while deleting the visualization'), gettext('Error'), true);
+            })
+            .finally(() => {
+                // Restore button state
+                this.disabled = false;
+                this.innerHTML = originalText;
+            });
+        });
+    }
+
     // Function to handle visualization deletion
     function attachDeleteHandlers() {
         document.querySelectorAll('.delete-visualization-btn').forEach(button => {
@@ -955,47 +1010,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     const vizType = this.getAttribute('data-viz-type');
                     const pathology = this.getAttribute('data-pathology');
                     
-                    // Confirm deletion
-                    if (confirm(gettext('Are you sure you want to delete the') + ` ${vizType.toUpperCase()} ` + gettext('visualization for') + ` ${pathology}?`)) {
-                        // Show loading state on button
-                        this.classList.add('loading');
-                        this.disabled = true;
-                        
-                        // Make AJAX request to delete visualization
-                        fetch(`/visualization/${vizId}/delete/`, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRFToken': getCookie('csrftoken'),
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Content-Type': 'application/json',
-                            }
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                // Remove the visualization card with animation
-                                const card = document.getElementById(`visualization-${vizId}`);
-                                if (card) {
-                                    card.style.transition = 'opacity 0.3s ease-out';
-                                    card.style.opacity = '0';
-                                    setTimeout(() => {
-                                        card.remove();
-                                    }, 300);
-                                }
-                            } else {
-                                alert(data.error || gettext('Failed to delete visualization'));
-                                // Restore button state
-                                this.classList.remove('loading');
-                                this.disabled = false;
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error deleting visualization:', error);
-                            alert(gettext('An error occurred while deleting the visualization'));
-                            // Restore button state
-                            this.classList.remove('loading');
-                            this.disabled = false;
-                        });
+                    // Set data on confirmation button
+                    if (confirmBtn) {
+                        confirmBtn.setAttribute('data-viz-id', vizId);
+                    }
+
+                    // Set message
+                    const messageEl = document.getElementById('deleteVisualizationMessage');
+                    if (messageEl) {
+                        messageEl.textContent = gettext('Are you sure you want to delete the') + ` ${vizType.toUpperCase()} ` + gettext('visualization for') + ` ${pathology}?`;
+                    }
+
+                    // Show modal
+                    const modalEl = document.getElementById('deleteVisualizationModal');
+                    if (modalEl) {
+                        // @ts-ignore
+                        const modal = new bootstrap.Modal(modalEl);
+                        modal.show();
                     }
                 });
             }

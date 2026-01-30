@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!isValidDate) {
             // If invalid, restore original value
             this.value = this.getAttribute('data-original-value') || '';
-            alert(gettext('Please use the YYYY-MM-DD format for dates'));
+            window.showModal(gettext('Please use the YYYY-MM-DD format for dates'), gettext('Invalid Date Format'), true);
           }
         }
       });
@@ -349,12 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
               console.error('Detailed errors:', data.errors);
             }
             restoreFormUI();
-            alert(gettext('Error: ') + data.error);
+            window.showModal(data.error, gettext('Error'), true);
           } else {
             // Generic error handling
             console.error('Unexpected response format:', data);
             restoreFormUI();
-            alert(gettext('Error starting analysis. Please try again.'));
+            window.showModal(gettext('Error starting analysis. Please try again.'), gettext('Error'), true);
           }
         })
         .catch(error => {
@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
           console.error('Error details:', error.message, error.stack);
           restoreFormUI();
           const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
-          alert(gettext('Error: ') + message);
+          window.showModal(message, gettext('Error'), true);
         });
       }, 0);
     });
