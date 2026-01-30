@@ -236,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function monitorSegmentationProgress() {
         let progress = 5;
+        let oodNotified = false;
         if (progressBar) {
             progressBar.style.width = `${progress}%`;
             progressBar.setAttribute('aria-valuenow', String(progress));
@@ -270,6 +271,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         progressBar.setAttribute('aria-valuenow', String(progress));
                     }
                     if (percentageText) percentageText.textContent = `${progress}% ${gettext('Complete')}`;
+                    
+                    // Check for OOD status and notify if not already notified
+                    if (data.requires_expert_review && !oodNotified) {
+                        oodNotified = true;
+                        window.showModal(
+                            gettext('Out-of-Distribution (OOD) image detected during segmentation. The results may be unreliable and require expert review.'),
+                            gettext('OOD Detected'),
+                            true // Show as error/warning
+                        );
+                    }
                     
                     // Update status message based on progress
                     if (statusText) {

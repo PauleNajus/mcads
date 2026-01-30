@@ -342,7 +342,8 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
         response_data = {
             'status': xray_instance.processing_status,
             'progress': xray_instance.progress,
-            'xray_id': xray_instance.pk
+            'xray_id': xray_instance.pk,
+            'requires_expert_review': xray_instance.requires_expert_review
         }
         
         # If processing is complete, include visualization data

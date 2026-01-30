@@ -9,15 +9,15 @@ django-csp==3.8  # Content Security Policy
 Pillow==11.3.0  # Keep updated for security
 
 # Machine Learning and Scientific Computing
-torch==2.7.0
-torchvision==0.22.0
+torch==2.10.0
+torchvision==0.25.0
 torchxrayvision==1.4.0
-numpy==2.2.6  # Constrained by PyTorch compatibility
-matplotlib==3.10.3
+numpy==2.4.1  # Constrained by PyTorch compatibility
+matplotlib==3.10.5
 
 # Image Processing and Computer Vision
-opencv-python==4.12.0.88
-scikit-image==0.25.2
+opencv-python==4.13.0.90
+scikit-image==0.26.0
 
 # Medical imaging (DICOM)
 pydicom==3.0.1
@@ -30,23 +30,23 @@ pytz==2024.2
 sqlparse==0.5.3
 
 # System and Compatibility (Django/HTTP dependencies)
-asgiref==3.9.1
+asgiref==3.11.0
 tzdata==2025.2
 
 # Development and monitoring
-whitenoise==6.8.2  # Static file serving optimization
-gunicorn==23.0.0  # Production ASGI/WSGI server
-uvicorn==0.35.0  # High-performance ASGI server
+whitenoise==6.11.0  # Static file serving optimization
+gunicorn==24.1.1  # Production ASGI/WSGI server
+uvicorn==0.40.0  # High-performance ASGI server
 
 # Async Processing and Task Queue
-celery==5.5.3
-redis==5.2.1
+celery==5.6.2
+redis==7.1.0
 django-celery-beat==2.8.0
 django-celery-results==2.5.1
 
 # API Development
 djangorestframework==3.16.1
-django-cors-headers==4.6.0
+django-cors-headers==4.9.0
 drf-spectacular==0.28.0
 
 # Advanced Monitoring and Analytics
@@ -56,4 +56,4 @@ django-health-check==3.20.0
 
 # Database Performance
 django-db-connection-pool==1.2.5
-psycopg2-binary==2.9.10  # PostgreSQL adapter
+psycopg2-binary==2.9.11  # PostgreSQL adapter

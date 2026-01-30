@@ -205,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to track progress
   const trackProgress = (uploadId) => {
     let currentProgress = 0;
+    let oodNotified = false;
     
     // Hide form and show progress bar
     if (formWrapper) formWrapper.style.display = 'none';
@@ -226,6 +227,16 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           if (progressPercentage) progressPercentage.textContent = `${currentProgress}% ${gettext('Complete')}`;
           
+          // Check for OOD status and notify if not already notified
+          if (data.requires_expert_review && !oodNotified) {
+            oodNotified = true;
+            window.showModal(
+                gettext('Out-of-Distribution (OOD) image detected. The analysis results may be unreliable and require expert review.'),
+                gettext('OOD Detected'),
+                true // Show as error/warning
+            );
+          }
+
           // Update screen reader announcements
           const statusElement = document.getElementById('analysis-status');
           if (statusElement && currentProgress % 25 === 0) {
