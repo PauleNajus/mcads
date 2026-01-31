@@ -10,7 +10,7 @@ x-mcads-app: &mcads_app
       condition: service_healthy
   environment: &mcads_env
     # Django
-    DEBUG: ${DEBUG:-1}
+    DEBUG: ${DEBUG:-0}
     SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
 

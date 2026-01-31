@@ -1,6 +1,17 @@
 // Results page functionality for MCADS
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Helper to format date as YYYY-MM-DD HH:MM:SS
+    function formatDateTime(dateString) {
+        const d = new Date(dateString);
+        return d.getFullYear() + '-' + 
+               String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(d.getDate()).padStart(2, '0') + ' ' + 
+               String(d.getHours()).padStart(2, '0') + ':' + 
+               String(d.getMinutes()).padStart(2, '0') + ':' + 
+               String(d.getSeconds()).padStart(2, '0');
+    }
+
     // Check if we are on the results page by looking for the X-ray ID script
     const xrayIdScript = document.getElementById('xray-id');
     if (!xrayIdScript) return;
@@ -414,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${gettext("GRAD-CAM highlights the regions in the image that strongly influenced the model's prediction for")} ${viz.target_pathology}.
                     </p>
                     <small class="text-muted">
-                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString(undefined, {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false})}
+                        ${gettext("Generated on")}: ${formatDateTime(viz.created_at)}
                     </small>
                 </div>
             `;
@@ -533,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${gettext("Pixel-Level Interpretability shows which individual pixels had the most influence on the model's prediction for")} ${viz.target_pathology}.
                     </p>
                     <small class="text-muted">
-                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString(undefined, {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false})}
+                        ${gettext("Generated on")}: ${formatDateTime(viz.created_at)}
                         ${viz.threshold ? ` | ${gettext("Threshold")}: ${viz.threshold}` : ''}
                     </small>
                 </div>

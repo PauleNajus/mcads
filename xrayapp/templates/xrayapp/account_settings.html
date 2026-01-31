@@ -131,11 +131,11 @@
                                         <!-- Account Dates -->
                                         <div class="mb-3">
                                             <h6 class="text-muted">{% trans "Account Dates" %}</h6>
-                                            <p class="card-text mb-1"><strong>{% trans "Date Joined:" %}</strong> {{ user.date_joined|date:"F d, Y H:i" }}</p>
-                                            <p class="card-text mb-1"><strong>{% trans "Last Login:" %}</strong> {{ user.last_login|date:"F d, Y H:i"|default:"—" }}</p>
+                                            <p class="card-text mb-1"><strong>{% trans "Date Joined:" %}</strong> {{ user.date_joined|date:"Y-m-d H:i" }}</p>
+                                            <p class="card-text mb-1"><strong>{% trans "Last Login:" %}</strong> {{ user.last_login|date:"Y-m-d H:i"|default:"—" }}</p>
                                             {% if user.profile %}
-                                            <p class="card-text mb-1"><strong>{% trans "Profile Created:" %}</strong> {{ user.profile.created_at|date:"F d, Y H:i" }}</p>
-                                            <p class="card-text mb-1"><strong>{% trans "Profile Updated:" %}</strong> {{ user.profile.updated_at|date:"F d, Y H:i" }}</p>
+                                            <p class="card-text mb-1"><strong>{% trans "Profile Created:" %}</strong> {{ user.profile.created_at|date:"Y-m-d H:i" }}</p>
+                                            <p class="card-text mb-1"><strong>{% trans "Profile Updated:" %}</strong> {{ user.profile.updated_at|date:"Y-m-d H:i" }}</p>
                                             {% endif %}
                                         </div>
 

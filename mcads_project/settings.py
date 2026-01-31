@@ -24,7 +24,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 # Initialize environ
 env = environ.Env(
     # Set default values
-    DEBUG=(bool, True),  # Default to True for development
+    DEBUG=(bool, False),  # Default to False for security
     SECRET_KEY=(str, ''.join([get_random_secret_key(), get_random_secret_key()[:20]])),  # Generate longer key
     ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),  # Default development hosts
 )
@@ -147,7 +147,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Security settings for production
-DEBUG = True # FORCE DEBUG FOR TESTING
+# DEBUG = True # FORCE DEBUG FOR TESTING
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
@@ -330,6 +330,7 @@ USE_TZ = True
 TIME_FORMAT = 'H:i'
 DATETIME_FORMAT = 'Y-m-d H:i:s'
 SHORT_DATETIME_FORMAT = 'Y-m-d H:i'
+DATE_FORMAT = 'Y-m-d'
 
 
 # Static files (CSS, JavaScript, Images)
