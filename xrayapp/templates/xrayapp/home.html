@@ -207,21 +207,21 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="acceptableImagesModalLabel">
-                    <i class="bi bi-info-circle"></i> Acceptable Images Guidelines
+                    <i class="bi bi-info-circle"></i> {% trans "Acceptable Images Guidelines" %}
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="row">
                     <div class="col-12">
-                        <h6 class="text-success"><i class="bi bi-check-circle"></i> Good X-ray Images</h6>
-                        <p class="small text-muted mb-3">These images will produce the best analysis results:</p>
+                        <h6 class="text-success"><i class="bi bi-check-circle"></i> {% trans "Good X-ray Images" %}</h6>
+                        <p class="small text-muted mb-3">{% trans "These images will produce the best analysis results:" %}</p>
                         <ul class="small mb-3">
-                            <li>Clear frontal chest X-rays (PA or AP view)</li>
-                            <li>High contrast with good visibility of anatomical structures</li>
-                            <li>Properly centered patient positioning</li>
-                            <li>Adequate penetration (spine visible through heart)</li>
-                            <li>No artifacts, text overlays, or measurement markers</li>
+                            <li>{% trans "Clear frontal chest X-rays (PA or AP view)" %}</li>
+                            <li>{% trans "High contrast with good visibility of anatomical structures" %}</li>
+                            <li>{% trans "Properly centered patient positioning" %}</li>
+                            <li>{% trans "Adequate penetration (spine visible through heart)" %}</li>
+                            <li>{% trans "No artifacts, text overlays, or measurement markers" %}</li>
                         </ul>
                         
                         <div class="row mb-4">
@@ -229,58 +229,58 @@
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/good/Good1.jpg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Good X-ray example 1"
+                                     alt="{% trans 'Good X-ray example 1' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-success">Good Example 1</p>
+                                <p class="small text-center mt-1 text-success">{% trans "Good Example 1" %}</p>
                             </div>
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/good/Good2.jpeg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Good X-ray example 2"
+                                     alt="{% trans 'Good X-ray example 2' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-success">Good Example 2</p>
+                                <p class="small text-center mt-1 text-success">{% trans "Good Example 2" %}</p>
                             </div>
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/good/Good3.jpeg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Good X-ray example 3"
+                                     alt="{% trans 'Good X-ray example 3' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-success">Good Example 3</p>
+                                <p class="small text-center mt-1 text-success">{% trans "Good Example 3" %}</p>
                             </div>
                         </div>
                         
-                        <h6 class="text-danger"><i class="bi bi-x-circle"></i> Poor Quality Images</h6>
-                        <p class="small text-muted mb-3">These types of images may produce inaccurate results:</p>
+                        <h6 class="text-danger"><i class="bi bi-x-circle"></i> {% trans "Poor Quality Images" %}</h6>
+                        <p class="small text-muted mb-3">{% trans "These types of images may produce inaccurate results:" %}</p>
                         <ul class="small mb-3">
-                            <li>Lateral or oblique views (side views)</li>
-                            <li>Poor image quality, low contrast, or overexposed images</li>
-                            <li>Images with significant artifacts or medical devices</li>
-                            <li>Cropped images or partial chest views</li>
-                            <li>Images with text overlays, annotations, or watermarks</li>
-                            <li>Screenshots or photos of X-rays on monitors</li>
+                            <li>{% trans "Lateral or oblique views (side views)" %}</li>
+                            <li>{% trans "Poor image quality, low contrast, or overexposed images" %}</li>
+                            <li>{% trans "Images with significant artifacts or medical devices" %}</li>
+                            <li>{% trans "Cropped images or partial chest views" %}</li>
+                            <li>{% trans "Images with text overlays, annotations, or watermarks" %}</li>
+                            <li>{% trans "Screenshots or photos of X-rays on monitors" %}</li>
                         </ul>
                         
                         <div class="row">
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/bad/Bad1.jpeg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Bad X-ray example 1"
+                                     alt="{% trans 'Bad X-ray example 1' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-danger">Poor Example 1</p>
+                                <p class="small text-center mt-1 text-danger">{% trans "Poor Example 1" %}</p>
                             </div>
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/bad/Bad2.jpeg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Bad X-ray example 2"
+                                     alt="{% trans 'Bad X-ray example 2' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-danger">Poor Example 2</p>
+                                <p class="small text-center mt-1 text-danger">{% trans "Poor Example 2" %}</p>
                             </div>
                             <div class="col-md-4 mb-2">
                                 <img src="{% static 'xrayapp/images/examples/bad/Bad3.jpeg' %}" 
                                      class="img-fluid rounded border" 
-                                     alt="Bad X-ray example 3"
+                                     alt="{% trans 'Bad X-ray example 3' %}"
                                      style="height: 150px; object-fit: cover; width: 100%;">
-                                <p class="small text-center mt-1 text-danger">Poor Example 3</p>
+                                <p class="small text-center mt-1 text-danger">{% trans "Poor Example 3" %}</p>
                             </div>
                         </div>
                     </div>

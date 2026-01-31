@@ -62,49 +62,49 @@
                                     {{ xray|get_severity_label }}
                                 </h3>
                                 <div class="small text-muted fw-medium">
-                                    {% if severity_level == 1 %}0 min (Immediate)
-                                    {% elif severity_level == 2 %}10 min (Very Urgent)
-                                    {% elif severity_level == 3 %}60 min (Urgent)
-                                    {% elif severity_level == 4 %}120 min (Standard)
-                                    {% else %}240 min (Non-urgent){% endif %}
+                                    {% if severity_level == 1 %}{% trans "0 min (Immediate)" %}
+                                    {% elif severity_level == 2 %}{% trans "10 min (Very Urgent)" %}
+                                    {% elif severity_level == 3 %}{% trans "60 min (Urgent)" %}
+                                    {% elif severity_level == 4 %}{% trans "120 min (Standard)" %}
+                                    {% else %}{% trans "240 min (Non-urgent)" %}{% endif %}
                                 </div>
                             </div>
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <small class="text-muted fw-medium">{% trans "Assigned Category" %}</small>
                                     <small class="fw-bold">
-                                        {% if severity_level == 1 %}Red (Immediate)
-                                        {% elif severity_level == 2 %}Orange (Very Urgent)
-                                        {% elif severity_level == 3 %}Yellow (Urgent)
-                                        {% elif severity_level == 4 %}Green (Standard)
-                                        {% else %}Blue (Non-urgent){% endif %}
+                                        {% if severity_level == 1 %}{% trans "Red (Immediate)" %}
+                                        {% elif severity_level == 2 %}{% trans "Orange (Very Urgent)" %}
+                                        {% elif severity_level == 3 %}{% trans "Yellow (Urgent)" %}
+                                        {% elif severity_level == 4 %}{% trans "Green (Standard)" %}
+                                        {% else %}{% trans "Blue (Non-urgent)" %}{% endif %}
                                     </small>
                                 </div>
                                 <div class="progress" style="height: 24px;">
                                     {% if severity_level == 1 %}
                                     <div class="progress-bar bg-danger" role="progressbar" style="width: 100%;" 
                                          aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
-                                        <span class="progress-text text-white fw-bold">IMMEDIATE</span>
+                                        <span class="progress-text text-white fw-bold">{% trans "IMMEDIATE" %}</span>
                                     </div>
                                     {% elif severity_level == 2 %}
                                     <div class="progress-bar" role="progressbar" style="width: 80%; background-color: #fd7e14;" 
                                          aria-valuenow="80" aria-valuemin="0" aria-valuemax="100">
-                                        <span class="progress-text text-white fw-bold">VERY URGENT</span>
+                                        <span class="progress-text text-white fw-bold">{% trans "VERY URGENT" %}</span>
                                     </div>
                                     {% elif severity_level == 3 %}
                                     <div class="progress-bar bg-warning text-dark" role="progressbar" style="width: 60%;" 
                                          aria-valuenow="60" aria-valuemin="0" aria-valuemax="100">
-                                        <span class="progress-text fw-bold">URGENT</span>
+                                        <span class="progress-text fw-bold">{% trans "URGENT" %}</span>
                                     </div>
                                     {% elif severity_level == 4 %}
                                     <div class="progress-bar bg-success" role="progressbar" style="width: 40%;" 
                                          aria-valuenow="40" aria-valuemin="0" aria-valuemax="100">
-                                        <span class="progress-text text-white fw-bold">STANDARD</span>
+                                        <span class="progress-text text-white fw-bold">{% trans "STANDARD" %}</span>
                                     </div>
                                     {% else %}
                                     <div class="progress-bar bg-info text-white" role="progressbar" style="width: 20%;" 
                                          aria-valuenow="20" aria-valuemin="0" aria-valuemax="100">
-                                        <span class="progress-text fw-bold">NON-URGENT</span>
+                                        <span class="progress-text fw-bold">{% trans "NON-URGENT" %}</span>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -223,11 +223,11 @@
                                     <div class="position-relative mobile-pathology-progress">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <span class="badge {% if prob > 0.7 %}bg-very-high{% elif prob > 0.5 %}bg-high{% elif prob >= 0.3 %}bg-medium{% elif prob >= 0.15 %}bg-low{% else %}bg-very-low{% endif %} small fw-medium mobile-risk-badge">
-                                                {% if prob > 0.7 %}Very High
-                                                {% elif prob > 0.5 %}High  
-                                                {% elif prob >= 0.3 %}Medium
-                                                {% elif prob >= 0.15 %}Low
-                                                {% else %}Very Low
+                                                {% if prob > 0.7 %}{% trans "Very High" %}
+                                                {% elif prob > 0.5 %}{% trans "High" %}  
+                                                {% elif prob >= 0.3 %}{% trans "Medium" %}
+                                                {% elif prob >= 0.15 %}{% trans "Low" %}
+                                                {% else %}{% trans "Very Low" %}
                                                 {% endif %}
                                             </span>
                                             <small class="fw-bold fs-7 fs-sm-6">{{ prob|multiply:100|floatformat:0 }}%</small>
@@ -456,20 +456,20 @@
         <div id="interpretation-progress" class="card mb-4 mobile-optimized" style="display: none;">
             <div class="card-header bg-primary text-white">
                 <div class="d-flex align-items-center justify-content-center flex-wrap">
-                    <h5 class="mb-0 fs-6 fs-sm-5">Generating AI Visualization</h5>
+                    <h5 class="mb-0 fs-6 fs-sm-5">{% trans "Generating AI Visualization" %}</h5>
                 </div>
             </div>
             <div class="card-body">
                 <div class="text-center mb-4">
                     <p class="text-muted mb-0">
-                        <span id="interpretation-status">Initializing visualization engine...</span>
+                        <span id="interpretation-status">{% trans "Initializing visualization engine..." %}</span>
                     </p>
                 </div>
                 
                 <div class="modern-progress pulsing mb-3" 
                      style="height: 36px;" 
                      role="progressbar" 
-                     aria-label="Visualization generation progress"
+                     aria-label="{% trans 'Visualization generation progress' %}"
                      aria-valuenow="0" 
                      aria-valuemin="0" 
                      aria-valuemax="100"
@@ -479,7 +479,7 @@
                          class="modern-progress-bar animated" 
                          style="width: 0%;">
                     </div>
-                    <span id="interpretation-percentage" class="modern-progress-text">0% Complete</span>
+                    <span id="interpretation-percentage" class="modern-progress-text">0% {% trans "Complete" %}</span>
                 </div>
                 
                 <!-- Screen reader announcements -->

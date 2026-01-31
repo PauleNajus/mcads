@@ -1661,8 +1661,6 @@ msgstr "Ištrinti šią vizualizaciją"
 msgid "Original X-ray"
 msgstr "Originalus rentgenas"
 
-
-
 #: .\xrayapp\templates\xrayapp\results.html:706
 #: .\xrayapp\templates\xrayapp\results.html:1132
 msgid "GRAD-CAM Overlay"
@@ -1794,8 +1792,6 @@ msgstr "Slenkstis"
 #: .\xrayapp\templates\xrayapp\results.html:1224
 msgid "Pixel-level interpretability"
 msgstr "Pikselių lygio interpretavimas"
-
-
 
 #: .\xrayapp\templates\xrayapp\results.html:799
 #: .\xrayapp\templates\xrayapp\results.html:1247
@@ -3106,3 +3102,372 @@ msgstr "Vaizdo tikrinimas šiame serveryje nepasiekiamas."
 #: .\xrayapp\forms.py:237
 msgid "Invalid image file."
 msgstr "Netinkamas vaizdo failas."
+
+msgid "Acceptable Images Guidelines"
+msgstr "Priimtinų vaizdų gairės"
+
+msgid "Good X-ray Images"
+msgstr "Geri rentgeno vaizdai"
+
+msgid "These images will produce the best analysis results:"
+msgstr "Šie vaizdai duos geriausius analizės rezultatus:"
+
+msgid "Clear frontal chest X-rays (PA or AP view)"
+msgstr "Aiškūs priekiniai krūtinės ląstos rentgeno vaizdai (PA arba AP vaizdas)"
+
+msgid "High contrast with good visibility of anatomical structures"
+msgstr "Didelis kontrastas su geru anatominių struktūrų matomumu"
+
+msgid "Properly centered patient positioning"
+msgstr "Tinkamai centruota paciento padėtis"
+
+msgid "Adequate penetration (spine visible through heart)"
+msgstr "Pakankamas skvarbumas (stuburas matomas per širdį)"
+
+msgid "No artifacts, text overlays, or measurement markers"
+msgstr "Jokių artefaktų, teksto perdangų ar matavimo žymeklių"
+
+msgid "Good X-ray example 1"
+msgstr "Geras rentgeno pavyzdys 1"
+
+msgid "Good Example 1"
+msgstr "Geras pavyzdys 1"
+
+msgid "Good X-ray example 2"
+msgstr "Geras rentgeno pavyzdys 2"
+
+msgid "Good Example 2"
+msgstr "Geras pavyzdys 2"
+
+msgid "Good X-ray example 3"
+msgstr "Geras rentgeno pavyzdys 3"
+
+msgid "Good Example 3"
+msgstr "Geras pavyzdys 3"
+
+msgid "Poor Quality Images"
+msgstr "Prastos kokybės vaizdai"
+
+msgid "These types of images may produce inaccurate results:"
+msgstr "Šio tipo vaizdai gali duoti netikslius rezultatus:"
+
+msgid "Lateral or oblique views (side views)"
+msgstr "Šoniniai arba įstrižiniai vaizdai (šoniniai vaizdai)"
+
+msgid "Poor image quality, low contrast, or overexposed images"
+msgstr "Prasta vaizdo kokybė, mažas kontrastas arba peršviesti vaizdai"
+
+msgid "Images with significant artifacts or medical devices"
+msgstr "Vaizdai su reikšmingais artefaktais arba medicinos prietaisais"
+
+msgid "Cropped images or partial chest views"
+msgstr "Apkarpyti vaizdai arba daliniai krūtinės ląstos vaizdai"
+
+msgid "Images with text overlays, annotations, or watermarks"
+msgstr "Vaizdai su teksto perdangomis, anotacijomis arba vandens ženklais"
+
+msgid "Screenshots or photos of X-rays on monitors"
+msgstr "Ekrano kopijos arba rentgeno nuotraukų nuotraukos monitoriuose"
+
+msgid "Bad X-ray example 1"
+msgstr "Blogas rentgeno pavyzdys 1"
+
+msgid "Poor Example 1"
+msgstr "Prastas pavyzdys 1"
+
+msgid "Bad X-ray example 2"
+msgstr "Blogas rentgeno pavyzdys 2"
+
+msgid "Poor Example 2"
+msgstr "Prastas pavyzdys 2"
+
+msgid "Bad X-ray example 3"
+msgstr "Blogas rentgeno pavyzdys 3"
+
+msgid "Poor Example 3"
+msgstr "Prastas pavyzdys 3"
+
+msgid "Assigned Category"
+msgstr "Priskirta kategorija"
+
+msgid "Red (Immediate)"
+msgstr "Raudona (Nedelsiant)"
+
+msgid "Orange (Very Urgent)"
+msgstr "Oranžinė (Labai skubu)"
+
+msgid "Yellow (Urgent)"
+msgstr "Geltona (Skubu)"
+
+msgid "Green (Standard)"
+msgstr "Žalia (Standartinė)"
+
+msgid "Blue (Non-urgent)"
+msgstr "Mėlyna (Neskubu)"
+
+msgid "IMMEDIATE"
+msgstr "NEDELSIANT"
+
+msgid "VERY URGENT"
+msgstr "LABAI SKUBU"
+
+msgid "URGENT"
+msgstr "SKUBU"
+
+msgid "STANDARD"
+msgstr "STANDARTINĖ"
+
+msgid "NON-URGENT"
+msgstr "NESKUBU"
+
+msgid "0 min (Immediate)"
+msgstr "0 min (Nedelsiant)"
+
+msgid "10 min (Very Urgent)"
+msgstr "10 min (Labai skubu)"
+
+msgid "60 min (Urgent)"
+msgstr "60 min (Skubu)"
+
+msgid "120 min (Standard)"
+msgstr "120 min (Standartinė)"
+
+msgid "240 min (Non-urgent)"
+msgstr "240 min (Neskubu)"
+
+msgid "Very High"
+msgstr "Labai didelė"
+
+msgid "High"
+msgstr "Didelė"
+
+msgid "Medium"
+msgstr "Vidutinė"
+
+msgid "Low"
+msgstr "Maža"
+
+msgid "Very Low"
+msgstr "Labai maža"
+
+msgid "Generating AI Visualization"
+msgstr "Generuojama AI vizualizacija"
+
+msgid "Initializing visualization engine..."
+msgstr "Inicijuojamas vizualizacijos variklis..."
+
+msgid "Visualization generation progress"
+msgstr "Vizualizacijos generavimo eiga"
+
+msgid "Out-of-Distribution (OOD) image detected. The analysis results may be unreliable and require expert review."
+msgstr "Aptiktas nestandartinis (OOD) vaizdas. Analizės rezultatai gali būti nepatikimi ir reikalauja eksperto peržiūros."
+
+msgid "OOD Detected"
+msgstr "OOD aptiktas"
+
+msgid "Image uploaded successfully, analysis 25% complete"
+msgstr "Vaizdas sėkmingai įkeltas, analizė atlikta 25%"
+
+msgid "AI model processing X-ray data, analysis 50% complete"
+msgstr "AI modelis apdoroja rentgeno duomenis, analizė atlikta 50%"
+
+msgid "Generating predictions, analysis 75% complete"
+msgstr "Generuojamos prognozės, analizė atlikta 75%"
+
+msgid "Analysis complete, redirecting to results"
+msgstr "Analizė baigta, nukreipiama į rezultatus"
+
+msgid "Error starting analysis. Please try again."
+msgstr "Klaida pradedant analizę. Bandykite dar kartą."
+
+msgid "Error submitting form. Please try again."
+msgstr "Klaida pateikiant formą. Bandykite dar kartą."
+
+msgid "Generating"
+msgstr "Generuojama"
+
+msgid "Pixel-Level Interpretability"
+msgstr "Pikselių lygio interpretavimas"
+
+msgid "visualization..."
+msgstr "vizualizacija..."
+
+msgid "Starting anatomical segmentation..."
+msgstr "Pradedamas anatominis segmentavimas..."
+
+msgid "Error starting segmentation process"
+msgstr "Klaida pradedant segmentavimo procesą"
+
+msgid "Error starting interpretation process"
+msgstr "Klaida pradedant interpretavimo procesą"
+
+msgid "Initializing AI model..."
+msgstr "Inicijuojamas AI modelis..."
+
+msgid "Processing X-ray data..."
+msgstr "Apdorojami rentgeno duomenys..."
+
+msgid "Generating heat maps..."
+msgstr "Generuojami karščio žemėlapiai..."
+
+msgid "Finalizing visualization..."
+msgstr "Užbaigiama vizualizacija..."
+
+msgid "Almost complete..."
+msgstr "Beveik baigta..."
+
+msgid "Visualization generation 25% complete, initializing AI interpretability models"
+msgstr "Vizualizacijos generavimas atliktas 25%, inicijuojami AI interpretavimo modeliai"
+
+msgid "Visualization generation 50% complete, processing pixel-level analysis"
+msgstr "Vizualizacijos generavimas atliktas 50%, apdorojama pikselių lygio analizė"
+
+msgid "Visualization generation 75% complete, generating heat maps and overlays"
+msgstr "Vizualizacijos generavimas atliktas 75%, generuojami karščio žemėlapiai ir perdangos"
+
+msgid "Visualization generation complete, displaying results"
+msgstr "Vizualizacijos generavimas baigtas, rodomi rezultatai"
+
+msgid "Visualization complete!"
+msgstr "Vizualizacija baigta!"
+
+msgid "Connection error - retrying..."
+msgstr "Ryšio klaida - bandoma iš naujo..."
+
+msgid "Loading segmentation model..."
+msgstr "Įkeliamas segmentavimo modelis..."
+
+msgid "Analyzing anatomical structures..."
+msgstr "Analizuojamos anatominės struktūros..."
+
+msgid "Generating segmentation masks..."
+msgstr "Generuojamos segmentavimo kaukės..."
+
+msgid "Finalizing segmentation results..."
+msgstr "Užbaigiami segmentavimo rezultatai..."
+
+msgid "Segmentation complete!"
+msgstr "Segmentavimas baigtas!"
+
+msgid "Pixel-Level Overlay"
+msgstr "Pikselių lygio perdanga"
+
+msgid "Anatomical Segmentation Results"
+msgstr "Anatominio segmentavimo rezultatai"
+
+msgid "Segmentation Overlay"
+msgstr "Segmentavimo perdanga"
+
+msgid "Segmentation overlay"
+msgstr "Segmentavimo perdanga"
+
+msgid "Detected Anatomical Structures"
+msgstr "Aptiktos anatominės struktūros"
+
+msgid "Left Clavicle"
+msgstr "Kairysis raktikaulis"
+
+msgid "Right Clavicle"
+msgstr "Dešinysis raktikaulis"
+
+msgid "Left Scapula"
+msgstr "Kairioji mentė"
+
+msgid "Right Scapula"
+msgstr "Dešinioji mentė"
+
+msgid "Left Lung"
+msgstr "Kairysis plautis"
+
+msgid "Right Lung"
+msgstr "Dešinysis plautis"
+
+msgid "Left Hilus Pulmonis"
+msgstr "Kairysis plaučių vartai"
+
+msgid "Right Hilus Pulmonis"
+msgstr "Dešinysis plaučių vartai"
+
+msgid "Heart"
+msgstr "Širdis"
+
+msgid "Aorta"
+msgstr "Aorta"
+
+msgid "Facies Diaphragmatica"
+msgstr "Diafragminis paviršius"
+
+msgid "Mediastinum"
+msgstr "Tarpuplautis"
+
+msgid "Weasand"
+msgstr "Gerklė"
+
+msgid "Spine"
+msgstr "Stuburas"
+
+msgid "Deleting..."
+msgstr "Trinama..."
+
+msgid "Failed to delete visualization"
+msgstr "Nepavyko ištrinti vizualizacijos"
+
+msgid "An error occurred while deleting the visualization"
+msgstr "Įvyko klaida trinant vizualizaciją"
+
+msgid "Are you sure you want to delete the"
+msgstr "Ar tikrai norite ištrinti"
+
+msgid "visualization for"
+msgstr "vizualizaciją skirtą"
+
+msgid "Browse or drop a file"
+msgstr "Naršyti arba įkelti failą"
+
+msgid "Invalid Date Format"
+msgstr "Netinkamas datos formatas"
+
+msgid "Please use the YYYY-MM-DD format for dates"
+msgstr "Naudokite YYYY-MM-DD formatą datoms"
+
+msgid "Switch to dark mode"
+msgstr "Perjungti į tamsų režimą"
+
+msgid "Switch to light mode"
+msgstr "Perjungti į šviesų režimą"
+
+msgid "Error"
+msgstr "Klaida"
+
+msgid "Message"
+msgstr "Pranešimas"
+
+msgid "Potential Data Quality Issue Detected"
+msgstr "Aptikta galima duomenų kokybės problema"
+
+msgid "Triage Priority (MTS)"
+msgstr "Rūšiavimo prioritetas (MTS)"
+
+msgid "Triage category is estimated based on the highest probability pathology found."
+msgstr "Rūšiavimo kategorija nustatoma remiantis didžiausia rastos patologijos tikimybe."
+
+msgid "Medical Disclaimer:"
+msgstr "Medicininis atsakomybės atsisakymas:"
+
+msgid "Always consult with a qualified healthcare professional for proper medical evaluation and treatment."
+msgstr "Visada pasitarkite su kvalifikuotu sveikatos priežiūros specialistu dėl tinkamo medicininio įvertinimo ir gydymo."
+
+msgid "Caution:"
+msgstr "Dėmesio:"
+
+msgid "The analysis results below may be unreliable. A manual review by a medical expert is strongly recommended."
+msgstr "Žemiau pateikti analizės rezultatai gali būti nepatikimi. Griežtai rekomenduojama medicinos eksperto peržiūra."
+
+msgid "This image has been flagged as Out-of-Distribution (OOD). This means it differs significantly from the data the AI models were trained on."
+msgstr "Šis vaizdas pažymėtas kaip nestandartinis (OOD). Tai reiškia, kad jis reikšmingai skiriasi nuo duomenų, kuriais buvo apmokyti AI modeliai."
+
+msgid "Out-of-Distribution (OOD) Warning"
+msgstr "Nestandartinio (OOD) vaizdo įspėjimas"
+
+msgid "Anatomical Segmentation"
+msgstr "Anatominis segmentavimas"
