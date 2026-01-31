@@ -326,6 +326,11 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# Date and Time formatting (24-hour clock)
+TIME_FORMAT = 'H:i'
+DATETIME_FORMAT = 'Y-m-d H:i:s'
+SHORT_DATETIME_FORMAT = 'Y-m-d H:i'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/

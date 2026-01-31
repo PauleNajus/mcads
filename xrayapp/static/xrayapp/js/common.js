@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hour12: false
         };
         const timeString = new Intl.DateTimeFormat('lt-LT', options).format(now);
-        const clockElement = document.getElementById('eest-clock');
+        const clockElement = document.getElementById('server-time');
         if (clockElement) {
             clockElement.textContent = timeString;
         }

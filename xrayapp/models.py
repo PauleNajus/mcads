@@ -216,7 +216,7 @@ class XRayImage(models.Model):
     technologist_last_name = models.CharField(max_length=100, blank=True, db_index=True)
     
     # X-ray image and processing
-    image = models.ImageField(upload_to='xrays/')
+    image = models.ImageField(upload_to='xrays/', max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
     processing_status = models.CharField(max_length=20, default='pending', db_index=True)
     progress = models.IntegerField(default=0)

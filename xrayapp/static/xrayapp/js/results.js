@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${gettext("GRAD-CAM highlights the regions in the image that strongly influenced the model's prediction for")} ${viz.target_pathology}.
                     </p>
                     <small class="text-muted">
-                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString()}
+                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString(undefined, {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false})}
                     </small>
                 </div>
             `;
@@ -533,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${gettext("Pixel-Level Interpretability shows which individual pixels had the most influence on the model's prediction for")} ${viz.target_pathology}.
                     </p>
                     <small class="text-muted">
-                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString()}
+                        ${gettext("Generated on")}: ${new Date(viz.created_at).toLocaleString(undefined, {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false})}
                         ${viz.threshold ? ` | ${gettext("Threshold")}: ${viz.threshold}` : ''}
                     </small>
                 </div>

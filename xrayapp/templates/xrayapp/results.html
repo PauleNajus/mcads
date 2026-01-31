@@ -295,11 +295,11 @@
                 <div class="row">
                     <div class="col-md-6">
                         {# Show the same center-cropped square view the model sees (matches XRayCenterCrop). #}
-                        <img src="{{ image_url }}" alt="Original X-ray" class="img-fluid visualization-image model-crop">
+                        <img src="{{ image_url }}" alt="Original X-ray" class="img-fluid visualization-image">
                         <p class="mt-2 text-center">{% trans "Original X-ray" %}</p>
                     </div>
                     <div class="col-md-6">
-                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="GRAD-CAM Overlay" class="img-fluid visualization-image model-crop">
+                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="GRAD-CAM Overlay" class="img-fluid visualization-image">
                         <p class="mt-2 text-center">{% trans "GRAD-CAM Overlay" %}</p>
                     </div>
                 </div>

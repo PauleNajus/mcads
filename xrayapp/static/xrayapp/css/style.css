@@ -1383,19 +1383,6 @@ button,
   transition: transform var(--transition-normal);
 }
 
-/* Model-space preview for interpretability.
-   TorchXRayVision uses a centered square crop (`XRayCenterCrop`) before resizing.
-   Displaying interpretability images with the same crop avoids user confusion when
-   the uploaded X-ray is not square. */
-.visualization-image.model-crop {
-  /* Keep previews from becoming huge on wide screens. */
-  max-width: 600px;
-  /* Ensure a true square crop (matches `min(H, W)` center crop). */
-  max-height: none;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  object-position: center;
-}
 
 .visualization-image:hover {
   transform: scale(1.02);
