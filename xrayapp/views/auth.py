@@ -51,10 +51,26 @@ def account_settings(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST' and 'update_settings' in request.POST:
         settings_form = UserProfileForm(request.POST, instance=profile)
         if settings_form.is_valid():
-            settings_form.save()
+            user_profile = settings_form.save()
+            
+            # Update active language if it changed
+            new_language = user_profile.preferred_language
+            if new_language:
+                translation.activate(new_language)
+                request.session['django_language'] = new_language
+            
             messages.success(request, _('Your preferences have been updated successfully.'))
             # Redirect to refresh the page and apply settings immediately
-            return redirect(f"{reverse('account_settings')}?tab=settings")
+            response = redirect(f"{reverse('account_settings')}?tab=settings")
+            
+            if new_language:
+                response.set_cookie(
+                    settings.LANGUAGE_COOKIE_NAME,
+                    new_language,
+                    max_age=settings.LANGUAGE_COOKIE_AGE,
+                )
+            
+            return response
         else:
             messages.error(request, _('Please correct the errors in your preferences.'))
             active_tab = 'settings'

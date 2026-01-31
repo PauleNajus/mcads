@@ -20,22 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
   
-  // Function to get current theme (same logic as inline script)
+  // Function to get current theme
   const getCurrentTheme = () => {
-    // Check user preferences first (if available)
-    const userTheme = window.userPreferences?.theme;
-    if (userTheme && userTheme !== 'auto') {
-      return userTheme;
-    }
-    
-    // Fall back to localStorage
-    const storedTheme = localStorage.getItem('theme');
-    if (storedTheme && storedTheme !== 'auto') {
-      return storedTheme;
-    }
-    
-    // Use system preference for 'auto' or if no preference is set
-    return prefersDarkScheme.matches ? 'dark' : 'light';
+    return document.documentElement.getAttribute('data-bs-theme') || 
+           (prefersDarkScheme.matches ? 'dark' : 'light');
   };
   
   // Function to update the icon
