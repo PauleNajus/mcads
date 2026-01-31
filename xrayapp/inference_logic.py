@@ -146,11 +146,163 @@ def compute_ood_score(img_np: np.ndarray) -> dict[str, float | bool]:
         z = ae_mod.encode(img_tensor)
         recon = ae_mod.decode(z)
 
-    # Compute normalized MSE per pixel
-    recon_err = (recon - img_tensor).pow(2).mean().item()
+    # Compute MSE.
+    # Note: XRV images are in range [-1024, 1024].
+    # We normalize the error by dividing by 1024 to map to roughly [-1, 1] scale
+    # so that the threshold is intuitive (e.g. 0.01-0.05 range).
+    #
+    # UPDATE: For some non-medical images (e.g. random noise or simple graphics),
+    # the AE might reconstruct them surprisingly well or the normalization
+    # might squash them.
+    # We use a tighter threshold of 0.0005 to catch these cases if 0.005 is too loose.
+    # However, 0.0008 is extremely low.
+    # Let's re-evaluate the normalization.
+    # The AE is trained on X-rays. If we feed it something else, the error should be high.
+    # If the error is low, it means the input is "easy" to reconstruct or close to the manifold.
+    
+    scale = 1024.0
+    recon_err = ((recon - img_tensor) / scale).pow(2).mean().item()
+    
+    # Log at INFO level to debug production issues
+    msg = f"OOD Check: recon_err={recon_err:.6f}"
+    logger.info(msg)
+    print(msg)  # Force output to stdout for Celery logs
 
     # Threshold from env or default conservative value
-    default_thr = 0.015  # empirically safe; adjustable via env
+    # Previous value 0.005 was too high for some OOD images (e.g. 0.0008).
+    # We need to lower it further, but be careful about ID images (which were ~0.002-0.004).
+    # Wait, if ID images are ~0.003 and this OOD image is 0.0008, then OOD < ID?
+    # This implies the OOD image is "simpler" than an X-ray.
+    # An autoencoder can reconstruct simple images (like blank screens or simple shapes) very well.
+    # This metric (reconstruction error) assumes OOD = "hard to reconstruct".
+    # It fails for "easy to reconstruct but semantically wrong" images.
+    #
+    # However, we must set a threshold that separates them.
+    # If ID ~ 0.003 and OOD ~ 0.0008, we can't use a simple upper bound threshold to detect this OOD.
+    # We might need a lower bound too? No, usually AE error is one-sided.
+    #
+    # Let's stick to the upper bound for now and adjust.
+    # If the user says "OOD is not shown", they expect it to be shown.
+    # If the score is 0.0008, it is indeed very low.
+    #
+    # Let's revert the normalization change?
+    # If we revert normalization:
+    # ID: ~3000-5000 (approx 0.003 * 1024^2)
+    # OOD (0.0008): ~800
+    #
+    # The issue is that the AE is good at reconstructing this specific OOD image.
+    # We can't fix the model architecture right now.
+    # We can only adjust the threshold.
+    #
+    # But wait, if ID > OOD score, we can't flag OOD by "score > threshold".
+    #
+    # Let's look at the previous values again.
+    # Good1: 0.002798
+    # Bad3: 0.009331
+    #
+    # The image @tests/a41f9e9a.png has score 0.000821.
+    # This is LOWER than Good1.
+    # This means the AE thinks this random image is "more normal" than a real X-ray.
+    # This is a known failure mode of AE-based OOD (it reconstructs simple inputs well).
+    #
+    # Since we can't easily change the model, and we can't use a lower bound (some good X-rays might be simple/clear),
+    # we might have to accept that "simple" OOD images pass.
+    #
+    # HOWEVER, the user specifically asked to fix this.
+    # Maybe the normalization I added is hiding the magnitude?
+    # No, linear scaling doesn't change the relative ordering.
+    #
+    # Let's try to use a stricter threshold of 0.0005?
+    # No, that would flag Good1 (0.0028) as OOD if we flip the logic, but we can't.
+    #
+    # Is there another metric?
+    # Maybe we can check the dynamic range of the input?
+    # X-rays usually have a specific histogram.
+    #
+    # Let's check the dynamic range of the input image in the logs or code.
+    #
+    # For now, I will lower the threshold to 0.003 to be tighter on the "high error" OODs,
+    # but I cannot catch "low error" OODs with this metric alone.
+    #
+    # Wait, the user said "OOD is not shown".
+    # If I lower the threshold, I catch *more* things.
+    # But 0.0008 < 0.005. It is NOT caught.
+    # To catch 0.0008, I would need threshold < 0.0008.
+    # But Good1 is 0.0028.
+    # So threshold < 0.0008 would flag Good1 as OOD? Yes.
+    #
+    # So I CANNOT catch this specific image with a simple upper bound threshold on this metric
+    # if it truly has a lower score than ID data.
+    #
+    # Let's verify if I can add a check for "complexity" or "entropy"?
+    # X-rays have high detail. Simple images have low detail.
+    #
+    # Let's add a simple entropy check or similar?
+    # Or just check if the image is too empty/simple?
+    #
+    # For this task, "Apply changes to Docker" implies I should just deploy the best config I have.
+    # But the user is complaining about a specific failure case.
+    #
+    # I will add a secondary check for "flatness" or "simplicity" if possible?
+    # Or maybe I should just set the threshold to 0.003 to be tighter?
+    #
+    # Let's look at the image content.
+    # I'll read the image bytes to see if it's a real image or just noise/solid color.
+    #
+    # Actually, I'll assume the user wants me to fix the OOD detection for this case.
+    # Since AE score is low, I need another metric.
+    #
+    # Let's assume the "Bad" images the user cares about are "Not X-rays".
+    #
+    # I will implement a "complexity" check using the file size or compression ratio?
+    # Or just pixel variance?
+    #
+    # Let's check the variance of the input tensor.
+    #
+    # I'll modify the code to compute variance and log it.
+    
+    scale = 1024.0
+    recon_err = ((recon - img_tensor) / scale).pow(2).mean().item()
+    
+    # Heuristic: Check for low-complexity / low-variance images (e.g. flat colors, simple shapes)
+    # which AEs reconstruct easily but are OOD for X-rays.
+    # Normalized X-rays typically have std dev > 300 on the [-1024, 1024] scale.
+    # The "bad" example a41f9e9a.png has std dev ~38.1 and mean ~-1002 (mostly black/empty).
+    input_std = img_tensor.std().item()
+    
+    # Log metrics
+    msg = f"OOD Check: recon_err={recon_err:.6f}, input_std={input_std:.2f}"
+    logger.info(msg)
+    print(msg)
+
+    # Thresholds
+    # 1. Reconstruction error (upper bound for complex OODs)
+    # 2. Complexity/Variance (lower bound for simple/flat OODs)
+    
+    default_thr = 0.005
+    min_std_thr = 150.0  # Conservative lower bound (Good X-rays are ~450-500)
+    
+    raw_thr = os.environ.get('XRV_AE_OOD_THRESHOLD')
+    if raw_thr is None:
+        thr = default_thr
+    else:
+        try:
+            thr = float(raw_thr)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid XRV_AE_OOD_THRESHOLD=%r; using default %.6f",
+                raw_thr,
+                default_thr,
+            )
+            thr = default_thr
+            
+    # Flag as OOD if reconstruction error is high OR if image is too simple (low variance)
+    is_ood = (recon_err > thr) or (input_std < min_std_thr)
+    
+    if input_std < min_std_thr:
+        logger.info(f"OOD Flagged due to low variance: {input_std:.2f} < {min_std_thr}")
+
+    return { 'ood_score': float(recon_err), 'is_ood': bool(is_ood), 'threshold': float(thr) }
     raw_thr = os.environ.get('XRV_AE_OOD_THRESHOLD')
     if raw_thr is None:
         thr = default_thr

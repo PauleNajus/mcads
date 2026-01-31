@@ -40,7 +40,7 @@ x-mcads-app: &mcads_app
     XRV_RESNET_WEIGHTS: ${XRV_RESNET_WEIGHTS:-resnet50-res512-all}
     XRV_AE_WEIGHTS: ${XRV_AE_WEIGHTS:-101-elastic}
     XRV_AE_INPUT_SIZE: ${XRV_AE_INPUT_SIZE:-224}
-    XRV_AE_OOD_THRESHOLD: ${XRV_AE_OOD_THRESHOLD:-0.015}
+    XRV_AE_OOD_THRESHOLD: ${XRV_AE_OOD_THRESHOLD:-0.005}
     XRV_CALIBRATION_FILE: /app/config/calibration.json
   volumes: &mcads_volumes
     - mcads_media:/app/media
