@@ -7,6 +7,7 @@ urlpatterns = [
     path('health/', views.health, name='health'),
     path('', views.home, name='home'),
     path('xray/<int:pk>/', views.xray_results, name='xray_results'),
+    path('xray/<int:pk>/preview.png', views.dicom_preview, name='dicom_preview'),
     path('progress/<int:pk>/', views.check_progress, name='check_progress'),
     path('interpretability/<int:pk>/generate/', views.generate_interpretability, name='generate_interpretability'),
     path('segmentation/<int:pk>/generate/', views.generate_segmentation, name='generate_segmentation'),

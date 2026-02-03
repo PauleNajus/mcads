@@ -15,6 +15,7 @@ from .xray import (
     home,
     xray_results,
     check_progress,
+    dicom_preview,
 )
 from .history import (
     prediction_history,

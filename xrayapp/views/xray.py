@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -31,6 +32,8 @@ from .utils import (
     _serialize_visualization,
     process_image_async,
 )
+
+from xrayapp.image_processing import convert_dicom_to_png
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +256,11 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
         Path(xray_instance.image.name).suffix.lower() in {".dcm", ".dicom"}
         or str(xray_instance.image_format or "").upper() == "DICOM"
     )
+    image_preview_url = (
+        reverse("dicom_preview", kwargs={"pk": xray_instance.pk})
+        if image_is_dicom
+        else image_url
+    )
     
     # Ensure severity level is calculated and stored
     if xray_instance.severity_level is None:
@@ -292,6 +300,7 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
         'xray': xray_instance,
         'image_url': image_url,
         'image_is_dicom': image_is_dicom,
+        'image_preview_url': image_preview_url,
         'predictions': predictions,
         'patient_info': patient_info,
         'image_metadata': image_metadata,
@@ -317,6 +326,78 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
     }
     
     return render(request, 'xrayapp/results.html', context)
+
+
+@login_required
+def dicom_preview(request: HttpRequest, pk: int) -> HttpResponse:
+    """Render a DICOM X-ray into a browser-viewable PNG (cached on disk).
+
+    Important:
+    - This is for *display only*. The inference pipeline still analyzes the
+      original DICOM directly (no conversion required for analysis).
+    - We cache a downscaled PNG under MEDIA_ROOT to avoid re-decoding DICOM on
+      every page load.
+    """
+    user_hospital = _get_user_hospital(request.user)
+    if user_hospital is None:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    # Hospital-scoped access (matches `xray_results`).
+    xray = XRayImage.objects.for_hospital(user_hospital).get(pk=pk)
+
+    # Source DICOM path.
+    dicom_path = Path(settings.MEDIA_ROOT) / xray.image.name
+    if not dicom_path.exists():
+        return JsonResponse({"error": "File not found"}, status=404)
+
+    # Cache location (persisted on the same media volume).
+    cache_dir = Path(settings.MEDIA_ROOT) / "previews" / "dicom"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    preview_path = cache_dir / f"xray_{xray.pk}.png"
+
+    try:
+        dicom_mtime = dicom_path.stat().st_mtime
+    except OSError:
+        dicom_mtime = 0.0
+
+    # Reuse cached preview if it's newer than the source.
+    if preview_path.exists():
+        try:
+            if preview_path.stat().st_mtime >= dicom_mtime:
+                from django.http import FileResponse
+                return FileResponse(open(preview_path, "rb"), content_type="image/png")
+        except OSError:
+            pass
+
+    # Generate a fresh preview (downscale to keep response fast).
+    try:
+        with open(dicom_path, "rb") as f:
+            png_file = convert_dicom_to_png(f, max_size=1024)
+            png_bytes = png_file.read()
+    except Exception as exc:
+        logger.exception("Failed to render DICOM preview for xray=%s: %s", xray.pk, exc)
+        return JsonResponse({"error": "Unable to render DICOM preview"}, status=500)
+
+    # Atomic-ish write: write temp then replace.
+    tmp_path = preview_path.with_suffix(".tmp")
+    try:
+        with open(tmp_path, "wb") as out:
+            out.write(png_bytes)
+        try:
+            import os
+            os.replace(tmp_path, preview_path)
+        except Exception:
+            # Fall back to non-atomic replace if needed.
+            preview_path.write_bytes(png_bytes)
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+    except Exception:
+        # If caching fails, still return the freshly rendered bytes.
+        pass
+
+    return HttpResponse(png_bytes, content_type="image/png")
 
 
 def check_progress(request: HttpRequest, pk: int) -> JsonResponse:

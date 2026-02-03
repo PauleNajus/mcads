@@ -78,7 +78,7 @@ def get_image_mime_type(header: bytes) -> str | None:
         return None
 
 
-def convert_dicom_to_png(uploaded: UploadedFile) -> ContentFile:
+def convert_dicom_to_png(uploaded: UploadedFile, *, max_size: int | None = None) -> ContentFile:
     """Convert a DICOM upload into a PNG `ContentFile`.
 
     Why convert?
@@ -86,6 +86,12 @@ def convert_dicom_to_png(uploaded: UploadedFile) -> ContentFile:
     - Templates use `<img src="{{ image_url }}">`, which won't render a `.dcm`.
 
     We keep the original name stem, but always return a `.png` file.
+
+    Args:
+        uploaded: File-like object positioned at any offset (will be seeked to 0).
+        max_size: Optional maximum width/height for the output PNG. If set,
+            the image is downscaled (keeping aspect ratio) for faster browser
+            previews and smaller responses.
     """
     if not DICOM_AVAILABLE:
         raise ValidationError(_("DICOM support is not available on this server."))
@@ -158,6 +164,18 @@ def convert_dicom_to_png(uploaded: UploadedFile) -> ContentFile:
     arr8 = (arr * 255.0).clip(0, 255).astype("uint8")
 
     img = Image.fromarray(arr8, mode="L")
+    if max_size is not None:
+        try:
+            m = int(max_size)
+        except (TypeError, ValueError):
+            m = 0
+        if m > 0 and max(img.size) > m:
+            # Downscale for UI previews (keep aspect ratio).
+            try:
+                resample = Image.Resampling.LANCZOS  # Pillow >= 9
+            except Exception:  # pragma: no cover
+                resample = getattr(Image, "LANCZOS", Image.BILINEAR)
+            img.thumbnail((m, m), resample=resample)
     out = BytesIO()
     # `optimize=True` can add seconds for large PNGs; prefer fast compression.
     img.save(out, format="PNG", compress_level=1)
