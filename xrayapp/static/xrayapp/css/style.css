@@ -1552,6 +1552,20 @@ button,
     margin: 0 !important;
     margin-bottom: var(--spacing-md) !important;
   }
+
+  /* Results page visualization "Image Controls" should stay compact on mobile.
+     The generic `.text-center .btn` rule above is meant for CTAs and would otherwise
+     make every control button full-width (wasting vertical space). */
+  .visualization-controls {
+    /* If a parent container uses flex + centered items, keep this section full width. */
+    align-self: stretch;
+  }
+
+  .visualization-controls .btn {
+    width: auto !important;
+    max-width: none !important;
+    margin-bottom: 0 !important;
+  }
   
   /* Account settings mobile spacing - ensure proper spacing between Save profile button and Account information */
   button[name="update_profile"] {

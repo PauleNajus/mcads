@@ -11,6 +11,11 @@ __pycache__
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Local caches that can become huge (avoid sending them as build context)
+.cache/
+.matplotlib/
+.torchxrayvision/
+
 # Virtual environment
 venv/
 env/
@@ -41,6 +46,7 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 

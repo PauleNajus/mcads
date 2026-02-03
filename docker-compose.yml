@@ -1,6 +1,7 @@
 x-mcads-app: &mcads_app
-  build:
-    context: .
+  # Single shared app image for web/worker/beat.
+  # This avoids building the exact same Docker context multiple times (much faster deploys).
+  image: ${MCADS_APP_IMAGE:-mcads-app:local}
   init: true
   restart: unless-stopped
   depends_on:
@@ -81,6 +82,9 @@ services:
 
   web:
     <<: *mcads_app
+    # Build the shared app image once (other app services reuse it via `image:`).
+    build:
+      context: .
     environment:
       <<: *mcads_env
       MCADS_ROLE: web

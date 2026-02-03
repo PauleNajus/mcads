@@ -67,11 +67,14 @@ COPY . /app
 # This keeps runtime images consistent even if `.mo` files aren't committed.
 RUN /opt/venv/bin/python /app/manage.py compilemessages
 
-# Runtime directories must be writable by the app user.
+# Create the unprivileged runtime user.
+# The entrypoint starts as root (to fix volume permissions) then re-execs as `mcads`.
+#
+# Important for deploy speed:
+# Avoid recursive `chown -R` over the whole venv during image rebuilds; it is expensive
+# and would re-run whenever application code changes (since it comes after `COPY .`).
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin mcads && \
-    mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib && \
-    chmod +x /app/docker-entrypoint.sh && \
-    chown -R mcads:mcads /app /opt/uv-python /opt/venv
+    chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 

@@ -347,6 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
             section.id = `visualization-${viz.id}`;  // Use proper ID for Image Controls
             section.className = 'card mb-4';
             section.setAttribute('data-dynamic-container', containerId);  // Keep track of dynamic ID
+            // Responsive Image Controls:
+            // - xs/sm: wrap buttons so they fit on mobile
+            // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
                 <div class="card-header bg-success text-white">
                     <div class="d-flex justify-content-between align-items-center">
@@ -374,49 +377,49 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <!-- Visualization Controls -->
-                    <div class="visualization-controls bg-body border rounded-3 p-3 mt-3 mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="visualization-controls bg-body border rounded-3 p-2 p-md-3 mt-2 mt-md-3 mb-2 mb-md-3">
+                        <div class="d-flex flex-wrap align-items-center gap-1 gap-md-2 mb-1 mb-md-2">
                             <small class="text-muted">${gettext("Image Controls")}</small>
-                            <button class="btn btn-sm btn-outline-secondary reset-controls-btn d-inline-flex align-items-center gap-1" data-viz-id="${viz.id}">
+                            <button class="btn btn-sm btn-outline-secondary reset-controls-btn d-inline-flex align-items-center gap-1 ms-auto" data-viz-id="${viz.id}">
                                 <i class="fas fa-undo"></i> ${gettext("Reset")}
                             </button>
                         </div>
-                        <div class="d-flex flex-nowrap gap-2 overflow-auto pb-1">
+                        <div class="d-flex flex-wrap flex-md-nowrap gap-1 gap-md-2 overflow-auto pb-0 pb-md-1">
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="invert" data-viz-id="${viz.id}" title="${gettext('Invert Colors')}">
                                 <i class="fas fa-adjust"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Invert")}</span>
+                                <span class="btn-label">${gettext("Invert")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="flip-h" data-viz-id="${viz.id}" title="${gettext('Flip Horizontal')}">
                                 <i class="fas fa-arrows-alt-h"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Flip H")}</span>
+                                <span class="btn-label">${gettext("Flip H")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="flip-v" data-viz-id="${viz.id}" title="${gettext('Flip Vertical')}">
                                 <i class="fas fa-arrows-alt-v"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Flip V")}</span>
+                                <span class="btn-label">${gettext("Flip V")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="rotate" data-viz-id="${viz.id}" title="${gettext('Rotate 90°')}">
                                 <i class="fas fa-redo"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Rotate")}</span>
+                                <span class="btn-label">${gettext("Rotate")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="sharpen" data-viz-id="${viz.id}" title="${gettext('Sharpen')}">
                                 <i class="fas fa-search-plus"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Sharpen")}</span>
+                                <span class="btn-label">${gettext("Sharpen")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="brightness-up" data-viz-id="${viz.id}" title="${gettext('Increase Brightness')}">
                                 <i class="fas fa-sun"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Bright +")}</span>
+                                <span class="btn-label">${gettext("Bright +")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="brightness-down" data-viz-id="${viz.id}" title="${gettext('Decrease Brightness')}">
                                 <i class="fas fa-moon"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Bright -")}</span>
+                                <span class="btn-label">${gettext("Bright -")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="contrast-up" data-viz-id="${viz.id}" title="${gettext('Increase Contrast')}">
                                 <i class="fas fa-plus-circle"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Contrast +")}</span>
+                                <span class="btn-label">${gettext("Contrast +")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="contrast-down" data-viz-id="${viz.id}" title="${gettext('Decrease Contrast')}">
                                 <i class="fas fa-minus-circle"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Contrast -")}</span>
+                                <span class="btn-label">${gettext("Contrast -")}</span>
                             </button>
                         </div>
                     </div>
@@ -466,6 +469,9 @@ document.addEventListener('DOMContentLoaded', () => {
             section.id = `visualization-${viz.id}`;  // Use proper ID for Image Controls
             section.className = 'card mb-4';
             section.setAttribute('data-dynamic-container', containerId);  // Keep track of dynamic ID
+            // Responsive Image Controls:
+            // - xs/sm: wrap buttons so they fit on mobile
+            // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
                 <div class="card-header bg-info text-white">
                     <div class="d-flex justify-content-between align-items-center">
@@ -493,49 +499,49 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <!-- Visualization Controls -->
-                    <div class="visualization-controls bg-body border rounded-3 p-3 mt-3 mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="visualization-controls bg-body border rounded-3 p-2 p-md-3 mt-2 mt-md-3 mb-2 mb-md-3">
+                        <div class="d-flex flex-wrap align-items-center gap-1 gap-md-2 mb-1 mb-md-2">
                             <small class="text-muted">${gettext("Image Controls")}</small>
-                            <button class="btn btn-sm btn-outline-secondary reset-controls-btn d-inline-flex align-items-center gap-1" data-viz-id="${viz.id}">
+                            <button class="btn btn-sm btn-outline-secondary reset-controls-btn d-inline-flex align-items-center gap-1 ms-auto" data-viz-id="${viz.id}">
                                 <i class="fas fa-undo"></i> ${gettext("Reset")}
                             </button>
                         </div>
-                        <div class="d-flex flex-nowrap gap-2 overflow-auto pb-1">
+                        <div class="d-flex flex-wrap flex-md-nowrap gap-1 gap-md-2 overflow-auto pb-0 pb-md-1">
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="invert" data-viz-id="${viz.id}" title="${gettext('Invert Colors')}">
                                 <i class="fas fa-adjust"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Invert")}</span>
+                                <span class="btn-label">${gettext("Invert")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="flip-h" data-viz-id="${viz.id}" title="${gettext('Flip Horizontal')}">
                                 <i class="fas fa-arrows-alt-h"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Flip H")}</span>
+                                <span class="btn-label">${gettext("Flip H")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="flip-v" data-viz-id="${viz.id}" title="${gettext('Flip Vertical')}">
                                 <i class="fas fa-arrows-alt-v"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Flip V")}</span>
+                                <span class="btn-label">${gettext("Flip V")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="rotate" data-viz-id="${viz.id}" title="${gettext('Rotate 90°')}">
                                 <i class="fas fa-redo"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Rotate")}</span>
+                                <span class="btn-label">${gettext("Rotate")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="sharpen" data-viz-id="${viz.id}" title="${gettext('Sharpen')}">
                                 <i class="fas fa-search-plus"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Sharpen")}</span>
+                                <span class="btn-label">${gettext("Sharpen")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="brightness-up" data-viz-id="${viz.id}" title="${gettext('Increase Brightness')}">
                                 <i class="fas fa-sun"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Bright +")}</span>
+                                <span class="btn-label">${gettext("Bright +")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="brightness-down" data-viz-id="${viz.id}" title="${gettext('Decrease Brightness')}">
                                 <i class="fas fa-moon"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Bright -")}</span>
+                                <span class="btn-label">${gettext("Bright -")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="contrast-up" data-viz-id="${viz.id}" title="${gettext('Increase Contrast')}">
                                 <i class="fas fa-plus-circle"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Contrast +")}</span>
+                                <span class="btn-label">${gettext("Contrast +")}</span>
                             </button>
                             <button class="btn btn-sm btn-outline-primary control-btn d-inline-flex align-items-center gap-1 flex-shrink-0" data-action="contrast-down" data-viz-id="${viz.id}" title="${gettext('Decrease Contrast')}">
                                 <i class="fas fa-minus-circle"></i>
-                                <span class="btn-label d-none d-md-inline">${gettext("Contrast -")}</span>
+                                <span class="btn-label">${gettext("Contrast -")}</span>
                             </button>
                         </div>
                     </div>

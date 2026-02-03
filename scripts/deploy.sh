@@ -23,6 +23,12 @@ fi
 
 echo "✅ Docker and Docker Compose are available (${COMPOSE[*]})"
 
+# Speed + correctness:
+# - BuildKit is required for our Dockerfile cache mounts (`RUN --mount=type=cache,...`).
+# - Enabling these env vars also makes `docker-compose` (legacy) use the Docker CLI builder.
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
+export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-1}"
+
 # Create necessary directories
 echo "Creating necessary directories..."
 mkdir -p logs media staticfiles data_exports backups
@@ -46,24 +52,50 @@ else
     echo "NOTE: If DEBUG=0, Django redirects HTTP -> HTTPS; provide TLS certs or set DEBUG=1 for HTTP-only."
 fi
 
-# Build and start services
-echo "Building Docker images..."
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" build
+# Determine the health endpoint (used for fast readiness waiting below).
+if [[ "${TLS_ENABLED}" == "1" ]]; then
+    # Cert is usually for the real domain, not "localhost", so skip verification here.
+    HEALTH_URL="https://localhost/health/"
+    CURL_FLAGS=(-fsSk)
+else
+    HEALTH_URL="http://localhost/health/"
+    CURL_FLAGS=(-fsS)
+fi
 
-echo "Starting services..."
+# Build (if needed) and start services.
 # `--build` ensures the running containers pick up fresh code changes.
 # `--remove-orphans` avoids stale services after compose file edits.
+echo "Building (if needed) and starting services..."
 "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d --build --remove-orphans
 
 # Nginx reads config only on start/reload. Since our config is mounted from the host
 # (and Compose doesn't detect content-only changes), explicitly restart Nginx so
 # updates like `client_max_body_size` take effect.
-echo "Restarting nginx to apply config..."
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" restart nginx
+#
+# Prefer a zero-downtime reload; fall back to a restart if reload isn't supported.
+nginx_cid="$("${COMPOSE[@]}" "${COMPOSE_FILES[@]}" ps -q nginx 2>/dev/null | head -n1 || true)"
+if [[ -n "${nginx_cid}" ]]; then
+    echo "Reloading nginx to apply config..."
+    "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T nginx nginx -s reload \
+      || "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" restart nginx
+else
+    echo "Nginx container not created yet; skipping early reload."
+fi
 
-# Wait for services to be ready
-echo "Waiting for services to initialize..."
-sleep 30
+# Wait for services to be ready (faster than a fixed sleep; returns as soon as ready).
+echo "Waiting for application to become ready..."
+HEALTH_TIMEOUT_SECONDS="${MCADS_DEPLOY_HEALTH_TIMEOUT_SECONDS:-120}"
+HEALTH_INTERVAL_SECONDS="${MCADS_DEPLOY_HEALTH_INTERVAL_SECONDS:-2}"
+health_deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+until curl "${CURL_FLAGS[@]}" "${HEALTH_URL}" > /dev/null 2>&1; do
+    if (( SECONDS >= health_deadline )); then
+        echo "⚠️  Application health check timed out after ${HEALTH_TIMEOUT_SECONDS}s - checking logs..."
+        "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" logs --tail=50 web || true
+        "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" logs --tail=50 nginx || true
+        break
+    fi
+    sleep "${HEALTH_INTERVAL_SECONDS}"
+done
 
 # Check service health
 echo "Checking service health..."
@@ -79,15 +111,6 @@ done
 
 # Test application response
 echo "Testing application..."
-if [[ "${TLS_ENABLED}" == "1" ]]; then
-    # Cert is usually for the real domain, not "localhost", so skip verification here.
-    HEALTH_URL="https://localhost/health/"
-    CURL_FLAGS=(-fsSk)
-else
-    HEALTH_URL="http://localhost/health/"
-    CURL_FLAGS=(-fsS)
-fi
-
 if curl "${CURL_FLAGS[@]}" "${HEALTH_URL}" > /dev/null 2>&1; then
     echo "✅ Application is responding"
 else

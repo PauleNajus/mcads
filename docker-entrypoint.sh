@@ -18,7 +18,28 @@ mkdir -p /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /a
 # If we start as root (recommended for correct volume permissions), fix ownership
 # then re-exec as the unprivileged app user.
 if [[ "$(id -u)" == "0" && "${MCADS_ENTRYPOINT_REEXEC:-0}" != "1" ]]; then
-  chown -R mcads:mcads /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib
+  # Performance note:
+  # Recursive chown on large named volumes (e.g. model caches) can take a long time and
+  # would previously run on *every* container start. We only chown when the directory
+  # owner isn't already the target user, which keeps repeat deploys fast.
+  #
+  # If you ever need to force a full recursive chown (after manual root writes), set:
+  #   MCADS_FORCE_CHOWN=1
+  target_uid="$(id -u mcads)"
+  target_gid="$(id -g mcads)"
+
+  if [[ "${MCADS_FORCE_CHOWN:-0}" == "1" ]]; then
+    chown -R "${target_uid}:${target_gid}" /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib
+  else
+    for d in /app/logs /app/media /app/staticfiles /app/data_exports /app/backups /app/.torchxrayvision /app/.matplotlib; do
+      # Only look at the top-level dir ownership; contents are created by `mcads` after re-exec.
+      cur_owner="$(stat -c '%u:%g' "${d}" 2>/dev/null || true)"
+      if [[ "${cur_owner}" != "${target_uid}:${target_gid}" ]]; then
+        echo "Fixing ownership of ${d} (was ${cur_owner:-unknown})..."
+        chown -R "${target_uid}:${target_gid}" "${d}"
+      fi
+    done
+  fi
   export MCADS_ENTRYPOINT_REEXEC=1
   exec gosu mcads "$0" "$@"
 fi
@@ -90,7 +111,15 @@ if [[ "${role}" == "web" ]]; then
 
   if [[ "${MCADS_COLLECTSTATIC:-1}" == "1" ]]; then
     echo "Collecting static files..."
-    python manage.py collectstatic --noinput --clear
+    # `--clear` deletes the entire STATIC_ROOT first and can be slow on repeat deploys.
+    # Leave old files by default (safe with hashed/static manifests), and allow forcing
+    # a full clean collection when needed:
+    #   MCADS_COLLECTSTATIC_CLEAR=1
+    collectstatic_args=(--noinput)
+    if [[ "${MCADS_COLLECTSTATIC_CLEAR:-0}" == "1" ]]; then
+      collectstatic_args+=(--clear)
+    fi
+    python manage.py collectstatic "${collectstatic_args[@]}"
   fi
 fi
 
