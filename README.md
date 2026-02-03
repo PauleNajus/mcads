@@ -28,7 +28,7 @@ Example of a GRAD-CAM heatmap:
 
 ## Technology Stack
 
-- **Backend**: Django 5.2, Python 3.13.11
+- **Backend**: Django 5.2 LTS, Python 3.13.11
 - **Machine Learning**: PyTorch 2.7.0, TorchXRayVision
 - **Database**: PostgreSQL (recommended: 15+)
 - **Frontend**: Django-Bootstrap5 25.1, HTML5, CSS3, JavaScript
@@ -208,7 +208,7 @@ Test images are available in the `tests/` directory:
 
 ### Production Considerations
 
-1. **Database**: PostgreSQL (required)
+1. **Database**: PostgreSQL
 2. **Static Files**: Use a CDN or reverse proxy for static file serving
 3. **Security**: Update `SECRET_KEY` and disable `DEBUG`
 4. **WSGI Server**: Use Gunicorn or uWSGI
