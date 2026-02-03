@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http.response import HttpResponseRedirectBase
 from django.template.loader import render_to_string
-import hashlib
+from django.utils.translation import gettext_lazy as _
 logger = logging.getLogger(__name__)
 
 
@@ -177,3 +180,74 @@ class RoleBasedAccessMiddleware:
                 return permission
 
         return None
+
+
+class AjaxRedirectToJsonMiddleware:
+    """Return JSON instead of redirects for XHR/fetch requests.
+
+    Browsers follow redirects automatically for `fetch()`. If a view protected by
+    `@login_required` redirects to the login page, the frontend ends up with a
+    200 HTML response (login form) and JSON parsing fails with a confusing
+    "Response is not JSON".
+
+    This middleware converts redirects for requests that *expect JSON* into a
+    JSON payload with a non-2xx status so frontend code can handle it explicitly.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+        # LOGIN_URL can be a named URL ("login") or an absolute/relative path.
+        # Resolve it once to a concrete path for reliable comparisons.
+        from django.shortcuts import resolve_url
+
+        login_url = getattr(settings, "LOGIN_URL", None)
+        try:
+            resolved_login_url = resolve_url(login_url) if login_url else "/accounts/login/"
+        except Exception:
+            resolved_login_url = str(login_url or "/accounts/login/")
+        self._login_path_prefix = urlparse(str(resolved_login_url)).path or "/accounts/login/"
+
+    @staticmethod
+    def _wants_json(request: HttpRequest) -> bool:
+        """Heuristic: treat requests as AJAX when they expect JSON back."""
+        accept = request.headers.get("Accept", "")
+        return (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or "application/json" in accept
+            # Our frontend sets this header on form uploads; it helps in cases
+            # where proxies strip non-standard headers.
+            or bool(request.headers.get("X-CSRFToken"))
+        )
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+
+        if not self._wants_json(request):
+            return response
+
+        # Only convert actual redirects (3xx with a Location header).
+        if not isinstance(response, HttpResponseRedirectBase):
+            return response
+
+        location = response.get("Location")
+        if not location:
+            return response
+
+        # Normalize paths for comparison.
+        try:
+            location_path = urlparse(str(location)).path or ""
+        except Exception:
+            location_path = str(location)
+
+        if location_path.startswith(self._login_path_prefix):
+            return JsonResponse(
+                {"error": _("Authentication required"), "login_url": location},
+                status=401,
+            )
+
+        # Generic redirect for JSON callers (e.g., HTTPS enforcement).
+        return JsonResponse(
+            {"error": _("Unexpected redirect"), "redirect_url": location},
+            status=409,
+        )

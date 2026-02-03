@@ -64,6 +64,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Convert login/HTTPS redirects to JSON for fetch()/XHR callers.
+    # This avoids "Response is not JSON" when the browser follows a redirect and
+    # returns an HTML page to frontend code expecting JSON.
+    'xrayapp.middleware.AjaxRedirectToJsonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'csp.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

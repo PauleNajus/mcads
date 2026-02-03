@@ -344,7 +344,15 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           if (!data) {
-            throw new Error('Response is not JSON');
+            // `fetch()` follows redirects automatically. For auth/HTTPS redirects
+            // this means we may end up with a 200 HTML page instead of JSON.
+            // Send the user to the final URL instead of showing a confusing error.
+            if (response.redirected && response.url) {
+              const err = new Error('Redirected');
+              err.redirectUrl = response.url;
+              throw err;
+            }
+            throw new Error(gettext('Unexpected server response. Please refresh the page and try again.'));
           }
 
           return data;
@@ -371,6 +379,14 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
           console.error('Error submitting form:', error);
           console.error('Error details:', error.message, error.stack);
+
+          // If the backend indicates an auth/HTTPS redirect, follow it.
+          const redirectUrl = error?.redirectUrl || error?.data?.login_url || error?.data?.redirect_url;
+          if (redirectUrl) {
+            window.location.href = redirectUrl;
+            return;
+          }
+
           restoreFormUI();
           const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
           window.showModal(message, gettext('Error'), true);

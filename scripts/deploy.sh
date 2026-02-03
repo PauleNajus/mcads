@@ -102,10 +102,24 @@ echo "Checking service health..."
 
 services=("db" "redis" "web" "nginx")
 for service in "${services[@]}"; do
-    if "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" ps | grep -q "${service}.*Up"; then
-        echo "✅ $service is running"
+    # NOTE: Do not parse `docker compose ps` human output (it differs between
+    # docker-compose vs docker compose plugin and between versions). We instead
+    # resolve the service container id and inspect its real runtime state.
+    cid="$("${COMPOSE[@]}" "${COMPOSE_FILES[@]}" ps -q "${service}" 2>/dev/null | head -n1 || true)"
+    if [[ -z "${cid}" ]]; then
+        echo "❌ ${service} is not running"
+        continue
+    fi
+
+    status="$(docker inspect -f '{{.State.Status}}' "${cid}" 2>/dev/null || echo "unknown")"
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "${cid}" 2>/dev/null || true)"
+
+    if [[ "${status}" != "running" ]]; then
+        echo "❌ ${service} is not running (${status})"
+    elif [[ -n "${health}" && "${health}" != "healthy" ]]; then
+        echo "⚠️  ${service} is running but unhealthy (${health})"
     else
-        echo "❌ $service is not running"
+        echo "✅ ${service} is running"
     fi
 done
 

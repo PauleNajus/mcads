@@ -41,7 +41,11 @@ x-mcads-app: &mcads_app
     XRV_RESNET_WEIGHTS: ${XRV_RESNET_WEIGHTS:-resnet50-res512-all}
     XRV_AE_WEIGHTS: ${XRV_AE_WEIGHTS:-101-elastic}
     XRV_AE_INPUT_SIZE: ${XRV_AE_INPUT_SIZE:-224}
-    XRV_AE_OOD_THRESHOLD: ${XRV_AE_OOD_THRESHOLD:-0.005}
+    # OOD gating (warning only): tune to reduce false positives/negatives.
+    # - Reconstruction error: higher => fewer OOD warnings
+    # - Min std-dev: lower => fewer OOD warnings from "near-uniform" heuristic
+    XRV_AE_OOD_THRESHOLD: ${XRV_AE_OOD_THRESHOLD:-0.02}
+    XRV_AE_OOD_MIN_STD_THRESHOLD: ${XRV_AE_OOD_MIN_STD_THRESHOLD:-50.0}
     XRV_CALIBRATION_FILE: /app/config/calibration.json
   volumes: &mcads_volumes
     - mcads_media:/app/media
