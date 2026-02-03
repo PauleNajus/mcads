@@ -216,7 +216,12 @@ class XRayImage(models.Model):
     technologist_last_name = models.CharField(max_length=100, blank=True, db_index=True)
     
     # X-ray image and processing
-    image = models.ImageField(upload_to='xrays/', max_length=255)
+    #
+    # NOTE: We intentionally use FileField (not ImageField) so clinical uploads
+    # can be stored and processed directly as DICOM (.dcm) without converting to
+    # PNG/JPG. Browsers can't render DICOM in <img> tags; templates handle that
+    # by showing a download link for DICOM uploads.
+    image = models.FileField(upload_to='xrays/', max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
     processing_status = models.CharField(max_length=20, default='pending', db_index=True)
     progress = models.IntegerField(default=0)

@@ -19,9 +19,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     # PyTorch CPU backend fixes (also set in Django settings for safety)
-    MKLDNN_ENABLED=0 \
-    MKL_NUM_THREADS=1 \
-    OMP_NUM_THREADS=1
+    MKLDNN_ENABLED=0
 
 # OS runtime dependencies for this repo:
 # - libmagic1: python-magic

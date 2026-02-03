@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Form Progress Handling ---
 
   // Show the progress UI immediately on submit.
-  // This prevents a "dead" period for slow server-side work (e.g., DICOM -> PNG conversion).
+  // This prevents a "dead" period for slow server-side work (e.g., DICOM decode + model inference).
   const showProgressUI = () => {
     if (formWrapper) formWrapper.style.display = 'none';
     if (progressWrapper) progressWrapper.style.display = 'block';

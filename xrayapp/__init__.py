@@ -5,9 +5,13 @@ import logging
 # This must run before torch is imported anywhere in the app.
 # These environment variables must be set *before* importing torch to affect
 # the underlying CPU backends. Operators can override them externally if needed.
-os.environ.setdefault('MKLDNN_ENABLED', '0')
-os.environ.setdefault('MKL_NUM_THREADS', '1')
-os.environ.setdefault('OMP_NUM_THREADS', '1')
+_default_threads = os.environ.get("MCADS_CPU_THREADS")
+if not _default_threads:
+    _default_threads = str(max(1, min(os.cpu_count() or 1, 4)))
+
+os.environ.setdefault("MKLDNN_ENABLED", "0")
+os.environ.setdefault("MKL_NUM_THREADS", _default_threads)
+os.environ.setdefault("OMP_NUM_THREADS", _default_threads)
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
 
 logger = logging.getLogger(__name__)
@@ -31,20 +35,28 @@ try:
         if hasattr(torch.backends, 'mkldnn'):
             torch.backends.mkldnn.enabled = False  # type: ignore[assignment]
     
-    torch.set_num_threads(_env_int("OMP_NUM_THREADS", 1))
+    intra_threads = _env_int("OMP_NUM_THREADS", 1)
+    interop_threads = _env_int("TORCH_NUM_INTEROP_THREADS", 1)
+    torch.set_num_threads(intra_threads)
     try:
-        torch.set_num_interop_threads(_env_int("OMP_NUM_THREADS", 1))
+        # Inter-op threads should usually be small (1) to avoid oversubscription.
+        torch.set_num_interop_threads(interop_threads)
     except Exception:
         # Some builds disallow changing interop threads after initialization.
         pass
     
-    # Additional memory optimizations to prevent model inference hanging
-    if hasattr(torch.backends, 'openmp') and os.environ.get("MCADS_DISABLE_OPENMP", "1") == "1":
+    # Additional backend toggles (operators can override via env vars).
+    if hasattr(torch.backends, 'openmp') and os.environ.get("MCADS_DISABLE_OPENMP", "0") == "1":
         torch.backends.openmp.is_available = lambda: False  # type: ignore[assignment]
     if hasattr(torch.backends, 'cudnn') and not torch.cuda.is_available():
         torch.backends.cudnn.enabled = False
         
-    logger.info("PyTorch optimized for MCADS - fixes applied to prevent 75% processing hang")
+    logger.info(
+        "PyTorch configured for MCADS (intra_threads=%s, interop_threads=%s, mkldnn=%s)",
+        intra_threads,
+        interop_threads,
+        "enabled" if os.environ.get("MKLDNN_ENABLED", "0") != "0" else "disabled",
+    )
     
 except ImportError:
     # PyTorch not installed or not available

@@ -131,6 +131,12 @@ def compute_ood_score(img_np: np.ndarray) -> dict[str, float | bool]:
     - XRV_AE_OOD_MIN_STD_THRESHOLD: input std-dev lower bound (default 50.0).
       Set to 0 to disable the low-variance heuristic.
     """
+    # Operators can disable OOD gating entirely for speed (warning-only feature).
+    # This is useful on CPU-only deployments where latency matters more than the
+    # additional safety signal.
+    if os.environ.get("XRV_ENABLE_OOD", "1") == "0":
+        return {'ood_score': float('nan'), 'is_ood': False, 'threshold': float('inf')}
+
     try:
         ae, ae_resize = load_autoencoder()
     except Exception:
@@ -233,9 +239,9 @@ def process_image(
     # Extract and save image metadata
     if xray_instance:
         metadata = extract_image_metadata(image_path)
-        # If the upload was DICOM (converted to PNG for processing), keep the
-        # user-facing format as DICOM instead of overwriting with "PNG".
-        if not (xray_instance.image_format and str(xray_instance.image_format).upper() == "DICOM"):
+        # Prefer extracted metadata when available; keep any pre-set UI format
+        # (e.g. the upload form may set "DICOM") when extraction fails.
+        if str(metadata.format or "Unknown") != "Unknown":
             xray_instance.image_format = metadata.format
         xray_instance.image_size = metadata.size
         xray_instance.image_resolution = metadata.resolution

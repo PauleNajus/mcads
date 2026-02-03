@@ -181,6 +181,43 @@ def extract_image_metadata(image_path: str | Path) -> ImageMetadata:
     try:
         # Ensure image_path is a Path object for cross-platform compatibility
         img_path = Path(image_path)
+
+        # DICOM files are not readable by Pillow. Extract minimal metadata via pydicom
+        # without decoding pixel data (fast).
+        if img_path.suffix.lower() in {".dcm", ".dicom"}:
+            # Get file size from disk (works even if pydicom is unavailable).
+            file_size_bytes = img_path.stat().st_size
+            if file_size_bytes < 1024 * 1024:
+                size = f"{file_size_bytes / 1024:.1f} KB"
+            else:
+                size = f"{file_size_bytes / (1024 * 1024):.1f} MB"
+
+            resolution = "Unknown"
+            if DICOM_AVAILABLE:
+                try:
+                    ds = pydicom.dcmread(str(img_path), force=True, stop_before_pixels=True)
+                    rows = int(getattr(ds, "Rows", 0) or 0)
+                    cols = int(getattr(ds, "Columns", 0) or 0)
+                    if rows > 0 and cols > 0:
+                        resolution = f"{cols}x{rows}"
+                except Exception:
+                    # Keep resolution as Unknown on parse failures.
+                    pass
+
+            # Prefer filesystem timestamp for consistency across all file types.
+            stats = img_path.stat()
+            try:
+                date_created = datetime.fromtimestamp(stats.st_ctime)
+            except (OSError, ValueError):
+                date_created = datetime.fromtimestamp(stats.st_mtime)
+
+            return ImageMetadata(
+                name=img_path.name,
+                format="DICOM",
+                size=str(size),
+                resolution=str(resolution),
+                date_created=date_created,
+            )
         
         # Open the image with PIL
         with Image.open(img_path) as img:

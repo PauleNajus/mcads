@@ -99,7 +99,7 @@ def home(request: HttpRequest) -> HttpResponse:
             model_type = request.POST.get('model_type', 'densenet')
             xray_instance.model_used = model_type
 
-            # Preserve source format for DICOM uploads (stored as PNG for processing).
+            # Preserve source format for DICOM uploads (stored and analyzed as DICOM).
             source_format = getattr(form, "_mcads_source_format", None)
             if source_format:
                 xray_instance.image_format = str(source_format)
@@ -249,6 +249,10 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
     
     # Get image URL
     image_url = xray_instance.image.url
+    image_is_dicom = (
+        Path(xray_instance.image.name).suffix.lower() in {".dcm", ".dicom"}
+        or str(xray_instance.image_format or "").upper() == "DICOM"
+    )
     
     # Ensure severity level is calculated and stored
     if xray_instance.severity_level is None:
@@ -287,6 +291,7 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
     context = {
         'xray': xray_instance,
         'image_url': image_url,
+        'image_is_dicom': image_is_dicom,
         'predictions': predictions,
         'patient_info': patient_info,
         'image_metadata': image_metadata,

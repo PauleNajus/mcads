@@ -291,6 +291,22 @@ services:
           cpus: '1.0'
 ```
 
+### PyTorch CPU Thread Tuning (Recommended)
+On CPU-only VPS deployments, inference speed is usually limited by PyTorch
+threading defaults. For a **4-core** machine, the following settings are a good
+starting point:
+
+- **MCADS_CPU_THREADS=4**: PyTorch intra-op threads (use your CPU core count per worker)
+- **TORCH_NUM_INTEROP_THREADS=1**: keep inter-op threads low to avoid oversubscription
+
+These are already included as defaults in `docker-compose.yml`, but you can
+override them via a `.env` file:
+
+```bash
+MCADS_CPU_THREADS=4
+TORCH_NUM_INTEROP_THREADS=1
+```
+
 ### Volume Optimization
 - Use named volumes for persistent data
 - Regular cleanup of unused images/containers

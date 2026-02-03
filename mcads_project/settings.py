@@ -16,10 +16,19 @@ import environ
 from typing import cast
 from django.core.management.utils import get_random_secret_key
 
-# Fix PyTorch CPU backend issues - must be set before torch import
-os.environ['MKLDNN_ENABLED'] = '0'
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['OMP_NUM_THREADS'] = '1'
+# Fix PyTorch CPU backend issues - must be set before torch import.
+#
+# IMPORTANT:
+# - We use `setdefault()` so operators can override via environment variables.
+# - Default to using up to 4 CPU threads (good for small VPSes); increase if you
+#   run a single worker on a larger machine.
+_default_threads = os.environ.get("MCADS_CPU_THREADS")
+if not _default_threads:
+    _default_threads = str(max(1, min(os.cpu_count() or 1, 4)))
+
+os.environ.setdefault("MKLDNN_ENABLED", "0")
+os.environ.setdefault("MKL_NUM_THREADS", _default_threads)
+os.environ.setdefault("OMP_NUM_THREADS", _default_threads)
 
 # Initialize environ
 env = environ.Env(

@@ -167,10 +167,21 @@
             </div>
             <div class="card-body text-center">
                 <div class="position-relative d-inline-block">
+                    {% if image_is_dicom %}
+                    <div class="alert alert-info mb-0 text-start">
+                        <p class="mb-1">
+                            <strong>{% trans "DICOM preview is not available in the browser." %}</strong>
+                        </p>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ image_url }}" download>
+                            <i class="bi bi-download"></i> {% trans "Download DICOM" %}
+                        </a>
+                    </div>
+                    {% else %}
                     <img src="{{ image_url }}" alt="X-ray Image" class="img-fluid xray-image">
                     <div class="position-absolute bottom-0 end-0 m-2 bg-dark bg-opacity-50 text-white px-2 py-1 rounded small">
                         <i class="bi bi-zoom-in"></i> {% trans "Click to enlarge" %}
                     </div>
+                    {% endif %}
                 </div>
                 
                 <!-- Image Metadata -->
@@ -295,7 +306,18 @@
                 <div class="row">
                     <div class="col-md-6">
                         {# Show the same center-cropped square view the model sees (matches XRayCenterCrop). #}
+                        {% if image_is_dicom %}
+                        <div class="alert alert-info mb-0 text-start">
+                            <p class="mb-1">
+                                <strong>{% trans "DICOM preview is not available in the browser." %}</strong>
+                            </p>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ image_url }}" download>
+                                <i class="bi bi-download"></i> {% trans "Download DICOM" %}
+                            </a>
+                        </div>
+                        {% else %}
                         <img src="{{ image_url }}" alt="Original X-ray" class="img-fluid visualization-image">
+                        {% endif %}
                         <p class="mt-2 text-center">{% trans "Original X-ray" %}</p>
                     </div>
                     <div class="col-md-6">
@@ -386,7 +408,18 @@
             <div class="card-body text-center">
                 <div class="row">
                     <div class="col-md-6">
+                        {% if image_is_dicom %}
+                        <div class="alert alert-info mb-0 text-start">
+                            <p class="mb-1">
+                                <strong>{% trans "DICOM preview is not available in the browser." %}</strong>
+                            </p>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ image_url }}" download>
+                                <i class="bi bi-download"></i> {% trans "Download DICOM" %}
+                            </a>
+                        </div>
+                        {% else %}
                         <img src="{{ image_url }}" alt="Original X-ray" class="img-fluid visualization-image">
+                        {% endif %}
                         <p class="mt-2 text-center">{% trans "Original X-ray" %}</p>
                     </div>
                     <div class="col-md-6">

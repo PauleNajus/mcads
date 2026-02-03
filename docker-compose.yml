@@ -33,6 +33,16 @@ x-mcads-app: &mcads_app
     TORCH_HOME: /app/.torchxrayvision
     MPLCONFIGDIR: /app/.matplotlib
 
+    # CPU performance tuning (4-core VPS friendly defaults).
+    # - `MCADS_CPU_THREADS`: intra-op threads for PyTorch (set to CPU cores per worker).
+    # - `TORCH_NUM_INTEROP_THREADS`: keep small to avoid oversubscription.
+    MCADS_CPU_THREADS: ${MCADS_CPU_THREADS:-4}
+    TORCH_NUM_INTEROP_THREADS: ${TORCH_NUM_INTEROP_THREADS:-1}
+    # Optional: set to 1 to try faster CPU convolutions (if stable on your host).
+    MKLDNN_ENABLED: ${MKLDNN_ENABLED:-0}
+    # Optional: disable only if you hit CPU backend deadlocks on your host.
+    MCADS_DISABLE_OPENMP: ${MCADS_DISABLE_OPENMP:-0}
+
     # Entry-point behaviour
     MCADS_WAIT_TIMEOUT_SECONDS: "60"
 

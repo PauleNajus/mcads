@@ -3,13 +3,11 @@ from __future__ import annotations
 import logging
 
 from datetime import date
-from io import BytesIO
 
 from django import forms
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.core.files.base import ContentFile
 from django.utils.translation import gettext_lazy as _
 from django.core.files.uploadedfile import UploadedFile
 from django.contrib.auth.models import User
@@ -17,7 +15,6 @@ from django.contrib.auth.models import User
 from .models import XRayImage, UserProfile
 from .image_processing import (
     looks_like_dicom,
-    convert_dicom_to_png,
     get_image_mime_type,
     MAGIC_AVAILABLE
 )
@@ -26,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 class XRayUploadForm(forms.ModelForm):
-    # Accept DICOM uploads and convert them to PNG during validation.
-    # We use FileField (not ImageField) so `.dcm` can pass form parsing.
+    # Accept DICOM uploads directly (no conversion).
+    # We use FileField so `.dcm` can pass form parsing.
     image = forms.FileField(required=True)
 
     class Meta:
@@ -66,11 +63,11 @@ class XRayUploadForm(forms.ModelForm):
         self.fields['technologist_first_name'].widget.attrs.update({'maxlength': 100})
         self.fields['technologist_last_name'].widget.attrs.update({'maxlength': 100})
     
-    def clean_image(self) -> UploadedFile | ContentFile | None:
+    def clean_image(self) -> UploadedFile | None:
         """Validate uploaded image/DICOM file.
 
-        DICOM uploads are converted to PNG so the rest of the app can keep using
-        PIL/skimage and render previews via `<img>`.
+        DICOM uploads are accepted as-is and are analyzed directly by
+        TorchXRayVision (which supports `.dcm`).
         """
         image = self.cleaned_data.get('image')
         if not image:
@@ -114,13 +111,37 @@ class XRayUploadForm(forms.ModelForm):
                 if file_mime != 'application/octet-stream':
                     raise ValidationError(_('Invalid file type. Only image files are allowed.'))
 
-        # If this is a DICOM file, convert it to PNG before saving to the model.
+        # If this is a DICOM file, keep it as DICOM (no conversion).
         if is_dicom:
-            # Persist the original upload "format" separately from the stored file format.
-            # We convert DICOM → PNG for processing/display, but we still want user-facing
-            # metadata to say "DICOM".
+            # Persist the original upload format for UI/metadata.
             self._mcads_source_format = "DICOM"
-            return convert_dicom_to_png(image)
+            # Lightweight DICOM validation without decoding pixel data.
+            try:
+                import pydicom  # type: ignore
+            except Exception as exc:  # pragma: no cover (dependency/runtime)
+                raise ValidationError(_("DICOM support is not available on this server.")) from exc
+
+            try:
+                image.seek(0)
+                ds = pydicom.dcmread(image, force=True, stop_before_pixels=True)
+                # Basic sanity: make sure it looks like an image study.
+                if not getattr(ds, "Rows", None) or not getattr(ds, "Columns", None):
+                    raise ValidationError(_("Invalid DICOM file."))
+            except ValidationError:
+                raise
+            except Exception as exc:
+                raise ValidationError(_("Invalid DICOM file.")) from exc
+            finally:
+                image.seek(0)
+
+            # Ensure a stable `.dcm` suffix for downstream heuristics.
+            # (Some PACS exports are extensionless.)
+            name = (getattr(image, "name", "") or "").rsplit("/", 1)[-1]
+            if name and not name.lower().endswith((".dcm", ".dicom")):
+                stem = name.rsplit(".", 1)[0] if "." in name else name
+                image.name = f"{stem}.dcm"
+
+            return image
 
         # For non-DICOM uploads, we must validate that the content is a real image.
         # (We use FileField to accept .dcm, so we need to reintroduce ImageField-like verification.)
@@ -141,7 +162,7 @@ class XRayUploadForm(forms.ModelForm):
 
         # Verify the image can be opened by Pillow.
         #
-        # If Pillow cannot read it, try DICOM conversion as a fallback. This enables
+        # If Pillow cannot read it, try parsing it as DICOM as a fallback. This enables
         # extensionless/preamble-less DICOM uploads that don't include the "DICM" marker.
         try:
             image.seek(0)
@@ -149,10 +170,30 @@ class XRayUploadForm(forms.ModelForm):
                 img.verify()
         except (UnidentifiedImageError, OSError):
             try:
-                self._mcads_source_format = "DICOM"
-                return convert_dicom_to_png(image)
-            except ValidationError as exc:
+                import pydicom  # type: ignore
+            except Exception as exc:  # pragma: no cover (dependency/runtime)
                 raise ValidationError(_("Invalid image file.")) from exc
+
+            try:
+                image.seek(0)
+                ds = pydicom.dcmread(image, force=True, stop_before_pixels=True)
+                if not getattr(ds, "Rows", None) or not getattr(ds, "Columns", None):
+                    raise ValidationError(_("Invalid image file."))
+            except ValidationError:
+                raise
+            except Exception as exc:
+                raise ValidationError(_("Invalid image file.")) from exc
+            finally:
+                image.seek(0)
+
+            self._mcads_source_format = "DICOM"
+
+            name = (getattr(image, "name", "") or "").rsplit("/", 1)[-1]
+            if name and not name.lower().endswith((".dcm", ".dicom")):
+                stem = name.rsplit(".", 1)[0] if "." in name else name
+                image.name = f"{stem}.dcm"
+
+            return image
         finally:
             image.seek(0)
 
