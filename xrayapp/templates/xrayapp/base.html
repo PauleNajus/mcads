@@ -78,17 +78,17 @@
                         </a>
                     </li>
                 </ul>
-                <div class="d-flex align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center flex-wrap gap-1">
                         {% if user.is_authenticated %}
                             <!-- Admin button for admin users only -->
                             {% if user.profile.can_access_admin %}
-                                <a href="{% url 'admin:index' %}" class="btn btn-outline-danger" target="_blank" rel="noopener noreferrer">
+                                <a href="{% url 'admin:index' %}" class="btn btn-sm btn-outline-danger" target="_blank" rel="noopener noreferrer">
                                     <i class="bi bi-gear-fill me-1"></i>{% trans "Admin" %}
                                 </a>
                             {% endif %}
                             
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-person me-1"></i>{{ user.username }}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
@@ -102,14 +102,14 @@
                                 </ul>
                             </div>
                         {% else %}
-                            <a href="{% url 'login' %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'login' %}" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-box-arrow-in-right me-1"></i>{% trans "Login" %}
                             </a>
                         {% endif %}
                         
                         <!-- Language switch dropdown -->
                         <div class="dropdown">
-                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                 {% if LANGUAGE_CODE == 'lt' %}
                                     <img class="flag-img align-middle me-1" src="{% static 'xrayapp/images/flags/lt.svg' %}" alt="{% trans 'LT' %}">
                                     <span>{% trans "LT" %}</span>
@@ -124,7 +124,7 @@
                                         {% csrf_token %}
                                         <input name="next" type="hidden" value="{{ request.get_full_path|iriencode }}" />
                                         <input name="language" type="hidden" value="en" />
-                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-1">
                                             <img class="flag-img" src="{% static 'xrayapp/images/flags/us.svg' %}" alt="EN"> <span>English</span>
                                         </button>
                                     </form>
@@ -134,7 +134,7 @@
                                         {% csrf_token %}
                                         <input name="next" type="hidden" value="{{ request.get_full_path|iriencode }}" />
                                         <input name="language" type="hidden" value="lt" />
-                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-1">
                                             <img class="flag-img" src="{% static 'xrayapp/images/flags/lt.svg' %}" alt="LT"> <span>Lietuvių</span>
                                         </button>
                                     </form>
@@ -143,21 +143,23 @@
                         </div>
                         
                         <!-- Theme toggle button -->
-                        <button class="btn btn-outline-secondary theme-toggle rounded-2" id="theme-toggle" type="button" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{% trans 'Toggle theme' %}" aria-label="{% trans 'Toggle theme' %}">
+                        <button class="btn btn-sm btn-outline-secondary theme-toggle rounded-2" id="theme-toggle" type="button" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{% trans 'Toggle theme' %}" aria-label="{% trans 'Toggle theme' %}">
                             <i class="bi bi-moon-fill"></i>
                         </button>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <main class="py-4 flex-grow-1">
+    <main class="py-1 flex-grow-1">
         <div class="container">
             {% block content %}{% endblock %}
         </div>
     </main>
 
-    <footer class="bg-body-tertiary mt-auto py-3 border-top">
+    <footer class="bg-body-tertiary mt-auto py-1 border-top">
         <div class="container">
-            <div class="row g-3 align-items-end">
+            <div class="row g-1 align-items-end">
                 <div class="col-md-6">
                     <p class="mb-0 text-body-secondary small">
                         &copy; {% now "Y" %} MCADS. {% trans "All rights reserved." %} Paulius Bundza {% trans "and" %} Justas Trinkūnas. Vilnius Tech.

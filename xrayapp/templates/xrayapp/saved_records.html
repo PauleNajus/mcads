@@ -8,14 +8,14 @@
 {% csrf_token %}
 <div class="row">
     <div class="col-md-12">
-        <h2 class="mb-4">{% trans "Saved records" %}</h2>
+        <h2 class="mb-2">{% trans "Saved records" %}</h2>
         
-        <div class="card mb-4 advanced-filters">
+        <div class="card mb-2 advanced-filters">
             <div class="card-header">
                 <h5 class="mb-0">{% trans "Advanced filters" %}</h5>
             </div>
             <div class="card-body">
-                <form method="get" class="row g-3">
+                <form method="get" class="row g-2">
                     <div class="col-md-4 col-lg-3">
                         <label for="id_gender" class="form-label">{% trans "Gender" %}</label>
                         {{ form.gender|add_class:"form-select" }}
@@ -48,7 +48,7 @@
                         <label for="id_records_per_page" class="form-label">{% trans "Records per page" %}</label>
                         {{ form.records_per_page|add_class:"form-select" }}
                     </div>
-                    <div class="col-md-12 mt-4">
+                    <div class="col-md-12 mt-2">
                         <div class="filter-actions">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-filter me-1"></i> {% trans "Apply filters" %}
@@ -63,10 +63,10 @@
         </div>
             
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-1">
                 <h5 class="mb-0">{% trans "Saved Records" %}</h5>
-                <div class="d-flex align-items-center">
-                    <span class="badge bg-primary me-3">{{ total_count }} {% trans "Saved Records" %}</span>
+                <div class="d-flex flex-wrap align-items-center justify-content-end gap-1">
+                    <span class="badge bg-primary">{{ total_count }} {% trans "Saved Records" %}</span>
                     {% if total_count > 0 %}
                     <a href="{% url 'prediction_history' %}" class="btn btn-sm btn-outline-primary">
                         <i class="fas fa-history me-1"></i> {% trans "View all history" %}
@@ -143,7 +143,7 @@
                 <!-- Mobile Card View -->
                 <div class="d-lg-none">
                     {% for saved_record in saved_records %}
-                    <div class="card mb-3 history-card-mobile">
+                    <div class="card mb-2 history-card-mobile">
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-12">
@@ -210,7 +210,7 @@
                             
                             <div class="row">
                                 <div class="col-12">
-                                    <div class="d-flex justify-content-center gap-2">
+                                    <div class="d-flex flex-wrap justify-content-center gap-1">
                                         <a href="{% url 'xray_results' saved_record.prediction_history.xray.id %}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-eye me-1"></i> {% trans "View" %}
                                         </a>
@@ -233,7 +233,7 @@
                 {% else %}
                 <div class="alert alert-info no-records-info">
                     {% trans "You haven't saved any records yet." %} 
-                    <a href="{% url 'prediction_history' %}" style="color: #dc3545; text-decoration: none;">{% trans "Go to prediction history to save records." %}</a>
+                    <a href="{% url 'prediction_history' %}" class="link-danger text-decoration-none">{% trans "Go to prediction history to save records." %}</a>
                 </div>
                 {% endif %}
             </div>
@@ -242,7 +242,7 @@
             {% if saved_records.has_other_pages %}
             <div class="card-footer">
                 <nav aria-label="{% trans 'Saved records pagination' %}">
-                                         <div class="d-flex justify-content-center flex-wrap gap-1 mb-3">
+                                         <div class="d-flex justify-content-center flex-wrap gap-1 mb-2">
                          {% if saved_records.has_previous %}
                              <a class="btn btn-outline-secondary btn-sm" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1" aria-label="{% trans 'First' %}" title="{% trans 'First page' %}">
                                  <i class="fas fa-angle-double-left"></i>
@@ -280,8 +280,8 @@
             {% endif %}
         </div>
         
-        <div class="text-center mt-4 mb-4">
-            <a href="{% url 'prediction_history' %}" class="btn btn-outline-primary me-2">
+        <div class="d-flex flex-wrap justify-content-center gap-1 mt-2 mb-2 stack-mobile">
+            <a href="{% url 'prediction_history' %}" class="btn btn-outline-primary">
                 <i class="fas fa-history me-1"></i> {% trans "View all history" %}
             </a>
             <a href="{% url 'home' %}" class="btn btn-primary">

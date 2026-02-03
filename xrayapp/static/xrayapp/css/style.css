@@ -5,6 +5,9 @@
    We override the brand color here and rely on Bootstrap components/utilities. */
 :root,
 [data-bs-theme="light"] {
+  /* Overall UI density: slightly smaller typography than Bootstrap defaults. */
+  --bs-body-font-size: 0.95rem;
+
   /* Brand */
   /* Replace Bootstrap default primary with MCADS brand primary. */
   --bs-primary: #572437;
@@ -56,18 +59,18 @@
   --box-shadow-lg: var(--bs-box-shadow-lg);
 
   /* Spacing (legacy, used widely across templates). */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 0.75rem;
-  --spacing-lg: 1rem;
-  --spacing-xl: 1.25rem;
-  --spacing-xxl: 1.5rem;
+  --spacing-xs: 0.2rem;
+  --spacing-sm: 0.4rem;
+  --spacing-md: 0.6rem;
+  --spacing-lg: 0.8rem;
+  --spacing-xl: 1rem;
+  --spacing-xxl: 1.2rem;
 
   /* Typography (legacy) */
   --font-size-xs: 0.6rem;
   --font-size-sm: 0.75rem;
   --font-size-md: 0.875rem;
-  --font-size-lg: 1rem;
+  --font-size-lg: 0.95rem;
   --font-weight-normal: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
@@ -127,6 +130,29 @@ button,
   --bs-btn-focus-shadow-rgb: var(--bs-primary-rgb);
 }
 
+/* Soft primary button (matches compact card-header look: light brand tint + brand text). */
+.btn-soft-primary {
+  --bs-btn-color: var(--bs-primary);
+  --bs-btn-bg: rgba(var(--bs-primary-rgb), 0.08);
+  --bs-btn-border-color: rgba(var(--bs-primary-rgb), 0.22);
+  --bs-btn-hover-color: var(--bs-primary);
+  --bs-btn-hover-bg: rgba(var(--bs-primary-rgb), 0.12);
+  --bs-btn-hover-border-color: rgba(var(--bs-primary-rgb), 0.28);
+  --bs-btn-active-color: var(--bs-primary);
+  --bs-btn-active-bg: rgba(var(--bs-primary-rgb), 0.16);
+  --bs-btn-active-border-color: rgba(var(--bs-primary-rgb), 0.34);
+  --bs-btn-focus-shadow-rgb: var(--bs-primary-rgb);
+}
+
+[data-bs-theme="dark"] .btn-soft-primary {
+  --bs-btn-bg: rgba(var(--bs-primary-rgb), 0.18);
+  --bs-btn-border-color: rgba(var(--bs-primary-rgb), 0.34);
+  --bs-btn-hover-bg: rgba(var(--bs-primary-rgb), 0.24);
+  --bs-btn-hover-border-color: rgba(var(--bs-primary-rgb), 0.42);
+  --bs-btn-active-bg: rgba(var(--bs-primary-rgb), 0.3);
+  --bs-btn-active-border-color: rgba(var(--bs-primary-rgb), 0.5);
+}
+
 /* Star/save button styling */
 .save-toggle-btn {
   transition: all var(--transition-fast);
@@ -152,7 +178,7 @@ button,
 
 /* Ensure consistent button widths in action button groups */
 .btn-group .btn-sm {
-  min-width: 2.5rem;
+  min-width: 2.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -160,8 +186,8 @@ button,
 
 /* Specific width consistency for table action buttons */
 .table .btn-group .btn-sm {
-  width: 2.5rem;
-  height: 2.25rem;
+  width: 2.25rem;
+  height: 2rem;
 }
 
 [data-bs-theme="dark"] {
@@ -198,15 +224,61 @@ button,
    Avoid globally overriding `.btn-*` classes to keep Bootstrap predictable. */
 
 /* ==========================================
+   GLOBAL UI DENSITY (COMPACT)
+   ========================================== */
+/* Use low-specificity selectors so component-specific utilities can still override. */
+:where(.btn) {
+  --bs-btn-padding-y: 0.25rem;
+  --bs-btn-padding-x: 0.6rem;
+  --bs-btn-font-size: var(--bs-body-font-size);
+  --bs-btn-line-height: 1.2;
+}
+
+:where(.alert) {
+  --bs-alert-padding-y: 0.5rem;
+  --bs-alert-padding-x: 0.75rem;
+  --bs-alert-margin-bottom: 0.5rem;
+}
+
+:where(.dropdown-menu) {
+  --bs-dropdown-padding-y: 0.25rem;
+  --bs-dropdown-padding-x: 0.25rem;
+  --bs-dropdown-item-padding-y: 0.35rem;
+  --bs-dropdown-item-padding-x: 0.75rem;
+  --bs-dropdown-font-size: var(--bs-body-font-size);
+}
+
+:where(.modal) {
+  --bs-modal-padding: 0.75rem;
+  --bs-modal-header-padding: 0.5rem 0.75rem;
+  --bs-modal-footer-gap: 0.5rem;
+  --bs-modal-margin: 0.75rem;
+}
+
+:where(.form-label) {
+  margin-bottom: 0.2rem;
+}
+
+:where(.form-control, .form-select, .input-group-text) {
+  padding: 0.3rem 0.6rem;
+  font-size: var(--bs-body-font-size);
+}
+
+/* Slightly denser navbar to match the app's compact UI. */
+.navbar {
+  --bs-navbar-padding-y: 0.25rem;
+}
+
+/* ==========================================
    FORM STYLES - INPUT GROUPS
    ========================================== */
 
 /* File input group - ensure Browse button and text input have same height */
 .input-group #custom-file-button,
 .input-group #file-name-display {
-  height: calc(2.375rem + 2px) !important;
-  line-height: 1.5 !important;
-  padding: 0.375rem 0.75rem !important;
+  height: calc(2.125rem + 2px) !important;
+  line-height: 1.3 !important;
+  padding: 0.3rem 0.6rem !important;
   border: 1px solid var(--light-border) !important;
   display: flex !important;
   align-items: center !important;
@@ -226,14 +298,14 @@ button,
 /* Ensure consistent font size and spacing */
 .input-group #custom-file-button,
 .input-group #file-name-display {
-  font-size: 1rem !important;
+  font-size: var(--bs-body-font-size) !important;
   font-weight: 400 !important;
   vertical-align: middle !important;
 }
 
 /* Icon spacing inside Browse button */
 .input-group #custom-file-button i {
-  margin-right: 0.5rem !important;
+  margin-right: 0.35rem !important;
 }
 
 /* Password toggle button styles */
@@ -245,8 +317,8 @@ button,
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  min-width: 2.5rem !important;
-  height: calc(2.375rem + 2px) !important;
+  min-width: 2.25rem !important;
+  height: calc(2.125rem + 2px) !important;
 }
 
 .input-group #togglePassword:hover {
@@ -274,7 +346,7 @@ button,
 
 /* Ensure password input and toggle button have same height */
 .input-group .form-control {
-  height: calc(2.375rem + 2px) !important;
+  height: calc(2.125rem + 2px) !important;
   border-right: none !important;
 }
 
@@ -323,28 +395,52 @@ button,
    CARD STYLES
    ========================================== */
 .card {
+  /* Make cards slightly denser than Bootstrap defaults (less whitespace). */
+  --bs-card-spacer-y: 0.6rem;
+  --bs-card-spacer-x: 0.75rem;
+  --bs-card-cap-padding-y: 0.4rem;
+  --bs-card-cap-padding-x: 0.75rem;
+  /* Subtle branded header background for default headers. */
+  --bs-card-cap-bg: rgba(var(--bs-primary-rgb), 0.06);
+
   border-radius: var(--border-radius-lg);
   box-shadow: var(--box-shadow);
-  overflow: hidden;
+}
+
+[data-bs-theme="dark"] .card {
+  --bs-card-cap-bg: rgba(var(--bs-primary-rgb), 0.12);
 }
 
 .card-header {
-  background-color: rgba(var(--primary-rgb), 0.1) !important;
-  border-bottom: 1px solid var(--light-border);
-  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom-color: var(--light-border);
   font-weight: var(--font-weight-semibold);
 }
 
-.card-header h5, .card-header .mb-0, .card-header h2, .card-header h3, .card-header h4 {
-  color: var(--primary) !important;
+/* Keep card header titles aligned and compact. */
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6 {
   font-weight: var(--font-weight-semibold);
   margin: 0;
-  display: flex;
-  align-items: center;
 }
 
-/* Card header icons using CSS classes for specificity */
-.card-header h5:before, .card-header .mb-0:before, .card-header h2:before, .card-header h3:before, .card-header h4:before {
+/* Default card header title color (match "Advanced filters"). */
+.card-header:not(.text-white):not(.text-dark) h2,
+.card-header:not(.text-white):not(.text-dark) h3,
+.card-header:not(.text-white):not(.text-dark) h4,
+.card-header:not(.text-white):not(.text-dark) h5,
+.card-header:not(.text-white):not(.text-dark) h6 {
+  color: var(--bs-primary);
+}
+
+/* Header icons (opt-in via `header-*` class). */
+.card-header[class*="header-"] h2:before,
+.card-header[class*="header-"] h3:before,
+.card-header[class*="header-"] h4:before,
+.card-header[class*="header-"] h5:before,
+.card-header[class*="header-"] h6:before {
   content: '\f0b0';
   /* Keep in sync with the vendored Font Awesome version (currently 6.x). */
   font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
@@ -353,31 +449,16 @@ button,
 }
 
 /* Specific card header icons */
-.card-header.header-mcads h2:before, .card-header.header-mcads h5:before, .card-header.header-mcads .mb-0:before { content: '\f7e6'; }
-.card-header.header-patient h5:before, .card-header.header-patient .mb-0:before { content: '\f007'; }
-.card-header.header-severity h5:before, .card-header.header-severity .mb-0:before { content: '\f071'; }
-.card-header.header-xray h5:before, .card-header.header-xray .mb-0:before { content: '\f0fa'; }
-.card-header.header-prediction h5:before, .card-header.header-prediction .mb-0:before { content: '\f200'; }
-.card-header.header-history h5:before, .card-header.header-history .mb-0:before { content: '\f1da'; }
-.card-header.header-account h5:before, .card-header.header-account .mb-0:before, .card-header.header-account h4:before { content: '\f013'; }
-.card-header.header-interpretability h5:before, .card-header.header-interpretability .mb-0:before { content: '\f06e'; }
-.card-header.header-filters h5:before, .card-header.header-filters .mb-0:before { content: '\f0b0'; }
-.card-header.header-danger h5:before, .card-header.header-danger .mb-0:before { content: '\f06a'; color: var(--danger) !important; }
-
-/* Remove icons from auth headers */
-.card-header.header-auth h2:before, .card-header.header-auth h5:before, .card-header.header-auth .mb-0:before, .card-header.header-auth h4:before,
-.card-header h4:before { content: none !important; }
-
-/* Colored card headers */
-.card-header.bg-primary, .card-header.bg-warning, .card-header.bg-success, .card-header.bg-info {
-  background-color: rgba(var(--primary-rgb), 0.1) !important;
-  color: var(--primary) !important;
-}
-
-.card-header.bg-danger {
-  background-color: rgba(220, 53, 69, 0.1) !important;
-  color: var(--danger) !important;
-}
+.card-header.header-mcads h2:before, .card-header.header-mcads h5:before { content: '\f7e6'; }
+.card-header.header-patient h5:before { content: '\f007'; }
+.card-header.header-severity h5:before { content: '\f071'; }
+.card-header.header-xray h5:before { content: '\f0fa'; }
+.card-header.header-prediction h5:before { content: '\f200'; }
+.card-header.header-history h5:before { content: '\f1da'; }
+.card-header.header-account h5:before, .card-header.header-account h4:before { content: '\f013'; }
+.card-header.header-interpretability h5:before { content: '\f06e'; }
+.card-header.header-filters h5:before { content: '\f0b0'; }
+.card-header.header-danger h5:before { content: '\f06a'; color: var(--danger); }
 
 /* ==========================================
    SMALL UI HELPERS
@@ -417,6 +498,12 @@ button,
    ========================================== */
 .table {
   --bs-table-hover-bg: rgba(var(--primary-rgb), 0.05);
+}
+
+/* Slightly denser tables by default (use `.table-sm` for extra density). */
+.table:not(.table-sm) {
+  --bs-table-cell-padding-y: 0.35rem;
+  --bs-table-cell-padding-x: 0.5rem;
 }
 
 /* ==========================================
@@ -529,7 +616,7 @@ button,
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: visible;
   position: relative;
-  height: 1.5rem;
+  height: 1.25rem;
 }
 
 .progress-bar {
@@ -663,22 +750,22 @@ button,
 @media (max-width: 768px) {
   /* Larger progress bars for touch devices */
   .modern-progress {
-    min-height: 28px;
+    min-height: 24px;
     border-radius: 14px;
     padding: 4px;
   }
   
   .modern-progress-bar {
     border-radius: 10px;
-    min-height: 20px;
+    min-height: 16px;
   }
   
   .progress {
-    min-height: 20px;
+    min-height: 18px;
   }
   
   .progress-bar {
-    min-height: 16px;
+    min-height: 14px;
   }
   
   /* Touch-friendly progress text */
@@ -695,11 +782,11 @@ button,
   
   /* Mobile-specific spacing */
   #progress-wrapper {
-    padding: 1rem;
+    padding: 0.75rem;
   }
   
   #interpretation-progress .card-body {
-    padding: 1.25rem;
+    padding: 1rem;
   }
   
   /* Larger touch targets for buttons */
@@ -713,22 +800,22 @@ button,
 @media (max-width: 576px) {
   /* Even larger progress elements for small screens */
   .modern-progress {
-    min-height: 32px;
+    min-height: 26px;
     border-radius: 16px;
-    padding: 5px;
+    padding: 4px;
   }
   
   .modern-progress-bar {
     border-radius: 11px;
-    min-height: 22px;
+    min-height: 18px;
   }
   
   .progress {
-    min-height: 24px;
+    min-height: 20px;
   }
   
   .progress-bar {
-    min-height: 18px;
+    min-height: 16px;
   }
   
   /* Simplified animations for performance */
@@ -749,24 +836,24 @@ button,
   
   /* Compact layout adjustments */
   .alert.medical-warning {
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
   }
   
   .alert.medical-warning .row {
     --bs-gutter-x: 0.75rem;
   }
   
-  /* Stack severity level info vertically on small screens */
-  .d-flex.align-items-center.mb-3 {
+  /* Stack severity level info vertically on small screens (scoped). */
+  .mobile-severity-layout {
     flex-direction: column;
     align-items: stretch !important;
-    gap: 1rem;
+    gap: 0.75rem;
   }
   
-  .d-flex.align-items-center.mb-3 .text-center {
+  .mobile-severity-layout .mobile-severity-label {
     min-width: auto !important;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
   }
   
   /* Pathology table mobile optimization */
@@ -809,9 +896,9 @@ button,
   }
   
   /* Mobile table layout optimization */
-  .table td:first-child { width: 30% !important; }
-  .table td:nth-child(2) { width: 50% !important; }
-  .table td:last-child { width: 20% !important; }
+  .prediction-results-table td:first-child { width: 30% !important; }
+  .prediction-results-table td:nth-child(2) { width: 50% !important; }
+  .prediction-results-table td:last-child { width: 20% !important; }
   
   /* Override any inline min-width styles on mobile */
   .mobile-pathology-progress[style*="min-width"] {
@@ -825,20 +912,20 @@ button,
 @media (max-width: 375px) {
   /* Maximum touch-friendly sizing */
   .modern-progress {
-    min-height: 36px;
-    padding: 6px;
+    min-height: 28px;
+    padding: 4px;
   }
   
   .modern-progress-bar {
-    min-height: 24px;
+    min-height: 18px;
   }
   
   .progress {
-    min-height: 28px;
+    min-height: 22px;
   }
   
   .progress-bar {
-    min-height: 20px;
+    min-height: 18px;
   }
   
   /* Reduced animation complexity for very small devices */
@@ -852,12 +939,12 @@ button,
   
   /* Larger, clearer text */
   .modern-progress-text {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 900;
   }
   
   .progress-text {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 800;
   }
   
@@ -900,17 +987,17 @@ button,
   }
   
   /* Ultra-compact table layout */
-  .table td:first-child { 
+  .prediction-results-table td:first-child { 
     width: 35% !important; 
     font-size: 0.8rem !important;
     padding-right: 0.25rem !important;
   }
-  .table td:nth-child(2) { 
+  .prediction-results-table td:nth-child(2) { 
     width: 45% !important; 
     padding-left: 0.25rem !important;
     padding-right: 0.25rem !important;
   }
-  .table td:last-child { 
+  .prediction-results-table td:last-child { 
     width: 20% !important; 
     padding-left: 0.25rem !important;
   }
@@ -953,9 +1040,9 @@ button,
   }
   
   /* Optimize table spacing for common phone sizes */
-  .table td:first-child { width: 32% !important; }
-  .table td:nth-child(2) { width: 48% !important; }
-  .table td:last-child { width: 20% !important; }
+  .prediction-results-table td:first-child { width: 32% !important; }
+  .prediction-results-table td:nth-child(2) { width: 48% !important; }
+  .prediction-results-table td:last-child { width: 20% !important; }
 }
 
 /* Battery optimization for mobile devices */
@@ -1338,13 +1425,14 @@ button,
 }
 
 .advanced-filters .card-body {
-  padding: var(--spacing-xxl);
+  /* Keep filters compact on desktop too (mobile already overrides). */
+  padding: var(--spacing-lg);
 }
 
 .advanced-filters .form-label {
   font-weight: var(--font-weight-normal);
   font-size: var(--font-size-md);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
   color: var(--bs-body-color);
 }
 
@@ -1405,7 +1493,7 @@ button,
   border: 1px solid var(--light-border) !important;
   color: var(--primary) !important;
   font-weight: var(--font-weight-semibold);
-  padding: var(--spacing-md) var(--spacing-xl);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--border-radius) var(--border-radius) 0 0;
   margin-right: var(--spacing-xs);
   transition: all var(--transition-normal);
@@ -1453,19 +1541,19 @@ button,
 /* ==========================================
    COMPACT HOME PAGE STYLES
    ========================================== */
-.compact-card { margin-bottom: var(--spacing-lg); }
-.compact-card-body { padding: var(--spacing-lg); }
+.compact-card { margin-bottom: var(--spacing-md); }
+.compact-card-body { padding: var(--spacing-md); }
 .compact-info-card { margin-bottom: var(--spacing-md) !important; }
-.compact-card-header { padding: var(--spacing-sm) var(--spacing-md); font-size: 0.9rem; font-weight: var(--font-weight-semibold); }
-.compact-info-body { padding: var(--spacing-md); }
+.compact-card-header { padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.85rem; font-weight: var(--font-weight-semibold); }
+.compact-info-body { padding: var(--spacing-sm); }
 .compact-button-group { margin-bottom: var(--spacing-sm); }
 .compact-button-group .btn { margin-bottom: var(--spacing-sm); }
 .compact-warning { margin-bottom: 0 !important; padding: var(--spacing-sm) var(--spacing-md); }
 
 .compact-card-body .form-label { margin-bottom: var(--spacing-xs); font-size: var(--font-size-md); }
-.compact-card-body .form-control, .compact-card-body .form-select { margin-bottom: var(--spacing-sm); padding: var(--border-radius) var(--spacing-md); }
+.compact-card-body .form-control, .compact-card-body .form-select { margin-bottom: var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-md); }
 .compact-card-body .form-text { margin-top: 0.125rem; margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); }
-.compact-card-body .lead { font-size: var(--spacing-lg); margin-bottom: var(--spacing-md) !important; }
+.compact-card-body .lead { font-size: var(--font-size-lg); margin-bottom: var(--spacing-md) !important; }
 
 .compact-info-card .card-header { background-color: rgba(var(--primary-rgb), 0.08) !important; border-bottom: 1px solid var(--light-border); }
 .compact-info-body .row { margin-bottom: var(--spacing-xs); }
@@ -1494,6 +1582,13 @@ button,
    FILTER ACTION BUTTONS - EQUAL HEIGHT
    ========================================== */
 /* Ensure equal height for filter action buttons on all screen sizes */
+.advanced-filters .filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .advanced-filters .filter-actions .btn {
   height: auto;
   min-height: 38px;
@@ -1518,53 +1613,39 @@ button,
   /* Base mobile adjustments */
   .advanced-filters .card-body { padding: var(--spacing-lg); }
   
-  /* Button groups and actions */
-  .advanced-filters .filter-actions,
-  .text-center {
+  /* Filter action buttons: stack and fill on mobile. */
+  .advanced-filters .filter-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .advanced-filters .filter-actions .btn {
+    width: 100%;
+  }
+
+  /* Generic "action bar" stacking (opt-in via `.stack-mobile`). */
+  .stack-mobile {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-sm);
   }
-  
-  /* Exception: Keep card headers with icons horizontal on mobile */
-  .card-header.text-center {
-    display: block !important;
-    text-align: center !important;
+
+  .stack-mobile > .btn,
+  .stack-mobile > .btn-group {
+    width: 100%;
+    max-width: 320px;
   }
-  
-  .card-header h2, .card-header h5, .card-header .mb-0 {
-    display: inline-block !important;
-    text-align: center !important;
+
+  .stack-mobile > .btn-group > .btn {
+    width: 100%;
   }
-  
-  /* Ensure icons remain horizontally aligned with text on mobile */
-  .card-header h2:before, .card-header h5:before, .card-header .mb-0:before {
-    display: inline !important;
-    margin-right: var(--spacing-sm) !important;
-    vertical-align: middle !important;
-  }
-  
-  .text-center .btn,
+
   .compact-button-group .btn {
     width: 100%;
-    max-width: 300px;
+    max-width: 320px;
     margin: 0 !important;
     margin-bottom: var(--spacing-md) !important;
-  }
-
-  /* Results page visualization "Image Controls" should stay compact on mobile.
-     The generic `.text-center .btn` rule above is meant for CTAs and would otherwise
-     make every control button full-width (wasting vertical space). */
-  .visualization-controls {
-    /* If a parent container uses flex + centered items, keep this section full width. */
-    align-self: stretch;
-  }
-
-  .visualization-controls .btn {
-    width: auto !important;
-    max-width: none !important;
-    margin-bottom: 0 !important;
   }
   
   /* Account settings mobile spacing - ensure proper spacing between Save profile button and Account information */
@@ -1618,7 +1699,7 @@ button,
   .history-card-mobile .card-title { color: var(--primary); font-weight: var(--font-weight-semibold); border-bottom: 1px solid var(--light-border); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-md) !important; }
   .history-card-mobile .text-muted { font-size: var(--font-size-sm); font-weight: var(--font-weight-normal); text-transform: uppercase; letter-spacing: 0.5px; }
   .history-card-mobile .card-body { padding: var(--spacing-lg); }
-  .history-card-mobile .btn-sm { padding: var(--border-radius) var(--spacing-md); font-size: var(--font-size-md); min-width: 70px; }
+  .history-card-mobile .btn-sm { padding: var(--spacing-sm) var(--spacing-md); font-size: var(--font-size-md); min-width: 64px; }
   
   /* Image metadata table mobile optimization */
   .image-metadata-table .table thead th {
@@ -1677,16 +1758,6 @@ button,
     min-width: 80px !important;
   }
   
-  .card-body .row .col-md-4 {
-    margin-bottom: var(--spacing-lg) !important;
-  }
-  
-  .card-body .row .col-md-4 img {
-    max-height: 250px !important;
-    width: 100% !important;
-    object-fit: contain !important;
-  }
-  
   /* Visualization images */
   .visualization-image {
     max-width: 100% !important;
@@ -1703,7 +1774,7 @@ button,
   /* Compact styles adjustments */
   .compact-card-body { padding: var(--spacing-md); }
   .compact-info-body { padding: var(--spacing-sm); }
-  .compact-card-header { padding: var(--border-radius) var(--spacing-sm); font-size: 0.85rem; }
+  .compact-card-header { padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.85rem; }
   .compact-card-body .lead { font-size: 0.95rem; }
   
   /* Dark mode mobile adjustments */
@@ -1731,12 +1802,12 @@ button,
   .input-group #custom-file-button,
   .input-group #file-name-display {
     font-size: 0.9rem !important;
-    height: calc(2.25rem + 2px) !important;
-    padding: 0.34rem 0.65rem !important;
+    height: calc(2.05rem + 2px) !important;
+    padding: 0.28rem 0.55rem !important;
   }
   
   .input-group #custom-file-button i {
-    margin-right: 0.4rem !important;
+    margin-right: 0.35rem !important;
   }
 }
 

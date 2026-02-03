@@ -6,8 +6,8 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
+        <div class="card">
+            <div class="card-header">
                 <h4 class="mb-0"><i class="bi bi-person-circle"></i> {% trans "Log In" %}</h4>
             </div>
             <div class="card-body">
@@ -19,11 +19,11 @@
                 
                 <form method="post">
                     {% csrf_token %}
-                    <div class="mb-3">
+                    <div class="mb-2">
                         <label for="id_username" class="form-label">{% trans "Username" %}</label>
                         <input type="text" name="username" autofocus autocapitalize="none" autocomplete="username" maxlength="150" class="form-control" required id="id_username">
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-2">
                         <label for="id_password" class="form-label">{% trans "Password" %}</label>
                         <div class="input-group">
                             <input type="password" name="password" autocomplete="current-password" class="form-control" required id="id_password">
@@ -32,7 +32,7 @@
                             </button>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-soft-primary w-100">
                         <i class="bi bi-box-arrow-in-right"></i> {% trans "Log In" %}
                     </button>
                     <input type="hidden" name="next" value="{{ next }}">
