@@ -265,7 +265,7 @@ def xray_results(request: HttpRequest, pk: int) -> HttpResponse:
     # Ensure severity level is calculated and stored
     if xray_instance.severity_level is None:
         xray_instance.severity_level = xray_instance.calculate_severity_level
-        xray_instance.save()
+        xray_instance.save(update_fields=["severity_level"])
     
     # Get all visualizations for this X-ray
     visualizations = VisualizationResult.objects.filter(xray=xray_instance).order_by('-created_at')
@@ -493,8 +493,26 @@ def check_progress(request: HttpRequest, pk: int) -> JsonResponse:
                     'pli_target': xray_instance.pli_target_class
                 }
             
-            # Include image URL for display
-            response_data['image_url'] = xray_instance.image.url
+            # Include image URL for display.
+            #
+            # Important:
+            # - Browsers cannot render raw DICOM files in <img>.
+            # - The results page uses a cached PNG preview for DICOM via `dicom_preview`.
+            # - The JS results page builds dynamic visualization cards from this endpoint,
+            #   so we must expose the same preview URL here.
+            image_url = xray_instance.image.url
+            image_is_dicom = (
+                Path(xray_instance.image.name).suffix.lower() in {".dcm", ".dicom"}
+                or str(xray_instance.image_format or "").upper() == "DICOM"
+            )
+            image_preview_url = (
+                reverse("dicom_preview", kwargs={"pk": xray_instance.pk})
+                if image_is_dicom
+                else image_url
+            )
+            response_data["image_url"] = image_url
+            response_data["image_is_dicom"] = image_is_dicom
+            response_data["image_preview_url"] = image_preview_url
         
         # Force garbage collection to free memory
         gc.collect()

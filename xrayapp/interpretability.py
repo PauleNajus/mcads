@@ -10,7 +10,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter threading issues
 from typing import Any, Optional, Tuple
 import torchxrayvision as xrv
-from .model_loader import load_model
+from .model_loader import load_model, get_model_lock
 from .xrv_io import load_xrv_image as _load_xrv_image
 from .transforms import get_xrv_transform, get_center_crop_bounds
 
@@ -109,6 +109,19 @@ def _pathology_names_for_output(model: torch.nn.Module, n_outputs: int) -> list[
     TorchXRayVision models *usually* expose `model.pathologies`. When it doesn't
     match the output dimension, we fall back to `xrv.datasets.default_pathologies`.
     """
+    # Keep label ordering consistent with inference.
+    #
+    # In `xrayapp/inference_logic.py`, ResNet outputs are *always* mapped using
+    # `xrv.datasets.default_pathologies` (even if `model.pathologies` exists),
+    # because some TorchXRayVision ResNet weight bundles have been observed to
+    # expose a `pathologies` list that does not match the forward output order.
+    #
+    # If we used the wrong ordering here, GRAD-CAM / PLI could explain the
+    # wrong class index (accuracy-critical bug).
+    base = _unwrap_model(model)
+    if base.__class__.__name__.lower().startswith("resnet"):
+        return list(xrv.datasets.default_pathologies)[:n_outputs]
+
     model_names = list(getattr(model, "pathologies", []) or [])
     if model_names and len(model_names) == n_outputs:
         return model_names
@@ -483,22 +496,54 @@ class GradCAM:
 
         # Probabilities used only for thresholding/weighting.
         with torch.no_grad():
-            probabilities = torch.sigmoid(logits).squeeze().detach().cpu().numpy()
+            probs_t = torch.sigmoid(logits)
+            # Match TorchXRayVision `forward()` semantics when available (op_norm).
+            # This keeps threshold-based selection consistent with what users see.
+            base = _unwrap_model(self.model)
+            op_norm = getattr(base, "op_norm", None)
+            if callable(op_norm):
+                try:
+                    probs_t = op_norm(probs_t)
+                except Exception:
+                    # If op_norm isn't compatible for any reason, fall back to sigmoid.
+                    pass
+            probabilities = probs_t.squeeze().detach().cpu().numpy()
 
         pathology_names = _pathology_names_for_output(self.model, int(probabilities.shape[0]))
+        # ResNet weight bundles in TorchXRayVision include a couple of labels that
+        # are not trained and tend to sit at ~0.5 probability, which can dominate
+        # threshold-based "combined" visualizations. Inference explicitly excludes
+        # these labels; do the same here to keep explanations accurate.
+        excluded_names: set[str] = set()
+        try:
+            base = _unwrap_model(self.model)
+            if base.__class__.__name__.lower().startswith("resnet"):
+                excluded_names = {
+                    "Enlarged Cardiomediastinum",
+                    "Enlarged_Cardiomediastinum",
+                    "Lung Lesion",
+                    "Lung_Lesion",
+                }
+        except Exception:
+            excluded_names = set()
         
         # Find pathologies above threshold
         selected_pathologies = []
         selected_indices = []
         
         for i, (pathology, prob) in enumerate(zip(pathology_names, probabilities)):
+            if pathology in excluded_names:
+                continue
             if prob >= probability_threshold:
                 selected_pathologies.append((pathology, prob))
                 selected_indices.append(i)
         
         if not selected_indices:
             logger.info("No pathologies above threshold %.3f; using top-1 fallback.", probability_threshold)
-            top_indices = np.argsort(probabilities)[-3:][::-1]
+            candidate_indices = [i for i, name in enumerate(pathology_names) if name not in excluded_names]
+            if not candidate_indices:
+                candidate_indices = list(range(int(probabilities.shape[0])))
+            top_indices = np.array(candidate_indices, dtype=int)[np.argsort(probabilities[candidate_indices])[-3:][::-1]]
             for idx in top_indices:
                 logger.debug("Top pathology candidate: %s=%.3f", pathology_names[idx], probabilities[idx])
             # Use the top pathology if none above threshold
@@ -776,19 +821,39 @@ class PixelLevelInterpretability:
         probabilities = output.squeeze().cpu().detach().numpy()
         
         pathology_names = _pathology_names_for_output(self.model, int(probabilities.shape[0]))
+        # Keep behavior consistent with inference: some ResNet bundles include
+        # labels that are effectively unsupported (sit around 0.5). Exclude them
+        # from combined explanations to avoid misleading highlights.
+        excluded_names: set[str] = set()
+        try:
+            base = _unwrap_model(self.model)
+            if base.__class__.__name__.lower().startswith("resnet"):
+                excluded_names = {
+                    "Enlarged Cardiomediastinum",
+                    "Enlarged_Cardiomediastinum",
+                    "Lung Lesion",
+                    "Lung_Lesion",
+                }
+        except Exception:
+            excluded_names = set()
         
         # Find pathologies above threshold
         selected_pathologies = []
         selected_indices = []
         
         for i, (pathology, prob) in enumerate(zip(pathology_names, probabilities)):
+            if pathology in excluded_names:
+                continue
             if prob >= probability_threshold:
                 selected_pathologies.append((pathology, prob))
                 selected_indices.append(i)
         
         if not selected_indices:
             logger.info("No pathologies above threshold %.3f; using top-1 fallback.", probability_threshold)
-            top_indices = np.argsort(probabilities)[-3:][::-1]
+            candidate_indices = [i for i, name in enumerate(pathology_names) if name not in excluded_names]
+            if not candidate_indices:
+                candidate_indices = list(range(int(probabilities.shape[0])))
+            top_indices = np.array(candidate_indices, dtype=int)[np.argsort(probabilities[candidate_indices])[-3:][::-1]]
             for idx in top_indices:
                 logger.debug("Top pathology candidate: %s=%.3f", pathology_names[idx], probabilities[idx])
             # Use the top pathology if none above threshold
@@ -835,38 +900,40 @@ def apply_gradcam(
     """
     Apply Grad-CAM to an X-ray image
     """
-    try:
-        # Shared setup
-        wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
+    # Ensure deterministic results when multiple jobs run on the same cached model.
+    with get_model_lock(model_type):
+        try:
+            # Shared setup
+            wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
 
-        # Initialize Grad-CAM and generate heatmap
-        with GradCAM(wrapped_model) as gradcam:
-            heatmap, output = gradcam.get_heatmap(img_tensor, target_class)
+            # Initialize Grad-CAM and generate heatmap
+            with GradCAM(wrapped_model) as gradcam:
+                heatmap, output = gradcam.get_heatmap(img_tensor, target_class)
 
-        # Resolve target name
-        names = _pathology_names_for_output(wrapped_model, int(output.shape[-1]))
-        if target_class is None:
-            target_idx = int(torch.argmax(output, dim=-1).item())
-            target_name: str | int = names[target_idx] if 0 <= target_idx < len(names) else target_idx
-        elif isinstance(target_class, str):
-            target_name = target_class
-        else:
-            idx = int(target_class)
-            target_name = names[idx] if 0 <= idx < len(names) else idx
-        
-        # Shared postprocessing
-        heatmap_full, overlaid_img = _postprocess_and_overlay(heatmap, original_vis)
-        
-        return {
-            'original': original_vis,
-            'heatmap': heatmap_full,
-            'overlay': overlaid_img,
-            'target_class': target_name
-        }
-        
-    except Exception:
-        logger.exception("Failed to apply Grad-CAM")
-        raise
+            # Resolve target name
+            names = _pathology_names_for_output(wrapped_model, int(output.shape[-1]))
+            if target_class is None:
+                target_idx = int(torch.argmax(output, dim=-1).item())
+                target_name: str | int = names[target_idx] if 0 <= target_idx < len(names) else target_idx
+            elif isinstance(target_class, str):
+                target_name = target_class
+            else:
+                idx = int(target_class)
+                target_name = names[idx] if 0 <= idx < len(names) else idx
+            
+            # Shared postprocessing
+            heatmap_full, overlaid_img = _postprocess_and_overlay(heatmap, original_vis)
+            
+            return {
+                'original': original_vis,
+                'heatmap': heatmap_full,
+                'overlay': overlaid_img,
+                'target_class': target_name
+            }
+            
+        except Exception:
+            logger.exception("Failed to apply Grad-CAM")
+            raise
 
 
 def apply_combined_gradcam(
@@ -877,35 +944,36 @@ def apply_combined_gradcam(
     """
     Apply combined interpretability to an X-ray image for all pathologies above threshold
     """
-    try:
-        # Shared setup
-        wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
-        
-        # Initialize Grad-CAM and generate combined heatmap
-        with GradCAM(wrapped_model) as gradcam:
-            combined_heatmap, selected_pathologies, _predictions = gradcam.get_combined_heatmap(
-                img_tensor, probability_threshold=probability_threshold
-            )
-        
-        # Shared postprocessing
-        heatmap_full, overlaid_img = _postprocess_and_overlay(combined_heatmap, original_vis)
-        
-        # Create pathology summary string
-        pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
-        
-        return {
-            'original': original_vis,
-            'heatmap': heatmap_full,
-            'overlay': overlaid_img,
-            'selected_pathologies': selected_pathologies,
-            'pathology_summary': pathology_summary,
-            'method': 'combined_gradcam',
-            'threshold': probability_threshold
-        }
+    with get_model_lock(model_type):
+        try:
+            # Shared setup
+            wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
+            
+            # Initialize Grad-CAM and generate combined heatmap
+            with GradCAM(wrapped_model) as gradcam:
+                combined_heatmap, selected_pathologies, _predictions = gradcam.get_combined_heatmap(
+                    img_tensor, probability_threshold=probability_threshold
+                )
+            
+            # Shared postprocessing
+            heatmap_full, overlaid_img = _postprocess_and_overlay(combined_heatmap, original_vis)
+            
+            # Create pathology summary string
+            pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
+            
+            return {
+                'original': original_vis,
+                'heatmap': heatmap_full,
+                'overlay': overlaid_img,
+                'selected_pathologies': selected_pathologies,
+                'pathology_summary': pathology_summary,
+                'method': 'combined_gradcam',
+                'threshold': probability_threshold
+            }
 
-    except Exception:
-        logger.exception("Failed to apply combined Grad-CAM")
-        raise
+        except Exception:
+            logger.exception("Failed to apply combined Grad-CAM")
+            raise
 
 
 def apply_pixel_interpretability(
@@ -917,73 +985,81 @@ def apply_pixel_interpretability(
     """
     Apply Pixel-Level Interpretability to an X-ray image
     """
-    try:
-        requested_target_class = target_class
+    with get_model_lock(model_type):
+        pli: PixelLevelInterpretability | None = None
+        try:
+            requested_target_class = target_class
 
-        # Shared setup
-        wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
-        
-        # If target_class is not provided, use the class with the highest probability
-        # Note: We need a forward pass to determine this if not provided.
-        if target_class is None:
-            wrapped_model.eval()
-            with torch.no_grad():
-                preds = wrapped_model(img_tensor)
+            # Shared setup
+            wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
             
-            pred_idx = int(torch.argmax(preds).item())
-            # Use shared helper to resolve pathology name
-            n_outputs = int(preds.shape[-1])
-            names = _pathology_names_for_output(wrapped_model, n_outputs)
-            target_class = names[pred_idx] if 0 <= pred_idx < len(names) else str(pred_idx)
-        
-        # Normalize target_class string if needed
-        elif isinstance(target_class, str):
-            candidates = [target_class, target_class.replace(" ", "_"), target_class.replace("_", " ")]
-            if model_type == 'resnet':
-                for cand in candidates:
-                    if cand in xrv.datasets.default_pathologies:
-                        target_class = cand
-                        break
+            # If target_class is not provided, use the class with the highest probability
+            # Note: We need a forward pass to determine this if not provided.
+            if target_class is None:
+                wrapped_model.eval()
+                with torch.no_grad():
+                    preds = wrapped_model(img_tensor)
+                
+                pred_idx = int(torch.argmax(preds).item())
+                # Use shared helper to resolve pathology name
+                n_outputs = int(preds.shape[-1])
+                names = _pathology_names_for_output(wrapped_model, n_outputs)
+                target_class = names[pred_idx] if 0 <= pred_idx < len(names) else str(pred_idx)
+            
+            # Normalize target_class string if needed
+            elif isinstance(target_class, str):
+                candidates = [target_class, target_class.replace(" ", "_"), target_class.replace("_", " ")]
+                if model_type == 'resnet':
+                    for cand in candidates:
+                        if cand in xrv.datasets.default_pathologies:
+                            target_class = cand
+                            break
+                else:
+                    model_names = list(getattr(wrapped_model, "pathologies", []) or [])
+                    for cand in candidates:
+                        if cand in model_names:
+                            target_class = cand
+                            break
+
+            # Initialize PixelLevelInterpretability
+            pli = PixelLevelInterpretability(wrapped_model)
+            
+            # Generate saliency map
+            if use_smoothgrad:
+                saliency_map, _ = pli.apply_smoothgrad(img_tensor, target_class)
             else:
-                model_names = list(getattr(wrapped_model, "pathologies", []) or [])
-                for cand in candidates:
-                    if cand in model_names:
-                        target_class = cand
-                        break
+                saliency_map, _ = pli.generate_saliency(img_tensor, target_class)
+            
+            # Shared postprocessing (saliency_map is effectively a heatmap here)
+            saliency_full, overlaid_img = _postprocess_and_overlay(saliency_map, original_vis, alpha=0.6)
 
-        # Initialize PixelLevelInterpretability
-        pli = PixelLevelInterpretability(wrapped_model)
-        
-        # Generate saliency map
-        if use_smoothgrad:
-            saliency_map, _ = pli.apply_smoothgrad(img_tensor, target_class)
-        else:
-            saliency_map, _ = pli.generate_saliency(img_tensor, target_class)
-        
-        # Shared postprocessing (saliency_map is effectively a heatmap here)
-        saliency_full, overlaid_img = _postprocess_and_overlay(saliency_map, original_vis, alpha=0.6)
+            # Create colored version of saliency map (specific to PLI visualization needs)
+            saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)
 
-        # Create colored version of saliency map (specific to PLI visualization needs)
-        saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)
-        saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)
+            # Keep the user-visible label stable
+            target_display = requested_target_class if isinstance(requested_target_class, str) else target_class
+            
+            return {
+                'original': original_vis,
+                'saliency_map': saliency_full,
+                'saliency_colored': saliency_colored,
+                'overlay': overlaid_img,
+                'target_class': target_display,
+                'method': 'pli'
+            }
 
-        # Keep the user-visible label stable
-        target_display = requested_target_class if isinstance(requested_target_class, str) else target_class
-        
-        return {
-            'original': original_vis,
-            'saliency_map': saliency_full,
-            'saliency_colored': saliency_colored,
-            'overlay': overlaid_img,
-            'target_class': target_display,
-            'method': 'pli'
-        }
-
-    except Exception:
-        logger.exception("Error generating pixel interpretability")
-        # Return fallback empty result structure in case of error, or re-raise
-        # The original code returned empty zeros, but raising seems safer to avoid confusing downstream
-        raise
+        except Exception:
+            logger.exception("Error generating pixel interpretability")
+            raise
+        finally:
+            # Always remove hooks deterministically; relying on GC/__del__ is risky
+            # on long-running servers and can pollute subsequent Grad-CAM results.
+            if pli is not None:
+                try:
+                    pli._release_hooks()
+                except Exception:
+                    pass
 
 
 def apply_combined_pixel_interpretability(
@@ -995,39 +1071,47 @@ def apply_combined_pixel_interpretability(
     """
     Apply combined Pixel-Level Interpretability to an X-ray image
     """
-    try:
-        # Shared setup
-        wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
-        
-        # Initialize Pixel-Level Interpretability
-        pli = PixelLevelInterpretability(wrapped_model)
-        
-        # Get combined saliency map
-        combined_saliency, selected_pathologies, predictions = pli.get_combined_saliency(
-            img_tensor, probability_threshold=probability_threshold, use_smoothgrad=use_smoothgrad
-        )
-        
-        # Shared postprocessing
-        saliency_full, overlaid_img = _postprocess_and_overlay(combined_saliency, original_vis, alpha=0.4)
+    with get_model_lock(model_type):
+        pli: PixelLevelInterpretability | None = None
+        try:
+            # Shared setup
+            wrapped_model, img_tensor, original_vis = _prepare_interpretability(image_path, model_type)
+            
+            # Initialize Pixel-Level Interpretability
+            pli = PixelLevelInterpretability(wrapped_model)
+            
+            # Get combined saliency map
+            combined_saliency, selected_pathologies, predictions = pli.get_combined_saliency(
+                img_tensor, probability_threshold=probability_threshold, use_smoothgrad=use_smoothgrad
+            )
+            
+            # Shared postprocessing
+            saliency_full, overlaid_img = _postprocess_and_overlay(combined_saliency, original_vis, alpha=0.4)
 
-        # Colored saliency
-        saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)
-        saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)
-        
-        # Create pathology summary string
-        pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
-        
-        return {
-            'original': original_vis,
-            'saliency_map': saliency_full,
-            'saliency_colored': saliency_colored,
-            'overlay': overlaid_img,
-            'selected_pathologies': selected_pathologies,
-            'pathology_summary': pathology_summary,
-            'method': 'combined_pli',
-            'threshold': probability_threshold
-        }
+            # Colored saliency
+            saliency_colored_bgr = cv2.applyColorMap((saliency_full * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            saliency_colored = cv2.cvtColor(saliency_colored_bgr, cv2.COLOR_BGR2RGB)
+            
+            # Create pathology summary string
+            pathology_summary = ", ".join([f"{name} ({prob:.3f})" for name, prob in selected_pathologies])
+            
+            return {
+                'original': original_vis,
+                'saliency_map': saliency_full,
+                'saliency_colored': saliency_colored,
+                'overlay': overlaid_img,
+                'selected_pathologies': selected_pathologies,
+                'pathology_summary': pathology_summary,
+                'method': 'combined_pli',
+                'threshold': probability_threshold
+            }
 
-    except Exception:
-        logger.exception("Failed to apply combined PLI")
-        raise
+        except Exception:
+            logger.exception("Failed to apply combined PLI")
+            raise
+        finally:
+            if pli is not None:
+                try:
+                    pli._release_hooks()
+                except Exception:
+                    pass

@@ -480,6 +480,21 @@ button,
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Results page: show the same 1:1 center-crop the model sees.
+   We keep a fixed max width so the square doesn't become overwhelmingly large
+   on ultra-wide screens, but still scales down cleanly on mobile. */
+.model-view-frame {
+  width: min(100%, 800px);
+  margin: 0 auto;
+}
+
+.xray-image.model-crop {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: center;
+}
+
 .xray-image:hover {
   transform: scale(1.02);
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
@@ -1469,6 +1484,19 @@ button,
   padding: var(--spacing-sm);
   background-color: white;
   transition: transform var(--transition-normal);
+}
+
+.visualization-image.model-crop {
+  /* Display the same centered square crop the model sees (TorchXRayVision
+     `XRayCenterCrop()` -> `XRayResizer()` pipeline). This keeps GRAD-CAM / PLI
+     overlays faithful: we crop the *display* to the model's 1:1 input view
+     instead of stretching the heatmap to regions the model never saw. */
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: center;
+  /* Keep crop size bounded similarly to the default visualization images. */
+  width: 100%;
+  max-width: 600px;
 }
 
 

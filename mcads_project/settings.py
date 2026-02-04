@@ -125,6 +125,10 @@ _db_user = os.environ.get('DB_USER') or os.environ.get('POSTGRES_USER') or 'mcad
 _db_password = os.environ.get('DB_PASSWORD') or os.environ.get('POSTGRES_PASSWORD') or ''
 _db_host = os.environ.get('DB_HOST') or os.environ.get('POSTGRES_HOST') or 'localhost'
 _db_port = os.environ.get('DB_PORT') or os.environ.get('POSTGRES_PORT') or '5432'
+_db_conn_max_age = int(os.environ.get("DB_CONN_MAX_AGE", "60"))
+_db_connect_timeout = int(os.environ.get("DB_CONNECT_TIMEOUT", "5"))
+_db_application_name = os.environ.get("DB_APPLICATION_NAME", "mcads")
+_db_sslmode = os.environ.get("DB_SSLMODE", "disable")
 
 DATABASES = {
     'default': {
@@ -134,9 +138,20 @@ DATABASES = {
         'PASSWORD': _db_password,
         'HOST': _db_host,
         'PORT': _db_port,
+        # Performance: reuse connections for multiple requests/jobs.
+        # Keep this small to avoid idle connections lingering forever.
+        'CONN_MAX_AGE': _db_conn_max_age,
+        # Reliability: validate persistent connections before reuse.
+        'CONN_HEALTH_CHECKS': True,
         # Docker default: no TLS inside the private network.
         # Override with DB_SSLMODE if you use a managed/external Postgres.
-        'OPTIONS': {'sslmode': os.environ.get('DB_SSLMODE', 'disable')},
+        'OPTIONS': {
+            'sslmode': _db_sslmode,
+            # Fail fast on broken DNS/network (especially useful during container starts).
+            'connect_timeout': _db_connect_timeout,
+            # Helpful for pg_stat_activity observability.
+            'application_name': _db_application_name,
+        },
     }
 }
 
@@ -413,10 +428,6 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 # Test configuration
 import sys
 if 'test' in sys.argv:
-    DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
     import tempfile
     # Use a temporary directory for media files during tests
     MEDIA_ROOT = tempfile.mkdtemp()

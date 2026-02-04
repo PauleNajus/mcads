@@ -1,9 +1,10 @@
 from unittest.mock import patch, MagicMock
-from django.test import TestCase, SimpleTestCase
+from django.test import SimpleTestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from .image_processing import looks_like_dicom
 from .models import XRayImage
-from .model_loader import load_model, clear_model_cache, _model_cache
+from .model_loader import load_model, clear_model_cache
 
 class ImageProcessingTests(SimpleTestCase):
     def test_looks_like_dicom_header(self):
@@ -23,15 +24,16 @@ class ImageProcessingTests(SimpleTestCase):
         self.assertFalse(looks_like_dicom("test.png", header))
         self.assertFalse(looks_like_dicom(None, header))
 
-class XRayImageModelTests(TestCase):
+class XRayImageModelTests(SimpleTestCase):
     def test_create_xray_image(self):
         # Create a dummy image
         image = SimpleUploadedFile("test_image.jpg", b"file_content", content_type="image/jpeg")
-        xray = XRayImage.objects.create(
+        xray = XRayImage(
             image=image,
             first_name="John",
             last_name="Doe",
-            patient_id="12345"
+            patient_id="12345",
+            uploaded_at=timezone.now(),
         )
         self.assertEqual(xray.first_name, "John")
         self.assertIn("John Doe", str(xray))
@@ -39,22 +41,23 @@ class XRayImageModelTests(TestCase):
         self.assertEqual(xray.processing_status, 'pending')
 
     def test_calculate_severity_level(self):
-        xray = XRayImage(
-            atelectasis=0.1,
-            cardiomegaly=0.2,
-            effusion=0.05
-        )
-        # Average = (0.1 + 0.2 + 0.05) / 3 = 0.116... -> Level 1 (<= 0.19)
-        self.assertEqual(xray.calculate_severity_level, 1)
+        # Severity is derived from the *maximum* predicted pathology probability
+        # (Manchester Triage System approximation):
+        # 1=Immediate (>=0.80) ... 5=Non-urgent (<0.20)
+        xray = XRayImage(atelectasis=0.19)
+        self.assertEqual(xray.calculate_severity_level, 5)
 
-        xray.atelectasis = 0.3
-        xray.cardiomegaly = 0.3
-        # Average = (0.3 + 0.3 + 0.05) / 3 = 0.216... -> Level 2 (<= 0.30)
+        xray.atelectasis = 0.20
+        self.assertEqual(xray.calculate_severity_level, 4)
+
+        xray.atelectasis = 0.40
+        self.assertEqual(xray.calculate_severity_level, 3)
+
+        xray.atelectasis = 0.60
         self.assertEqual(xray.calculate_severity_level, 2)
 
-        xray.atelectasis = 0.9
-        # Average = (0.9 + 0.3 + 0.05) / 3 = 0.416... -> Level 3 (> 0.30)
-        self.assertEqual(xray.calculate_severity_level, 3)
+        xray.atelectasis = 0.80
+        self.assertEqual(xray.calculate_severity_level, 1)
 
 class ModelLoaderTests(SimpleTestCase):
     def setUp(self):

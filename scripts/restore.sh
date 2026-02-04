@@ -20,6 +20,18 @@ if [[ -f docker-compose.prod.yml && -f ssl/fullchain.pem && -f ssl/privkey.pem ]
   COMPOSE_FILES+=(-f docker-compose.prod.yml)
 fi
 
+# Load local env overrides if present (kept out of git).
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+# Resolve DB identity with sensible defaults (matches docker-compose.yml).
+DB_NAME="${DB_NAME:-${POSTGRES_DB:-mcads_db}}"
+DB_USER="${DB_USER:-${POSTGRES_USER:-mcads_user}}"
+
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <backup_name>"
     echo "Available backups:"
@@ -54,11 +66,11 @@ echo "Restoring PostgreSQL database..."
 sleep 10  # Wait for database to be ready
 
 # Drop and recreate database
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d postgres -c "DROP DATABASE IF EXISTS mcads_db;"
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d postgres -c "CREATE DATABASE mcads_db;"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS ${DB_NAME};"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U "${DB_USER}" -d postgres -c "CREATE DATABASE ${DB_NAME};"
 
 # Restore database data
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U mcads_user -d mcads_db < "${BACKUP_DIR}/mcads_backup_${BACKUP_NAME}/database.sql"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db psql -U "${DB_USER}" -d "${DB_NAME}" < "${BACKUP_DIR}/mcads_backup_${BACKUP_NAME}/database.sql"
 
 # Restore media files
 echo "Restoring media files..."

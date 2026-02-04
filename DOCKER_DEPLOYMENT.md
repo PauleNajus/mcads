@@ -255,8 +255,17 @@ docker-compose build --no-cache
 docker-compose exec db pg_isready -U mcads_user
 
 # Reset database
-docker-compose down -v
-docker-compose up -d
+./scripts/reset_db.sh
+
+# If you upgraded PostgreSQL across major versions (e.g. 15 -> 18) and see errors like
+# "database files are incompatible with server", recreate ONLY the Postgres volume:
+./scripts/recreate_postgres_volume.sh
+
+# NOTE:
+# `down -v` deletes *all* named volumes (including uploads/backups/caches).
+# Only use this if you intentionally want to wipe everything.
+# docker-compose down -v
+# docker-compose up -d
 ```
 
 #### Memory Issues

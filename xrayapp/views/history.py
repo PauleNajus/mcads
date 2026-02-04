@@ -7,8 +7,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Case, F, FloatField, IntegerField, Value, When
-from django.db.models.functions import Coalesce
+from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +19,6 @@ from xrayapp.forms import (
     XRayUploadForm,
 )
 from xrayapp.models import (
-    PATHOLOGY_FIELDS,
     PredictionHistory,
     SavedRecord,
 )
@@ -59,38 +58,17 @@ def prediction_history(request: HttpRequest) -> HttpResponse:
         sort_order = form.cleaned_data.get('sort_order', 'desc')
         
         if sort_by == 'severity':
-            # Sort by severity_level (1=Insignificant, 2=Moderate, 3=Significant)
-            # For records without severity_level, calculate it dynamically
-            
-            # List of all pathology fields
-            pathology_fields = PATHOLOGY_FIELDS
-            
-            # Calculate average of all pathology fields for records without severity_level
-            sum_expr = sum([Coalesce(F(field), Value(0.0), output_field=FloatField()) 
-                           for field in pathology_fields], Value(0.0, output_field=FloatField()))
-            avg_expr = sum_expr / Value(len(pathology_fields), output_field=FloatField())
-            
-            # First, annotate with average pathology
-            query = query.annotate(avg_pathology=avg_expr)
-            
-            # Then, use existing severity_level if available, otherwise calculate it
-            query = query.annotate(
-                sort_severity=Case(
-                    # If severity_level exists, use it
-                    When(severity_level__isnull=False, then=F('severity_level')),
-                    # Otherwise calculate from average pathology probability
-                    When(avg_pathology__lte=0.19, then=Value(1)),
-                    When(avg_pathology__lte=0.30, then=Value(2)),
-                    default=Value(3),
-                    output_field=IntegerField()
-                )
-            )
-            
-            # Sort by severity
-            # desc: Significant → Moderate → Insignificant (3, 2, 1)
-            # asc: Insignificant → Moderate → Significant (1, 2, 3)
-            order_field = 'sort_severity' if sort_order == 'asc' else '-sort_severity'
-            query = query.order_by(order_field, '-created_at')
+            # Sort by stored MTS triage severity_level:
+            # 1=Immediate (most urgent) ... 5=Non-urgent (least urgent)
+            #
+            # This is intentionally DB-only and index-friendly. We treat NULL as
+            # "unknown" and push it to the end.
+            if sort_order == "asc":
+                # Least urgent -> most urgent
+                query = query.order_by(F("severity_level").desc(nulls_last=True), "-created_at")
+            else:
+                # Most urgent -> least urgent
+                query = query.order_by(F("severity_level").asc(nulls_last=True), "-created_at")
         elif sort_by == 'xray_date':
             # Sort by X-ray date
             order_field = 'xray__date_of_xray' if sort_order == 'asc' else '-xray__date_of_xray'
@@ -116,9 +94,10 @@ def prediction_history(request: HttpRequest) -> HttpResponse:
     total_count = paginator.count
     
     # Get saved record IDs for current user to show star status
+    page_history_ids = [item.pk for item in history_items]
     saved_record_ids = set(SavedRecord.objects.filter(
         user=request.user,
-        prediction_history__in=[item.pk for item in history_items]
+        prediction_history_id__in=page_history_ids,
     ).values_list('prediction_history_id', flat=True))
     
     context = {
@@ -218,27 +197,39 @@ def toggle_save_record(request: HttpRequest, pk: int) -> JsonResponse:
         # Get the prediction history record (must be from same hospital)
         prediction_record = PredictionHistory.objects.for_hospital(user_hospital).get(pk=pk)
         
-        # Check if record is already saved by this user
-        saved_record, created = SavedRecord.objects.get_or_create(
-            user=request.user,
-            prediction_history=prediction_record
-        )
-        
-        if created:
-            # Record was saved
-            return JsonResponse({
-                'success': True,
-                'saved': True,
-                'message': _('Record saved successfully')
-            })
-        else:
-            # Record was already saved, so unsave it
-            saved_record.delete()
-            return JsonResponse({
-                'success': True,
-                'saved': False,
-                'message': _('Record removed from saved')
-            })
+        # Toggle inside a transaction so we don't 500 on rapid double-clicks / races.
+        with transaction.atomic():
+            deleted_count, _ = SavedRecord.objects.filter(
+                user=request.user,
+                prediction_history=prediction_record,
+            ).delete()
+
+            if deleted_count:
+                # Record was unsaved
+                return JsonResponse(
+                    {
+                        "success": True,
+                        "saved": False,
+                        "message": _("Record removed from saved"),
+                    }
+                )
+
+            try:
+                SavedRecord.objects.create(
+                    user=request.user,
+                    prediction_history=prediction_record,
+                )
+            except IntegrityError:
+                # Another request created it first; treat as saved.
+                pass
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "saved": True,
+                    "message": _("Record saved successfully"),
+                }
+            )
             
     except PredictionHistory.DoesNotExist:
         return JsonResponse({

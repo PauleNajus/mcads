@@ -10,12 +10,31 @@ import torchxrayvision as xrv
 
 # Centralized cache for all heavy models used across the app
 _model_cache: Dict[str, tuple] = {}
+_model_forward_locks: Dict[str, threading.Lock] = {}
 
 _AE_CACHE_KEY = "autoencoder"
 _SEGMENTATION_CACHE_KEY = "segmentation_pspnet"
 
 logger = logging.getLogger(__name__)
 _cache_lock = threading.Lock()
+
+def get_model_lock(model_type: str) -> threading.Lock:
+    """Return a per-model lock for safe forward/backward usage.
+
+    Why:
+    - `load_model()` caches model instances globally.
+    - Interpretability (Grad-CAM / PLI) registers hooks and runs backward(),
+      which can be corrupted if any other thread runs a forward pass on the same
+      model concurrently.
+    - Serializing per `model_type` keeps explanations correct while still
+      allowing different models (DenseNet vs ResNet) to run in parallel.
+    """
+    with _cache_lock:
+        lock = _model_forward_locks.get(model_type)
+        if lock is None:
+            lock = threading.Lock()
+            _model_forward_locks[model_type] = lock
+        return lock
 
 
 def _ensure_cache_dirs() -> str:

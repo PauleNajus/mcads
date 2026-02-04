@@ -140,7 +140,7 @@ def generate_interpretability(request: HttpRequest, pk: int) -> HttpResponse:
     # Reset progress to 0 and set status to processing
     xray_instance.progress = 0
     xray_instance.processing_status = 'processing'
-    xray_instance.save()
+    xray_instance.save(update_fields=["progress", "processing_status"])
     
     # Get the image path
     image_path = Path(settings.MEDIA_ROOT) / xray_instance.image.name
@@ -198,7 +198,7 @@ def generate_segmentation(request: HttpRequest, pk: int) -> HttpResponse:
     # Reset progress to 0 and set status to processing
     xray_instance.progress = 0
     xray_instance.processing_status = 'processing'
-    xray_instance.save()
+    xray_instance.save(update_fields=["progress", "processing_status"])
     
     # Start background processing (prefer Celery only if explicitly enabled)
     use_celery = settings.USE_CELERY

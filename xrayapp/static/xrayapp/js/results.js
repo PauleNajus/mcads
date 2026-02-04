@@ -223,12 +223,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // Display GRAD-CAM visualizations if available
                             if (data.gradcam && data.gradcam.has_gradcam && data.gradcam.visualizations) {
-                                displayMultipleGradCAMVisualizations(data.gradcam.visualizations, data.image_url);
+                                const displayImageUrl = data.image_preview_url || data.image_url;
+                                displayMultipleGradCAMVisualizations(data.gradcam.visualizations, displayImageUrl);
                             }
                             
                             // Display PLI visualizations if available
                             if (data.pli && data.pli.has_pli && data.pli.visualizations) {
-                                displayMultiplePLIVisualizations(data.pli.visualizations, data.image_url);
+                                const displayImageUrl = data.image_preview_url || data.image_url;
+                                displayMultiplePLIVisualizations(data.pli.visualizations, displayImageUrl);
                             }
                         }, 1000);
                     }
@@ -319,7 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // Display segmentation visualizations if available
                             if (data.segmentation && data.segmentation.has_segmentation && data.segmentation.visualizations) {
-                                displaySegmentationVisualizations(data.segmentation.visualizations, data.image_url);
+                                const displayImageUrl = data.image_preview_url || data.image_url;
+                                displaySegmentationVisualizations(data.segmentation.visualizations, displayImageUrl);
                             }
                         }, 1000);
                     }
@@ -351,19 +354,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // - xs/sm: wrap buttons so they fit on mobile
             // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
-                <div class="card-header bg-success text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            ${gettext("GRAD-CAM visualization")} - ${viz.target_pathology}
-                        </h5>
-                        <button class="btn btn-sm btn-danger delete-visualization-btn" 
-                                data-viz-id="${viz.id}" 
-                                data-viz-type="gradcam"
-                                data-pathology="${viz.target_pathology}"
-                                title="${gettext('Delete this visualization')}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                <div class="card-header">
+                    <h5 class="mb-0">${gettext("GRAD-CAM visualization")} - ${viz.target_pathology}</h5>
                 </div>
                 <div class="card-body text-center">
                     <div class="row">
@@ -473,28 +465,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // - xs/sm: wrap buttons so they fit on mobile
             // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
-                <div class="card-header bg-info text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            ${gettext("Pixel-level interpretability")} - ${viz.target_pathology}
-                        </h5>
-                        <button class="btn btn-sm btn-danger delete-visualization-btn" 
-                                data-viz-id="${viz.id}" 
-                                data-viz-type="pli"
-                                data-pathology="${viz.target_pathology}"
-                                title="${gettext('Delete this visualization')}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                <div class="card-header">
+                    <h5 class="mb-0">${gettext("Pixel-level interpretability")} - ${viz.target_pathology}</h5>
                 </div>
                 <div class="card-body text-center">
                     <div class="row">
                         <div class="col-md-6">
-                            <img src="${imageUrl}" alt="${gettext('Original X-ray')}" class="img-fluid visualization-image">
+                            <img src="${imageUrl}" alt="${gettext('Original X-ray')}" class="img-fluid visualization-image model-crop">
                             <p class="mt-2 text-center">${gettext("Original X-ray")}</p>
                         </div>
                         <div class="col-md-6">
-                            <img src="${viz.overlay_url}?t=${new Date().getTime()}" alt="${gettext('Pixel-Level Overlay')}" class="img-fluid visualization-image">
+                            <img src="${viz.overlay_url}?t=${new Date().getTime()}" alt="${gettext('Pixel-Level Overlay')}" class="img-fluid visualization-image model-crop">
                             <p class="mt-2 text-center">${gettext("Pixel-level overlay")}</p>
                         </div>
                     </div>
@@ -620,11 +601,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="row">
                         <div class="col-md-6">
                             <h6>${gettext("Original X-ray")}</h6>
-                            <img src="${imageUrl}" alt="${gettext('Original X-ray')}" class="img-fluid mb-3">
+                            <img src="${imageUrl}" alt="${gettext('Original X-ray')}" class="img-fluid visualization-image model-crop mb-3">
                         </div>
                         <div class="col-md-6">
                             <h6>${gettext("Segmentation Overlay")}</h6>
-                            <img src="/media/${combinedViz.visualization_path}" alt="${gettext('Segmentation overlay')}" class="img-fluid mb-3">
+                            <img src="/media/${combinedViz.visualization_path}" alt="${gettext('Segmentation overlay')}" class="img-fluid visualization-image model-crop mb-3">
                         </div>
                     </div>
                     

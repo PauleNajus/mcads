@@ -166,8 +166,8 @@
                 <small>{% trans "Uploaded on" %} {{ xray.uploaded_at|localtime|date:"Y-m-d H:i" }}</small>
             </div>
             <div class="card-body text-center">
-                <div class="position-relative d-inline-block">
-                    <img src="{{ image_preview_url }}" alt="X-ray Image" class="img-fluid xray-image">
+                <div class="position-relative model-view-frame">
+                    <img src="{{ image_preview_url }}" alt="X-ray Image" class="img-fluid xray-image model-crop">
                     <div class="position-absolute bottom-0 end-0 m-2 bg-dark bg-opacity-50 text-white px-2 py-1 rounded small">
                         <i class="bi bi-zoom-in"></i> {% trans "Click to enlarge" %}
                     </div>
@@ -285,28 +285,17 @@
         {% for viz in gradcam_visualizations %}
         <div class="card mb-2" id="visualization-{{ viz.id }}">
             <div class="card-header">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1">
-                    <h5 class="mb-0">
-                        {% trans "GRAD-CAM visualization" %} - {{ viz.target_pathology }}
-                    </h5>
-                    <button class="btn btn-sm btn-danger delete-visualization-btn" 
-                            data-viz-id="{{ viz.id }}" 
-                            data-viz-type="gradcam"
-                            data-pathology="{{ viz.target_pathology }}"
-                            title="{% trans 'Delete this visualization' %}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
+                <h5 class="mb-0">{% trans "GRAD-CAM visualization" %} - {{ viz.target_pathology }}</h5>
             </div>
             <div class="card-body text-center">
                 <div class="row">
                     <div class="col-md-6">
                         {# Show the same center-cropped square view the model sees (matches XRayCenterCrop). #}
-                        <img src="{{ image_preview_url }}" alt="Original X-ray" class="img-fluid visualization-image">
+                        <img src="{{ image_preview_url }}" alt="Original X-ray" class="img-fluid visualization-image model-crop">
                         <p class="mt-2 text-center">{% trans "Original X-ray" %}</p>
                     </div>
                     <div class="col-md-6">
-                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="GRAD-CAM Overlay" class="img-fluid visualization-image">
+                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="GRAD-CAM Overlay" class="img-fluid visualization-image model-crop">
                         <p class="mt-2 text-center">{% trans "GRAD-CAM Overlay" %}</p>
                     </div>
                 </div>
@@ -377,27 +366,16 @@
         {% for viz in pli_visualizations %}
         <div class="card mb-2" id="visualization-{{ viz.id }}">
             <div class="card-header">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1">
-                    <h5 class="mb-0">
-                        {% trans "Pixel-level interpretability" %} - {{ viz.target_pathology }}
-                    </h5>
-                    <button class="btn btn-sm btn-danger delete-visualization-btn" 
-                            data-viz-id="{{ viz.id }}" 
-                            data-viz-type="pli"
-                            data-pathology="{{ viz.target_pathology }}"
-                            title="{% trans 'Delete this visualization' %}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
+                <h5 class="mb-0">{% trans "Pixel-level interpretability" %} - {{ viz.target_pathology }}</h5>
             </div>
             <div class="card-body text-center">
                 <div class="row">
                     <div class="col-md-6">
-                        <img src="{{ image_preview_url }}" alt="Original X-ray" class="img-fluid visualization-image">
+                        <img src="{{ image_preview_url }}" alt="Original X-ray" class="img-fluid visualization-image model-crop">
                         <p class="mt-2 text-center">{% trans "Original X-ray" %}</p>
                     </div>
                     <div class="col-md-6">
-                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="Pixel-Level Overlay" class="img-fluid visualization-image">
+                        <img src="{{ viz.overlay_url }}?t={% now 'U' %}" alt="Pixel-Level Overlay" class="img-fluid visualization-image model-crop">
                         <p class="mt-2 text-center">{% trans "Pixel-level overlay" %}</p>
                     </div>
                 </div>

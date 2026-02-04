@@ -20,6 +20,19 @@ if [[ -f docker-compose.prod.yml && -f ssl/fullchain.pem && -f ssl/privkey.pem ]
   COMPOSE_FILES+=(-f docker-compose.prod.yml)
 fi
 
+# Load local env overrides if present (kept out of git).
+# This keeps the script in sync with docker-compose variables without hardcoding.
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+# Resolve DB identity with sensible defaults (matches docker-compose.yml).
+DB_NAME="${DB_NAME:-${POSTGRES_DB:-mcads_db}}"
+DB_USER="${DB_USER:-${POSTGRES_USER:-mcads_user}}"
+
 BACKUP_DIR="./backups"
 DATE=$(date +"%Y%m%d_%H%M%S")
 BACKUP_NAME="mcads_backup_${DATE}"
@@ -31,7 +44,7 @@ mkdir -p "${BACKUP_DIR}/${BACKUP_NAME}"
 
 # Backup PostgreSQL database
 echo "Backing up PostgreSQL database..."
-"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db pg_dump -U mcads_user mcads_db > "${BACKUP_DIR}/${BACKUP_NAME}/database.sql"
+"${COMPOSE[@]}" "${COMPOSE_FILES[@]}" exec -T db pg_dump -U "${DB_USER}" "${DB_NAME}" > "${BACKUP_DIR}/${BACKUP_NAME}/database.sql"
 
 # Backup media files
 echo "Backing up media files..."

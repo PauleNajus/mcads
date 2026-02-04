@@ -10,7 +10,7 @@ import torch
 import torchxrayvision as xrv
 import torchvision
 
-from .model_loader import load_model, load_segmentation_model, load_autoencoder
+from .model_loader import get_model_lock, load_model, load_segmentation_model, load_autoencoder
 from .transforms import get_xrv_transform
 from .xrv_io import load_xrv_image as _load_xrv_image
 from .image_processing import extract_image_metadata
@@ -280,6 +280,11 @@ def process_image(
         xray_instance.progress = 40
         xray_instance.save(update_fields=['progress'])
     
+    # Load model and get resize dimension.
+    #
+    # Note: The classifier model is cached globally. We'll serialize the actual
+    # forward pass below so interpretability hooks/backward passes can't be
+    # corrupted by concurrent forwards (and vice-versa).
     model, resize_dim = load_model(model_type)
     model = cast(torch.nn.Module, model)
     
@@ -299,7 +304,6 @@ def process_image(
     # Get device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     img_tensor = img_tensor.to(device)
-    model = model.to(device)
     
     # Update progress to 60%
     if xray_instance:
@@ -312,9 +316,13 @@ def process_image(
         xray_instance.progress = 75
         xray_instance.save(update_fields=['progress'])
     
-    with torch.inference_mode():
-        # Use the model's forward method for both model types
-        preds = model(img_tensor).cpu()
+    # Run the forward pass under a per-model lock to prevent races with
+    # interpretability (Grad-CAM / PLI register hooks and call backward()).
+    with get_model_lock(model_type):
+        model = model.to(device)
+        with torch.inference_mode():
+            # Use the model's forward method for both model types
+            preds = model(img_tensor).cpu()
     
     # Create a dictionary of pathology predictions
     # For ResNet, ALWAYS use default_pathologies for correct mapping
@@ -551,7 +559,9 @@ def save_and_record_visualization(
             'heatmap_filename': 'gradcam_heatmap',
             'overlay_filename': 'gradcam_overlay',
         }
-        target_value = results['pathology_summary']
+        # Store a short label in `target_pathology` (DB field is limited), and
+        # keep the full summary in `metadata`.
+        target_value = f"Combined (thr={threshold:g})"
         legacy_has_field = 'has_gradcam'
         legacy_target_field = 'gradcam_target_class'
         visualization_type = 'combined_gradcam'
@@ -568,7 +578,9 @@ def save_and_record_visualization(
             'saliency_filename': 'pli_saliency_map',
             'overlay_filename': 'pli_overlay_visualization',
         }
-        target_value = results['pathology_summary']
+        # Store a short label in `target_pathology` (DB field is limited), and
+        # keep the full summary in `metadata`.
+        target_value = f"Combined (thr={threshold:g})"
         legacy_has_field = 'has_pli'
         legacy_target_field = 'pli_target_class'
         visualization_type = 'combined_pli'
@@ -583,6 +595,15 @@ def save_and_record_visualization(
     rel_prefix = f"interpretability/{method}/"
     
     defaults = {'model_used': model_type}
+
+    # For combined methods, preserve full selection details in metadata (the
+    # `target_pathology` field is intentionally short).
+    if method in {"combined_gradcam", "combined_pli"}:
+        defaults["metadata"] = {
+            "pathology_summary": str(results.get("pathology_summary") or ""),
+            "selected_pathologies": list(results.get("selected_pathologies") or []),
+            "threshold": results.get("threshold"),
+        }
     
     for key, (fname, saver) in filenames.items():
         full_path = base_dir / fname
@@ -602,9 +623,13 @@ def save_and_record_visualization(
              if key == 'combined_filename': defaults['visualization_path'] = rel_path
              if key == 'heatmap_filename': defaults['heatmap_path'] = rel_path
              if key == 'overlay_filename': defaults['overlay_path'] = rel_path
-        elif visualization_type in ['pli', 'combined_pli']:
-             if key == 'saliency_filename' or key == 'combined_filename': defaults['visualization_path'] = rel_path
-             if key == 'separate_saliency_filename' or key == 'saliency_filename': defaults['saliency_path'] = rel_path
+        elif visualization_type == 'pli':
+             if key == 'saliency_filename': defaults['visualization_path'] = rel_path
+             if key == 'separate_saliency_filename': defaults['saliency_path'] = rel_path
+             if key == 'overlay_filename': defaults['overlay_path'] = rel_path
+        elif visualization_type == 'combined_pli':
+             if key == 'combined_filename': defaults['visualization_path'] = rel_path
+             if key == 'saliency_filename': defaults['saliency_path'] = rel_path
              if key == 'overlay_filename': defaults['overlay_path'] = rel_path
 
     if 'threshold' in results:
@@ -621,3 +646,10 @@ def save_and_record_visualization(
     # Finalize legacy flags
     setattr(xray_instance, legacy_has_field, True)
     setattr(xray_instance, legacy_target_field, target_value)
+
+    # Persist legacy fields for admin/back-compat consumers.
+    #
+    # We keep this explicit so DB writes remain minimal (one UPDATE for only the
+    # fields we just changed).
+    legacy_update_fields = {legacy_has_field, legacy_target_field, *legacy_map.values()}
+    xray_instance.save(update_fields=sorted(legacy_update_fields))

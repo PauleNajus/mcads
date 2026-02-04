@@ -34,15 +34,25 @@ def get_user_with_role(obj):
 
 @admin.display(description=_('Severity'))
 def get_severity_display(obj):
-    """Display severity with color coding"""
+    """Display severity with MTS-aligned color coding.
+
+    Severity levels (MTS):
+    1=Immediate (Red) ... 5=Non-urgent (Blue)
+    """
     level = obj.severity_level or obj.calculate_severity_level
     label = SEVERITY_MAPPING.get(level, _('Unknown'))
+
     if level == 1:
-        return format_html('<span style="color: #28a745;">{}</span>', label)
+        return format_html('<span style="color: #dc3545; font-weight: 600;">{}</span>', label)
     elif level == 2:
-        return format_html('<span style="color: #ffc107;">{}</span>', label)
+        return format_html('<span style="color: #fd7e14; font-weight: 600;">{}</span>', label)
     elif level == 3:
-        return format_html('<span style="color: #dc3545;">{}</span>', label)
+        return format_html('<span style="color: #ffc107; font-weight: 600;">{}</span>', label)
+    elif level == 4:
+        return format_html('<span style="color: #28a745; font-weight: 600;">{}</span>', label)
+    elif level == 5:
+        return format_html('<span style="color: #0dcaf0; font-weight: 600;">{}</span>', label)
+
     return label
 
 

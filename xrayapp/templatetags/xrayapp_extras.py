@@ -55,7 +55,7 @@ def add_class(field: Any, css_class: str) -> Any:
 
 @register.filter
 def get_severity_level(obj: Any) -> int | None:
-    """Get the severity level (0-3) from a model instance (XRayImage or PredictionHistory)"""
+    """Get the MTS severity level (1-5) from a model instance (XRayImage or PredictionHistory)."""
     if hasattr(obj, 'severity_level') and obj.severity_level is not None:
         return obj.severity_level
     elif hasattr(obj, 'calculate_severity_level'):

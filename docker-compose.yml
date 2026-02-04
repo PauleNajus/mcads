@@ -69,19 +69,27 @@ x-mcads-app: &mcads_app
 
 services:
   db:
-    image: postgres:15
+    # NOTE: Major version upgrades require a fresh data directory.
+    # If you previously ran Postgres 15/16/17 with the same `postgres_data` volume,
+    # recreate it (see `scripts/recreate_postgres_volume.sh`).
+    image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mcads_db}
       POSTGRES_USER: ${POSTGRES_USER:-mcads_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18+ stores data under a major-version subdirectory and expects
+      # the volume to be mounted at /var/lib/postgresql (see container logs).
+      - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      # Use compose-time interpolation (not shell expansion) so the command is
+      # stable across compose versions / shells.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mcads_user} -d ${POSTGRES_DB:-mcads_db}"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 30s
 
   redis:
     image: redis:7
