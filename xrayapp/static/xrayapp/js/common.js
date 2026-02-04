@@ -73,6 +73,10 @@ if (typeof gettext === 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
     // Style card headers based on content
     const headers = document.querySelectorAll('.card-header');
+    // Opt-out class for headers that must keep the default branded look.
+    // Example: interpretability visualization headers contain pathology names (e.g. "Infiltration")
+    // and would otherwise get auto-colored (yellow/red) by the keyword matcher below.
+    const SKIP_HEADER_AUTOCOLOR_CLASS = 'js-skip-header-autocolor';
     const headerPatterns = {
         'bg-success': ['Insignificant', 'No Finding'],
         'bg-warning': ['Moderate', 'Nodule', 'Infiltration', 'Atelectasis'],
@@ -80,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     headers.forEach(header => {
+        if (header.classList.contains(SKIP_HEADER_AUTOCOLOR_CLASS)) {
+            return;
+        }
+
         const text = header.textContent;
         // Don't override if it already has a specific background class
         if (header.classList.contains('bg-primary') || 

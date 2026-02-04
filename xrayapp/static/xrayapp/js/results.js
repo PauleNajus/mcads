@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // - xs/sm: wrap buttons so they fit on mobile
             // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
-                <div class="card-header">
+                <div class="card-header js-skip-header-autocolor">
                     <h5 class="mb-0">${gettext("GRAD-CAM visualization")} - ${viz.target_pathology}</h5>
                 </div>
                 <div class="card-body text-center">
@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // - xs/sm: wrap buttons so they fit on mobile
             // - md+: keep a single row with horizontal scroll (labels become visible)
             section.innerHTML = `
-                <div class="card-header">
+                <div class="card-header js-skip-header-autocolor">
                     <h5 class="mb-0">${gettext("Pixel-level interpretability")} - ${viz.target_pathology}</h5>
                 </div>
                 <div class="card-body text-center">

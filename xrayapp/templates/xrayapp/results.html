@@ -284,7 +284,7 @@
         {% if gradcam_visualizations %}
         {% for viz in gradcam_visualizations %}
         <div class="card mb-2" id="visualization-{{ viz.id }}">
-            <div class="card-header">
+            <div class="card-header js-skip-header-autocolor">
                 <h5 class="mb-0">{% trans "GRAD-CAM visualization" %} - {{ viz.target_pathology }}</h5>
             </div>
             <div class="card-body text-center">
@@ -365,7 +365,7 @@
         {% if pli_visualizations %}
         {% for viz in pli_visualizations %}
         <div class="card mb-2" id="visualization-{{ viz.id }}">
-            <div class="card-header">
+            <div class="card-header js-skip-header-autocolor">
                 <h5 class="mb-0">{% trans "Pixel-level interpretability" %} - {{ viz.target_pathology }}</h5>
             </div>
             <div class="card-body text-center">
@@ -595,5 +595,6 @@
 
 {% block extra_js %}
 {% load static %}
-<script src="{% static 'xrayapp/js/results.js' %}?v=20260127"></script>
+<script src="{% static 'xrayapp/js/results.js' %}?v=20260204"></script>
+{# Bump version when `xrayapp/js/results.js` changes to avoid stale cached JS. #}
 {% endblock %}
