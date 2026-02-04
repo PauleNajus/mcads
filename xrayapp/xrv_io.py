@@ -29,10 +29,13 @@ def load_xrv_image(path: str | Path) -> np.ndarray:
     """
     p = Path(path)
     s = str(p)
-    try:
-        return xrv.utils.load_image(s)
-    except Exception:
-        if p.suffix.lower() in (".dcm", ".dicom"):
-            return xrv.utils.read_xray_dcm(s)[None, ...]
-        raise
+
+    # Fast path: if the extension indicates DICOM, load via pydicom directly.
+    # TorchXRayVision's `load_image()` only detects DICOM via the "DICM" marker,
+    # so some valid clinical exports would otherwise take a slow "try-as-image"
+    # path before failing and falling back.
+    if p.suffix.lower() in (".dcm", ".dicom"):
+        return xrv.utils.read_xray_dcm(s)[None, ...]
+
+    return xrv.utils.load_image(s)
 

@@ -203,9 +203,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Function to track progress
+  // Map server-side progress [0..100] to UI progress [UPLOAD_STAGE_MAX..100].
+  // This keeps the bar moving smoothly: upload uses 0..UPLOAD_STAGE_MAX, then
+  // server processing continues from there.
+  const UPLOAD_STAGE_MAX = 20;
+  const mapServerProgress = (serverProgress) => {
+    const p = Number.isFinite(serverProgress) ? serverProgress : 0;
+    const clamped = Math.min(Math.max(p, 0), 100);
+    const mapped = Math.round(UPLOAD_STAGE_MAX + (clamped / 100) * (100 - UPLOAD_STAGE_MAX));
+    return Math.min(Math.max(mapped, UPLOAD_STAGE_MAX), 100);
+  };
+
   const trackProgress = (uploadId) => {
     let currentProgress = 0;
     let oodNotified = false;
+    let lastAnnounced = 0;
     
     // Hide form and show progress bar
     if (formWrapper) formWrapper.style.display = 'none';
@@ -219,13 +231,14 @@ document.addEventListener('DOMContentLoaded', () => {
           // Update progress bar
           currentProgress = data.progress;
           if (!Number.isFinite(currentProgress)) currentProgress = 0;
-          if (currentProgress < 1) currentProgress = 1; // never show 0%
+          if (currentProgress < 1) currentProgress = 1; // never show 0% from server
+          const displayProgress = mapServerProgress(currentProgress);
           if (progressBar) {
-            progressBar.style.width = `${currentProgress}%`;
-            progressBar.setAttribute('aria-valuenow', currentProgress);
-            progressBar.parentElement.setAttribute('aria-valuenow', currentProgress);
+            progressBar.style.width = `${displayProgress}%`;
+            progressBar.setAttribute('aria-valuenow', displayProgress);
+            progressBar.parentElement.setAttribute('aria-valuenow', displayProgress);
           }
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% ${gettext('Complete')}`;
+          if (progressPercentage) progressPercentage.textContent = `${displayProgress}% ${gettext('Complete')}`;
           
           // Check for OOD status and notify if not already notified
           if (data.requires_expert_review && !oodNotified) {
@@ -239,15 +252,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
           // Update screen reader announcements
           const statusElement = document.getElementById('analysis-status');
-          if (statusElement && currentProgress % 25 === 0) {
+          if (statusElement) {
             const statusMessages = {
               25: gettext('Image uploaded successfully, analysis 25% complete'),
               50: gettext('AI model processing X-ray data, analysis 50% complete'), 
               75: gettext('Generating predictions, analysis 75% complete'),
               100: gettext('Analysis complete, redirecting to results')
             };
-            if (statusMessages[currentProgress]) {
-              statusElement.textContent = statusMessages[currentProgress];
+            // Announce milestones based on *server* progress (not mapped UI progress).
+            const milestones = [25, 50, 75, 100];
+            for (const m of milestones) {
+              if (currentProgress >= m && lastAnnounced < m && statusMessages[m]) {
+                statusElement.textContent = statusMessages[m];
+                lastAnnounced = m;
+              }
             }
           }
           
@@ -264,11 +282,12 @@ document.addEventListener('DOMContentLoaded', () => {
           console.error('Error checking progress:', error);
           // Increase progress a bit anyway to give feedback
           currentProgress = Math.min(Math.max(currentProgress, 1) + 5, 95);
+          const displayProgress = mapServerProgress(currentProgress);
           if (progressBar) {
-            progressBar.style.width = `${currentProgress}%`;
-            progressBar.setAttribute('aria-valuenow', currentProgress);
+            progressBar.style.width = `${displayProgress}%`;
+            progressBar.setAttribute('aria-valuenow', displayProgress);
           }
-          if (progressPercentage) progressPercentage.textContent = `${currentProgress}% ${gettext('Complete')}`;
+          if (progressPercentage) progressPercentage.textContent = `${displayProgress}% ${gettext('Complete')}`;
           
           // Try again after a delay
           setTimeout(() => checkProgress(), 1000);
@@ -295,34 +314,50 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get CSRF token using global helper or fallback to form input
         const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
-        // Submit form via AJAX
-        fetch('/', {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': csrfToken,
-            'Accept': 'application/json',
-          },
-          cache: 'no-store',
-        })
-        .then(async (response) => {
-          // Always try to parse JSON (even on non-2xx) so we can show real errors.
-          const contentType = response.headers.get('content-type') || '';
+        // Submit form via XHR so we can show upload progress (large DICOMs can
+        // take seconds to upload, which used to look like a "stuck at 1%" UI).
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/', true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        xhr.upload.onprogress = (evt) => {
+          if (!progressBar || !progressPercentage) return;
+          if (!evt.lengthComputable) return;
+          const frac = evt.total > 0 ? (evt.loaded / evt.total) : 0;
+          const uploadPct = Math.min(
+            UPLOAD_STAGE_MAX,
+            Math.max(1, Math.round(frac * UPLOAD_STAGE_MAX))
+          );
+          progressBar.style.width = `${uploadPct}%`;
+          progressBar.setAttribute('aria-valuenow', uploadPct);
+          if (progressBar.parentElement) {
+            progressBar.parentElement.setAttribute('aria-valuenow', uploadPct);
+          }
+          progressPercentage.textContent = `${uploadPct}% ${gettext('Complete')}`;
+        };
+
+        xhr.onerror = () => {
+          restoreFormUI();
+          window.showModal(gettext('Error submitting form. Please try again.'), gettext('Error'), true);
+        };
+
+        xhr.onload = () => {
+          const status = xhr.status || 0;
+          const contentType = xhr.getResponseHeader('content-type') || '';
           let data = null;
           if (contentType.includes('application/json')) {
             try {
-              data = await response.json();
+              data = JSON.parse(xhr.responseText || 'null');
             } catch (err) {
               data = null;
             }
           }
 
-          if (!response.ok) {
-            // Prefer server-provided error details when available.
-            let errorMessage = (data && data.error) ? data.error : `HTTP error! status: ${response.status}`;
+          if (status < 200 || status >= 300) {
+            let errorMessage = (data && data.error) ? data.error : `HTTP error! status: ${status}`;
 
-            // If we got field-level errors, surface the most relevant one.
             if (data && data.errors && data.errors.image) {
               const imageErrors = data.errors.image;
               if (Array.isArray(imageErrors) && imageErrors.length) {
@@ -332,65 +367,44 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
 
-            // Common reverse-proxy error for large uploads.
-            if (response.status === 413) {
+            if (status === 413) {
               errorMessage = gettext('File too large. Please upload a smaller file.');
             }
 
-            const err = new Error(errorMessage);
-            err.status = response.status;
-            err.data = data;
-            throw err;
+            const redirectUrl = data?.login_url || data?.redirect_url;
+            if (redirectUrl) {
+              window.location.href = redirectUrl;
+              return;
+            }
+
+            restoreFormUI();
+            window.showModal(errorMessage, gettext('Error'), true);
+            return;
           }
 
           if (!data) {
-            // `fetch()` follows redirects automatically. For auth/HTTPS redirects
-            // this means we may end up with a 200 HTML page instead of JSON.
-            // Send the user to the final URL instead of showing a confusing error.
-            if (response.redirected && response.url) {
-              const err = new Error('Redirected');
-              err.redirectUrl = response.url;
-              throw err;
-            }
-            throw new Error(gettext('Unexpected server response. Please refresh the page and try again.'));
+            restoreFormUI();
+            window.showModal(gettext('Unexpected server response. Please refresh the page and try again.'), gettext('Error'), true);
+            return;
           }
 
-          return data;
-        })
-        .then(data => {
           if (data.upload_id) {
-            // Start tracking progress
+            // Start tracking progress (mapped to 20..100 UI range).
             trackProgress(data.upload_id);
-          } else if (data.error) {
-            // Handle validation errors
-            console.error('Form validation error:', data.error);
-            if (data.errors) {
-              console.error('Detailed errors:', data.errors);
-            }
+            return;
+          }
+
+          if (data.error) {
             restoreFormUI();
             window.showModal(data.error, gettext('Error'), true);
-          } else {
-            // Generic error handling
-            console.error('Unexpected response format:', data);
-            restoreFormUI();
-            window.showModal(gettext('Error starting analysis. Please try again.'), gettext('Error'), true);
-          }
-        })
-        .catch(error => {
-          console.error('Error submitting form:', error);
-          console.error('Error details:', error.message, error.stack);
-
-          // If the backend indicates an auth/HTTPS redirect, follow it.
-          const redirectUrl = error?.redirectUrl || error?.data?.login_url || error?.data?.redirect_url;
-          if (redirectUrl) {
-            window.location.href = redirectUrl;
             return;
           }
 
           restoreFormUI();
-          const message = (error && error.message) ? error.message : gettext('Error submitting form. Please try again.');
-          window.showModal(message, gettext('Error'), true);
-        });
+          window.showModal(gettext('Error starting analysis. Please try again.'), gettext('Error'), true);
+        };
+
+        xhr.send(formData);
       }, 0);
     });
   }
